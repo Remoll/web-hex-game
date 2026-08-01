@@ -1,25 +1,12 @@
 import * as THREE from "three";
-import { MapControls } from "three/addons/controls/MapControls.js";
 import type { HexCoord, PlaneCoord } from "./types";
 import { Formulas } from "./formulas/Formulas";
 import { Hex } from "./hex/Hex";
 import { Player } from "./units/Player";
+import { GameCamera } from "./camera/GameCamera";
 
 // --- SCENA I RENDERER ---
 const scene = new THREE.Scene();
-
-// --- KAMERA ORTOGRAFICZNA (DLA GRY 2D) ---
-const frustumSize = 30; // Zmienna określająca wielkość pola widzenia (Zoom)
-let aspect = window.innerWidth / window.innerHeight;
-
-const camera = new THREE.OrthographicCamera(
-  (-frustumSize * aspect) / 2,
-  (frustumSize * aspect) / 2,
-  frustumSize / 2,
-  -frustumSize / 2,
-  0.1,
-  1000
-);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -28,6 +15,19 @@ document.body.appendChild(renderer.domElement);
 
 const size = 1;
 const borderWidth = 0.08;
+const mapRadius = 18;
+const mapMaxRadius = size * (3 / 2) * mapRadius;
+
+// --- INICJALIZACJA WYODRĘBNIONEJ KAMERY ---
+// Domyślnie uruchamia się w trybie "FOLLOW"
+const gameCamera = new GameCamera(30, mapMaxRadius, renderer.domElement, "FOLLOW");
+
+// Opcjonalnie: Przełączanie trybu kamery klawiszem "C" (Follow <-> Free)
+window.addEventListener("keydown", (event: KeyboardEvent) => {
+  if (event.key.toLowerCase() === "c") {
+    gameCamera.toggleMode();
+  }
+});
 
 // --- GEOMETRIA I INSTANCED MESH MAPY ---
 const hexGeometry = Hex.createHexWithInnerBorderGeometry(size, borderWidth);
@@ -36,7 +36,6 @@ const hexMaterial = new THREE.MeshBasicMaterial({
   side: THREE.DoubleSide,
 });
 
-const mapRadius = 18;
 const hexMap: HexCoord[] = Hex.createHexMap(mapRadius);
 
 const mapInstancedMesh = new THREE.InstancedMesh(
@@ -58,14 +57,13 @@ hexMap.forEach((field, index) => {
 mapInstancedMesh.instanceMatrix.needsUpdate = true;
 scene.add(mapInstancedMesh);
 
-// --- GEOMETRIA I INSTANCED MESH DLA JEDNOSTEK / GRACZA ---
+// --- GEOMETRIA I INSTANCED MESH DLA JEDNOSTEK ---
 const unitGeometry = new THREE.PlaneGeometry(size * 0.8, size * 0.8);
 const playerMaterial = new THREE.MeshBasicMaterial({
   color: 0x0088ff, // Niebieski kwadrat
   side: THREE.DoubleSide,
 });
 
-// Rezerwujemy InstancedMesh na max 100 jednostek
 const maxUnits = 100;
 const unitsInstancedMesh = new THREE.InstancedMesh(
   unitGeometry,
@@ -73,63 +71,26 @@ const unitsInstancedMesh = new THREE.InstancedMesh(
   maxUnits
 );
 
-// FIX: Renderujemy tylko 1 instancję (obecnie jest tylko Gracz)
+// Renderujemy tylko 1 instancję (Gracza)
 unitsInstancedMesh.count = 1;
-
 scene.add(unitsInstancedMesh);
 
-// Tworzymy gracza na środku mapy (q: 0, r: 0) na slocie 0 w InstancedMesh
+// Tworzymy gracza na środku mapy (q: 0, r: 0) na slocie 0
 const player = new Player("player_1", { q: 0, r: 0 }, 0);
 player.moveTo(player.position, unitsInstancedMesh, size, dummy);
-
-// --- STEROWANIE KAMERĄ ---
-camera.position.set(0, 0, 50);
-
-const controls = new MapControls(camera, renderer.domElement);
-controls.screenSpacePanning = true;
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.enableRotate = false;
-
-controls.mouseButtons = {
-  LEFT: THREE.MOUSE.PAN,
-  MIDDLE: THREE.MOUSE.DOLLY,
-  RIGHT: THREE.MOUSE.NONE,
-};
-
-// Dla Ortograficznej Kamery zoom ogranicza się właściwościami minZoom i maxZoom
-controls.minZoom = 0.5;
-controls.maxZoom = 3;
-
-const mapMaxRadius = size * (3 / 2) * mapRadius;
-
-function clampCameraTarget() {
-  controls.target.x = THREE.MathUtils.clamp(
-    controls.target.x,
-    -mapMaxRadius,
-    mapMaxRadius
-  );
-  controls.target.y = THREE.MathUtils.clamp(
-    controls.target.y,
-    -mapMaxRadius,
-    mapMaxRadius
-  );
-}
 
 // --- OBSŁUGA INTERAKCJI / KLIKNIĘĆ (RAYCASTER) ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-const planeXY = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // Płaszczyzna Z=0
+const planeXY = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 const intersectionPoint = new THREE.Vector3();
 
 window.addEventListener("click", (event: MouseEvent) => {
-  // Przeliczenie pozycji myszy na współrzędne Normalized Device Coordinates (-1 do +1)
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-  raycaster.setFromCamera(mouse, camera);
+  raycaster.setFromCamera(mouse, gameCamera.camera);
 
-  // Wyznaczamy punkt przecięcia promienia myszy z płaszczyzną mapy (Z = 0)
   if (raycaster.ray.intersectPlane(planeXY, intersectionPoint)) {
     const clickedHex = Formulas.planeCoordToHexCoord(
       { x: intersectionPoint.x, y: intersectionPoint.y },
@@ -146,45 +107,29 @@ window.addEventListener("click", (event: MouseEvent) => {
       return;
     }
 
-    // 2. Jeśli gracz był zaznaczony i kliknięto w inny heks -> Przemieść Gracza
+    // 2. Jeśli gracz był zaznaczony -> Przemieszczamy go
     if (player.isSelected) {
       player.moveTo(clickedHex, unitsInstancedMesh, size, dummy);
-      player.isSelected = false; // Odznaczamy po wykonaniu ruchu
+      player.isSelected = false;
       console.log("Gracz przemieszczony na:", clickedHex);
     }
   }
 });
 
-// --- OBSŁUGA RESIZE DLA KAMERY ORTOGRAFICZNEJ ---
+// Resizing obsługiwany jest wewnętrznie przez GameCamera i poniższy listener dla renderera
 window.addEventListener("resize", () => {
-  aspect = window.innerWidth / window.innerHeight;
-
-  camera.left = (-frustumSize * aspect) / 2;
-  camera.right = (frustumSize * aspect) / 2;
-  camera.top = frustumSize / 2;
-  camera.bottom = -frustumSize / 2;
-
-  camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// --- PĘTLA ANIMACJI / PŁYNNE PODĄŻANIE KAMERY ---
+// --- PĘTLA ANIMACJI ---
 function animate() {
-  // Płynne przesuwanie celu kamery (controls.target) za Graczem
+  // Przeliczamy aktualną pozycję 2D gracza na potrzeby LERP w kamerze
   const playerPlanePos = Formulas.hexCoordToPlaneCoord(player.position, size);
 
-  // LERP (Linear Interpolation) zapewnia płynny ruch kamery za graczem
-  controls.target.x += (playerPlanePos.x - controls.target.x) * 0.05;
-  controls.target.y += (playerPlanePos.y - controls.target.y) * 0.05;
+  // Aktualizacja kamery (sama podejmie decyzję czy śledzić gracza na podstawie pola mode)
+  gameCamera.update(playerPlanePos);
 
-  // Przesuwamy pozycję kamery równolegle w osi Z
-  camera.position.x = controls.target.x;
-  camera.position.y = controls.target.y;
-
-  controls.update();
-  clampCameraTarget();
-
-  renderer.render(scene, camera);
+  renderer.render(scene, gameCamera.camera);
 }
 
 renderer.setAnimationLoop(animate);
