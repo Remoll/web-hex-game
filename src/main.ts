@@ -1,11 +1,5 @@
 import * as THREE from "three";
-import {
-  TerrainType,
-  type HexCoord,
-  type MapArray,
-  type Q,
-  type R,
-} from "./types";
+import { TerrainType, type HexCoord, type MapArray } from "./types";
 import { Formulas } from "./formulas/Formulas";
 import { Hex } from "./hex/Hex";
 import { Player } from "./units/Player";
@@ -183,8 +177,8 @@ window.addEventListener("click", (event: MouseEvent) => {
 
       if (clickedHex !== null) {
         if (
-          clickedHex.q === player.position.q &&
-          clickedHex.r === player.position.r
+          (clickedHex as HexCoord).q === player.position.q &&
+          (clickedHex as HexCoord).r === player.position.r
         ) {
           player.isSelected = !player.isSelected;
           console.log(
@@ -197,7 +191,7 @@ window.addEventListener("click", (event: MouseEvent) => {
           player.position = clickedHex;
           updatePlayerPosition();
           console.log(
-            `Gracz przemieszczony na Q:${clickedHex.q}, R:${clickedHex.r}`,
+            `Gracz przemieszczony na Q:${(clickedHex as HexCoord).q}, R:${(clickedHex as HexCoord).r}`,
           );
         }
       }
