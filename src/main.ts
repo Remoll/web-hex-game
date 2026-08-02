@@ -13,10 +13,10 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 
-const size = 1;
-const borderWidth = 0.08;
+const SIZE = 64;
+const BORDER_WIDTH = 3;
 const mapRadius = 18;
-const mapMaxRadius = size * (3 / 2) * mapRadius;
+const mapMaxRadius = SIZE * (3 / 2) * mapRadius;
 
 // --- INICJALIZACJA WYODRĘBNIONEJ KAMERY ---
 // Domyślnie uruchamia się w trybie "FOLLOW"
@@ -30,7 +30,7 @@ window.addEventListener("keydown", (event: KeyboardEvent) => {
 });
 
 // --- GEOMETRIA I INSTANCED MESH MAPY ---
-const hexGeometry = Hex.createHexWithInnerBorderGeometry(size, borderWidth);
+const hexGeometry = Hex.createHexWithInnerBorderGeometry(SIZE, BORDER_WIDTH);
 const hexMaterial = new THREE.MeshBasicMaterial({
   vertexColors: true,
   side: THREE.DoubleSide,
@@ -48,7 +48,7 @@ const dummy = new THREE.Object3D();
 
 // Wyrenderowanie siatki mapy
 hexMap.forEach((field, index) => {
-  const pos: PlaneCoord = Formulas.hexCoordToPlaneCoord(field, size);
+  const pos: PlaneCoord = Formulas.hexCoordToPlaneCoord(field, SIZE);
   dummy.position.set(pos.x, pos.y, 0);
   dummy.updateMatrix();
   mapInstancedMesh.setMatrixAt(index, dummy.matrix);
@@ -58,7 +58,7 @@ mapInstancedMesh.instanceMatrix.needsUpdate = true;
 scene.add(mapInstancedMesh);
 
 // --- GEOMETRIA I INSTANCED MESH DLA JEDNOSTEK ---
-const unitGeometry = new THREE.PlaneGeometry(size * 0.8, size * 0.8);
+const unitGeometry = new THREE.PlaneGeometry(SIZE * 0.8, SIZE * 0.8);
 const playerMaterial = new THREE.MeshBasicMaterial({
   color: 0x0088ff, // Niebieski kwadrat
   side: THREE.DoubleSide,
@@ -73,11 +73,13 @@ const unitsInstancedMesh = new THREE.InstancedMesh(
 
 // Renderujemy tylko 1 instancję (Gracza)
 unitsInstancedMesh.count = 1;
+// FIX: Wyłączamy ukrywanie obiektu, gdy środek mapy znika z ekranu
+unitsInstancedMesh.frustumCulled = false;
 scene.add(unitsInstancedMesh);
 
 // Tworzymy gracza na środku mapy (q: 0, r: 0) na slocie 0
 const player = new Player("player_1", { q: 0, r: 0 }, 0);
-player.moveTo(player.position, unitsInstancedMesh, size, dummy);
+player.moveTo(player.position, unitsInstancedMesh, SIZE, dummy);
 
 // --- OBSŁUGA INTERAKCJI / KLIKNIĘĆ (RAYCASTER) ---
 const raycaster = new THREE.Raycaster();
@@ -94,7 +96,7 @@ window.addEventListener("click", (event: MouseEvent) => {
   if (raycaster.ray.intersectPlane(planeXY, intersectionPoint)) {
     const clickedHex = Formulas.planeCoordToHexCoord(
       { x: intersectionPoint.x, y: intersectionPoint.y },
-      size
+      SIZE
     );
 
     // 1. Sprawdzamy czy kliknięto w Gracza
@@ -109,8 +111,7 @@ window.addEventListener("click", (event: MouseEvent) => {
 
     // 2. Jeśli gracz był zaznaczony -> Przemieszczamy go
     if (player.isSelected) {
-      player.moveTo(clickedHex, unitsInstancedMesh, size, dummy);
-      player.isSelected = false;
+      player.moveTo(clickedHex, unitsInstancedMesh, SIZE, dummy);
       console.log("Gracz przemieszczony na:", clickedHex);
     }
   }
@@ -124,7 +125,7 @@ window.addEventListener("resize", () => {
 // --- PĘTLA ANIMACJI ---
 function animate() {
   // Przeliczamy aktualną pozycję 2D gracza na potrzeby LERP w kamerze
-  const playerPlanePos = Formulas.hexCoordToPlaneCoord(player.position, size);
+  const playerPlanePos = Formulas.hexCoordToPlaneCoord(player.position, SIZE);
 
   // Aktualizacja kamery (sama podejmie decyzję czy śledzić gracza na podstawie pola mode)
   gameCamera.update(playerPlanePos);

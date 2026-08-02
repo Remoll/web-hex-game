@@ -33,7 +33,7 @@ export class GameCamera {
       0.1,
       1000
     );
-    this.camera.position.set(0, 0, 50);
+    this.camera.position.set(0, 0, 500);
 
     // Inicjalizacja Sterowania (MapControls)
     this.controls = new MapControls(this.camera, domElement);
@@ -60,8 +60,8 @@ export class GameCamera {
       TWO: THREE.TOUCH.DOLLY_PAN,
     };
 
-    this.controls.minZoom = 0.5;
-    this.controls.maxZoom = 3;
+    this.controls.minZoom = 0.007;
+    this.controls.maxZoom = 0.1;
   }
 
   // Zmiana trybu kamery w dowolnym momencie gry
