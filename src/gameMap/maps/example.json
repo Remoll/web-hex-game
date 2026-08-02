@@ -1,0 +1,249 @@
+[
+  {
+    "q": 0,
+    "r": -2,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 3,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 1,
+    "r": -2,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 2,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 2,
+    "r": -2,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 2,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": -1,
+    "r": -1,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 4,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 0,
+    "r": -1,
+    "fieldAttrs": {
+      "terrainType": 1,
+      "allowedMovements": {
+        "0": false,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 1,
+    "r": -1,
+    "fieldAttrs": {
+      "terrainType": 1,
+      "allowedMovements": {
+        "0": false,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 2,
+    "r": -1,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 1,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": -2,
+    "r": 0,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": -1,
+    "r": 0,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 0,
+    "r": 0,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 1,
+    "r": 0,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 2,
+    "r": 0,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": -2,
+    "r": 1,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": -1,
+    "r": 1,
+    "fieldAttrs": {
+      "terrainType": 1,
+      "allowedMovements": {
+        "0": false,
+        "1": true
+      },
+      "groundLevel": 0,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 0,
+    "r": 1,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 2,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 1,
+    "r": 1,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 1,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": -2,
+    "r": 2,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 1,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": -1,
+    "r": 2,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 1,
+      "leavingCostMultiplier": 1
+    }
+  },
+  {
+    "q": 0,
+    "r": 2,
+    "fieldAttrs": {
+      "terrainType": 0,
+      "allowedMovements": {
+        "0": true,
+        "1": true
+      },
+      "groundLevel": 1,
+      "leavingCostMultiplier": 1
+    }
+  }
+]
