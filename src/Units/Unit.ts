@@ -1,8 +1,8 @@
-import type { HexCoord } from "../types";
-import { Formulas } from "../formulas/Formulas";
-import type { CustomInstancedMesh } from "../CustomInstancedMesh/CustomInstancedMesh";
-import { GameContext } from "../GameContext/GameContext";
-import { GameConstants } from "../GameConstants/GameContsants";
+import type { HexCoord } from "@/types";
+import { Formulas } from "@/Formulas/Formulas";
+import type { CustomInstancedMesh } from "@/CustomInstancedMesh/CustomInstancedMesh";
+import { GameContext } from "@/GameContext/GameContext";
+import { GameConstants } from "@/GameConstants/GameContsants";
 
 export abstract class Unit {
   public id: string;

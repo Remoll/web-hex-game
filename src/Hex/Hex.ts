@@ -1,5 +1,5 @@
 import * as THREE from "three";
-// import type { HexCoord } from "../types";
+// import type { HexCoord } from "@/types";
 
 export class Hex {
   // Geometria samej górnej powierzchni z wyraźnym obrysem

@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { MapControls } from "three/addons/controls/MapControls.js";
-import { CameraMode, type PlaneCoord } from "../types";
-import { GameConstants } from "../GameConstants/GameContsants";
-import { GameContext } from "../GameContext/GameContext";
+import { CameraMode, type PlaneCoord } from "@/types";
+import { GameConstants } from "@/GameConstants/GameContsants";
+import { GameContext } from "@/GameContext/GameContext";
 
 export class GameCamera {
   public camera: THREE.OrthographicCamera;

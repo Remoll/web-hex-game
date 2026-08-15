@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import type { HexCoord, Q, R } from "../types";
-import { GameContext } from "../GameContext/GameContext";
+import type { HexCoord, Q, R } from "@/types";
+import { GameContext } from "@/GameContext/GameContext";
 
 export class EventsHandler {
   static initEventsListeners(

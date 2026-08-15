@@ -1,3 +1,5 @@
+import type { Field } from "@/Field/Field";
+
 export interface HexCoord {
   q: Q;
   r: R;
@@ -31,7 +33,15 @@ export type Q = number;
 
 export type R = number;
 
-export type MapArray = { q: Q; r: R; fieldAttrs: FieldAttrs }[];
+interface MapArrayItem {
+  q: Q;
+  r: R;
+  fieldAttrs: FieldAttrs;
+}
+
+export type MapArray = MapArrayItem[];
+
+export type FieldsMap = Map<Q, Map<R, Field>>;
 
 export enum CameraMode {
   FOLLOW,

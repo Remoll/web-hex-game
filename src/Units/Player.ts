@@ -1,6 +1,6 @@
-import { Unit } from "./Unit";
-import type { HexCoord } from "../types";
-import type { CustomInstancedMesh } from "../CustomInstancedMesh/CustomInstancedMesh";
+import { Unit } from "@/Units/Unit";
+import type { HexCoord } from "@/types";
+import type { CustomInstancedMesh } from "@/CustomInstancedMesh/CustomInstancedMesh";
 
 export class Player extends Unit {
   public isSelected: boolean = false;

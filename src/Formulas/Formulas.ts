@@ -1,4 +1,4 @@
-import type { HexCoord, PlaneCoord } from "../types";
+import type { HexCoord, PlaneCoord } from "@/types";
 
 export class Formulas {
   // Przeliczenie heksu na piksele (płaski na górze)

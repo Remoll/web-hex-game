@@ -1,15 +1,15 @@
 import * as THREE from "three";
-import { CameraMode, TerrainType } from "./types";
-import { Formulas } from "./formulas/Formulas";
-import { Hex } from "./hex/Hex";
-import { Player } from "./units/Player";
-import { GameCamera } from "./camera/GameCamera";
-import { GameMap } from "./gameMap/GameMap";
-import exampleMap from "./gameMap/maps/example.json";
-import { EventsHandler } from "./EventsHandler/EventsHandler";
-import { GameContext } from "./GameContext/GameContext";
-import { CustomInstancedMesh } from "./CustomInstancedMesh/CustomInstancedMesh";
-import { GameConstants } from "./GameConstants/GameContsants";
+import { CameraMode, TerrainType } from "@/types";
+import { Formulas } from "@/Formulas/Formulas";
+import { Hex } from "@/Hex/Hex";
+import { Player } from "@/Units/Player";
+import { GameCamera } from "@/GameCamera/GameCamera";
+import { GameMap } from "@/GameMap/GameMap";
+import exampleMap from "@/GameMap/maps/example.json";
+import { EventsHandler } from "@/EventsHandler/EventsHandler";
+import { GameContext } from "@/GameContext/GameContext";
+import { CustomInstancedMesh } from "@/CustomInstancedMesh/CustomInstancedMesh";
+import { GameConstants } from "@/GameConstants/GameContsants";
 
 // --- SCENA I RENDERER ---
 const scene = new THREE.Scene();

@@ -1,6 +1,6 @@
-import type { GameCamera } from "../camera/GameCamera";
-import type { GameMap } from "../gameMap/GameMap";
-import type { Player } from "../units/Player";
+import type { GameCamera } from "@/GameCamera/GameCamera";
+import type { GameMap } from "@/GameMap/GameMap";
+import type { Player } from "@/Units/Player";
 
 export class GameContext {
   private static _gameMap: GameMap;

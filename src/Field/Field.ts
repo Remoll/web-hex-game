@@ -1,4 +1,4 @@
-import type { AllowedMovements, FieldAttrs, TerrainType } from "../types";
+import type { AllowedMovements, FieldAttrs, TerrainType } from "@/types";
 
 export class Field {
   private terrainType: TerrainType;
