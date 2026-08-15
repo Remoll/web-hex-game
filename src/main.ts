@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TerrainType, type MapArray } from "./types";
+import { CameraMode, TerrainType } from "./types";
 import { Formulas } from "./formulas/Formulas";
 import { Hex } from "./hex/Hex";
 import { Player } from "./units/Player";
@@ -22,8 +22,9 @@ document.body.appendChild(renderer.domElement);
 
 GameConstants.init(64, 4, 16, 64 * 0.8, 64 * 0.5);
 
-const mapRadius = 2;
-const mapMaxRadius = GameConstants.SIZE * (3 / 2) * mapRadius;
+GameContext.gameMap = new GameMap(exampleMap);
+
+const totalFields = exampleMap.length;
 
 // --- ŚWIATŁA ---
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -34,17 +35,11 @@ dirLight.position.set(200, -300, 400);
 scene.add(dirLight);
 
 // --- KAMERA ---
-const gameCamera = new GameCamera(
+GameContext.gameCamera = new GameCamera(
   30,
-  mapMaxRadius,
   renderer.domElement,
-  "FOLLOW",
+  CameraMode.FOLLOW,
 );
-
-const mapArray: MapArray = exampleMap;
-
-const gameMap = new GameMap(mapArray);
-const totalFields = mapArray.length;
 
 // --- TWORZENIE INSTANCED MESH DLA FILARÓW (BOKÓW) ---
 const sidesGeometry = Hex.createHexSidesGeometry(GameConstants.SIZE);
@@ -71,7 +66,7 @@ const colorGrass = new THREE.Color(0x00cc44);
 const colorWater = new THREE.Color(0x0088ff);
 
 let index = 0;
-gameMap.forEachField((q, r, field) => {
+GameContext.gameMap.forEachField((q, r, field) => {
   const pos = Formulas.hexCoordToPlaneCoord({ q, r }, GameConstants.SIZE);
   const level = field.getGroundLevel();
   const totalHeight = (level + 1) * GameConstants.HEX_DEPTH;
@@ -113,11 +108,9 @@ unitsInstancedMesh.instancedMesh.count = 1;
 unitsInstancedMesh.instancedMesh.frustumCulled = false;
 scene.add(unitsInstancedMesh.instancedMesh);
 
-const player = new Player("player", { q: 0, r: 0 }, unitsInstancedMesh);
+GameContext.player = new Player("player", { q: 0, r: 0 }, unitsInstancedMesh);
 
-GameContext.init(gameMap, gameCamera, player);
-
-player.moveTo(GameContext.player.position);
+GameContext.player.moveTo(GameContext.player.position);
 
 EventsHandler.initEventsListeners(renderer, capsInstancedMesh.instancedMesh);
 
@@ -127,8 +120,8 @@ function animate() {
     GameContext.player.position,
     GameConstants.SIZE,
   );
-  gameCamera.update(playerPlanePos);
-  renderer.render(scene, gameCamera.camera);
+  GameContext.gameCamera.update(playerPlanePos);
+  renderer.render(scene, GameContext.gameCamera.camera);
 }
 
 renderer.setAnimationLoop(animate);

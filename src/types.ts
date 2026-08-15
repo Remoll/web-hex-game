@@ -32,3 +32,8 @@ export type Q = number;
 export type R = number;
 
 export type MapArray = { q: Q; r: R; fieldAttrs: FieldAttrs }[];
+
+export enum CameraMode {
+  FOLLOW,
+  FREE,
+}

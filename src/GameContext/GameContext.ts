@@ -7,33 +7,42 @@ export class GameContext {
   private static _gameCamera: GameCamera;
   private static _player: Player;
 
-  private static isInitialized: boolean = false;
-
-  static init(
-    gameMap: GameMap,
-    gameCamera: GameCamera,
-    player: Player,
-  ): void {
-    if (GameContext.isInitialized) {
-      throw Error("GameContext is already initialized");
-    }
-
-    GameContext._gameMap = gameMap;
-    GameContext._gameCamera = gameCamera;
-    GameContext._player = player;
-
-    GameContext.isInitialized = true;
-  }
-
+  // GAME MAP
   static get gameMap(): GameMap {
     return GameContext._gameMap;
   }
 
+  static set gameMap(gameMap) {
+    if (GameContext.gameMap) {
+      throw Error("gameMap is already initialized");
+    }
+
+    GameContext._gameMap = gameMap;
+  }
+
+  // GAME CAMERA
   static get gameCamera(): GameCamera {
     return GameContext._gameCamera;
   }
 
+  static set gameCamera(gameCamera) {
+    if (GameContext.gameCamera) {
+      throw Error("gameCamera is already initialized");
+    }
+
+    GameContext._gameCamera = gameCamera;
+  }
+
+  // PLAYER
   static get player(): Player {
     return GameContext._player;
+  }
+
+  static set player(player) {
+    if (GameContext.player) {
+      throw Error("player is already initialized");
+    }
+
+    GameContext._player = player;
   }
 }

@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { MapControls } from "three/addons/controls/MapControls.js";
-import type { PlaneCoord } from "../types";
-
-export type CameraMode = "FOLLOW" | "FREE";
+import { CameraMode, type PlaneCoord } from "../types";
+import { GameConstants } from "../GameConstants/GameContsants";
+import { GameContext } from "../GameContext/GameContext";
 
 export class GameCamera {
   public camera: THREE.OrthographicCamera;
@@ -11,19 +11,19 @@ export class GameCamera {
 
   private frustumSize: number;
   private mapMaxRadius: number;
-  
+
   // Offsety dla rzutu izometrycznego
-  private offsetY = -300; 
+  private offsetY = -300;
   private offsetZ = 300;
 
   constructor(
-    frustumSize: number = 30,
-    mapRadiusUnits: number,
+    frustumSize: number,
     domElement: HTMLElement,
-    initialMode: CameraMode = "FOLLOW"
+    initialMode: CameraMode,
   ) {
     this.frustumSize = frustumSize;
-    this.mapMaxRadius = mapRadiusUnits;
+    this.mapMaxRadius =
+      GameConstants.SIZE * (3 / 2) * GameContext.gameMap.radiusInHex;
     this.mode = initialMode;
 
     const aspect = window.innerWidth / window.innerHeight;
@@ -34,9 +34,9 @@ export class GameCamera {
       this.frustumSize / 2,
       -this.frustumSize / 2,
       0.1,
-      2000 // Zwiększamy zasięg odcinania, bo kamera jest pod kątem
+      2000, // Zwiększamy zasięg odcinania, bo kamera jest pod kątem
     );
-    
+
     // Ustawiamy kamerę pod kątem (Rzut Izometryczny)
     this.camera.position.set(0, this.offsetY, this.offsetZ);
 
@@ -73,19 +73,21 @@ export class GameCamera {
   }
 
   public toggleMode(): void {
-    this.setMode(this.mode === "FOLLOW" ? "FREE" : "FOLLOW");
+    this.setMode(
+      this.mode === CameraMode.FOLLOW ? CameraMode.FREE : CameraMode.FOLLOW,
+    );
   }
 
   private clampTarget(): void {
     this.controls.target.x = THREE.MathUtils.clamp(
       this.controls.target.x,
       -this.mapMaxRadius,
-      this.mapMaxRadius
+      this.mapMaxRadius,
     );
     this.controls.target.y = THREE.MathUtils.clamp(
       this.controls.target.y,
       -this.mapMaxRadius,
-      this.mapMaxRadius
+      this.mapMaxRadius,
     );
   }
 
@@ -101,9 +103,11 @@ export class GameCamera {
   }
 
   public update(targetPosition?: PlaneCoord): void {
-    if (this.mode === "FOLLOW" && targetPosition) {
-      this.controls.target.x += (targetPosition.x - this.controls.target.x) * 0.05;
-      this.controls.target.y += (targetPosition.y - this.controls.target.y) * 0.05;
+    if (this.mode === CameraMode.FOLLOW && targetPosition) {
+      this.controls.target.x +=
+        (targetPosition.x - this.controls.target.x) * 0.05;
+      this.controls.target.y +=
+        (targetPosition.y - this.controls.target.y) * 0.05;
 
       // W trybie podążania utrzymujemy kąt pochylenia dodając offsety
       this.camera.position.x = this.controls.target.x;
