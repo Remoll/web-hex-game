@@ -1,11 +1,14 @@
 import * as THREE from "three";
-import { TerrainType, type HexCoord, type MapArray } from "./types";
+import { TerrainType, type MapArray } from "./types";
 import { Formulas } from "./formulas/Formulas";
 import { Hex } from "./hex/Hex";
 import { Player } from "./units/Player";
 import { GameCamera } from "./camera/GameCamera";
 import { GameMap } from "./gameMap/GameMap";
 import exampleMap from "./gameMap/maps/example.json";
+import { EventsHandler } from "./EventsHandler/EventsHandler";
+import { GameState } from "./GameState/GameState";
+import { CustomInstancedMesh } from "./CustomInstancedMesh/CustomInstancedMesh";
 
 // --- SCENA I RENDERER ---
 const scene = new THREE.Scene();
@@ -38,12 +41,6 @@ const gameCamera = new GameCamera(
   "FOLLOW",
 );
 
-window.addEventListener("keydown", (event: KeyboardEvent) => {
-  if (event.key.toLowerCase() === "c") {
-    gameCamera.toggleMode();
-  }
-});
-
 const mapArray: MapArray = exampleMap;
 
 const gameMap = new GameMap(mapArray);
@@ -52,7 +49,7 @@ const totalFields = mapArray.length;
 // --- TWORZENIE INSTANCED MESH DLA FILARÓW (BOKÓW) ---
 const sidesGeometry = Hex.createHexSidesGeometry(SIZE);
 const sidesMaterial = new THREE.MeshLambertMaterial({ color: 0x553311 }); // Jednolity kolor ziemi dla wszystkich boków
-const sidesInstancedMesh = new THREE.InstancedMesh(
+const sidesInstancedMesh = new CustomInstancedMesh(
   sidesGeometry,
   sidesMaterial,
   totalFields,
@@ -61,13 +58,12 @@ const sidesInstancedMesh = new THREE.InstancedMesh(
 // --- TWORZENIE INSTANCED MESH DLA NAKŁADEK GÓRNYCH ---
 const capsGeometry = Hex.createHexTopGeometry(SIZE, BORDER_WIDTH);
 const capsMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
-const capsInstancedMesh = new THREE.InstancedMesh(
+const capsInstancedMesh = new CustomInstancedMesh(
   capsGeometry,
   capsMaterial,
   totalFields,
 );
 
-const dummy = new THREE.Object3D();
 const colorGrass = new THREE.Color(0x00cc44);
 const colorWater = new THREE.Color(0x0088ff);
 
@@ -78,16 +74,10 @@ gameMap.forEachField((q, r, field) => {
   const totalHeight = (level + 1) * HEX_DEPTH;
 
   // 1. Ustawienie filara (boki rozciągnięte w osi Z od 0 do totalHeight)
-  dummy.position.set(pos.x, pos.y, 0);
-  dummy.scale.set(1, 1, totalHeight);
-  dummy.updateMatrix();
-  sidesInstancedMesh.setMatrixAt(index, dummy.matrix);
+  sidesInstancedMesh.updateState(pos.x, pos.y, 0, index, totalHeight);
 
   // 2. Ustawienie górnej nakładki na samej górze filara
-  dummy.position.set(pos.x, pos.y, totalHeight);
-  dummy.scale.set(1, 1, 1);
-  dummy.updateMatrix();
-  capsInstancedMesh.setMatrixAt(index, dummy.matrix);
+  capsInstancedMesh.updateState(pos.x, pos.y, totalHeight, index, 1);
 
   // Kolor górnej powierzchni
   if (field.getTerrainType() === TerrainType.Water) {
@@ -99,14 +89,8 @@ gameMap.forEachField((q, r, field) => {
   index++;
 });
 
-sidesInstancedMesh.instanceMatrix.needsUpdate = true;
-capsInstancedMesh.instanceMatrix.needsUpdate = true;
-if (capsInstancedMesh.instanceColor) {
-  capsInstancedMesh.instanceColor.needsUpdate = true;
-}
-
-scene.add(sidesInstancedMesh);
-scene.add(capsInstancedMesh); // Raycaster będzie sprawdzał tę siatkę
+scene.add(sidesInstancedMesh.instancedMesh);
+scene.add(capsInstancedMesh.instancedMesh); // Raycaster będzie sprawdzał tę siatkę
 
 // --- GEOMETRIA I JEDNOSTKA GRACZA ---
 const PLAYER_HEIGHT = SIZE * 0.8;
@@ -117,16 +101,19 @@ const unitGeometry = new THREE.BoxGeometry(
 );
 const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xee2222 });
 
-const unitsInstancedMesh = new THREE.InstancedMesh(
+const unitsInstancedMesh = new CustomInstancedMesh(
   unitGeometry,
   playerMaterial,
   100,
 );
-unitsInstancedMesh.count = 1;
-unitsInstancedMesh.frustumCulled = false;
-scene.add(unitsInstancedMesh);
+
+unitsInstancedMesh.instancedMesh.count = 1;
+unitsInstancedMesh.instancedMesh.frustumCulled = false;
+scene.add(unitsInstancedMesh.instancedMesh);
 
 const player = new Player("player_1", { q: 0, r: 0 }, 0);
+
+GameState.initSingleton(gameMap, gameCamera, player);
 
 // Ustawienie gracza na starcie
 function updatePlayerPosition() {
@@ -138,70 +125,16 @@ function updatePlayerPosition() {
   const targetZ = (level + 1) * HEX_DEPTH + PLAYER_HEIGHT / 2;
 
   const pos2D = Formulas.hexCoordToPlaneCoord(player.position, SIZE);
-  dummy.position.set(pos2D.x, pos2D.y, targetZ);
-  dummy.scale.set(1, 1, 1);
-  dummy.updateMatrix();
-  unitsInstancedMesh.setMatrixAt(0, dummy.matrix);
-  unitsInstancedMesh.instanceMatrix.needsUpdate = true;
+  unitsInstancedMesh.updateState(pos2D.x, pos2D.y, targetZ, 0, 1);
 }
 
 updatePlayerPosition();
 
-// --- INTERAKCJA / RAYCASTER ---
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-window.addEventListener("click", (event: MouseEvent) => {
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, gameCamera.camera);
-
-  // Raycastujemy bezpośrednio w nakładki górne (capsInstancedMesh)
-  const intersects = raycaster.intersectObject(capsInstancedMesh);
-
-  if (intersects.length > 0) {
-    const instanceId = intersects[0].instanceId;
-
-    if (instanceId !== undefined) {
-      // Indeks instancji bezpośrednio odpowiada indeksowi pola w mapie!
-      let currentIndex = 0;
-      let clickedHex: HexCoord | null = null;
-
-      gameMap.forEachField((q, r) => {
-        if (currentIndex === instanceId) {
-          clickedHex = { q, r };
-        }
-        currentIndex++;
-      });
-
-      if (clickedHex !== null) {
-        if (
-          (clickedHex as HexCoord).q === player.position.q &&
-          (clickedHex as HexCoord).r === player.position.r
-        ) {
-          player.isSelected = !player.isSelected;
-          console.log(
-            `Gracz ${player.isSelected ? "ZAZNACZONY" : "ODZNACZONY"}`,
-          );
-          return;
-        }
-
-        if (player.isSelected) {
-          player.position = clickedHex;
-          updatePlayerPosition();
-          console.log(
-            `Gracz przemieszczony na Q:${(clickedHex as HexCoord).q}, R:${(clickedHex as HexCoord).r}`,
-          );
-        }
-      }
-    }
-  }
-});
-
-window.addEventListener("resize", () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+EventsHandler.initEventsListeners(
+  renderer,
+  capsInstancedMesh.instancedMesh,
+  updatePlayerPosition,
+);
 
 // --- PĘTLA ANIMACJI ---
 function animate() {
