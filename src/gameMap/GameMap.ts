@@ -3,7 +3,6 @@ import type { MapArray, Q, R } from "../types";
 
 export class GameMap {
   private gameMap: Map<Q, Map<R, Field>> = new Map();
-  private fieldsNumber: number = 0;
 
   constructor(mapArray: MapArray) {
     mapArray.forEach(({ q, r, fieldAttrs }) => {
@@ -12,17 +11,11 @@ export class GameMap {
       }
 
       this.gameMap.get(q)!.set(r, new Field(fieldAttrs));
-      this.fieldsNumber++;
     });
   }
 
   getGameMap() {
     return this.gameMap;
-  }
-
-  //   używam totalBlocks w main.js, może można to tutaj liczyć
-  getFieldsNumber() {
-    return this.fieldsNumber;
   }
 
   forEachField(callback: (q: Q, r: R, field: Field) => void) {
@@ -33,7 +26,7 @@ export class GameMap {
     }
   }
 
-  getField(q: Q, r: R) {
+  getField(q: Q, r: R): Field | undefined {
     return this.gameMap.get(q)?.get(r);
   }
 }

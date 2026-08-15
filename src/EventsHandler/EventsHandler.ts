@@ -1,17 +1,16 @@
 import * as THREE from "three";
 import type { HexCoord, Q, R } from "../types";
-import { GameState } from "../GameState/GameState";
+import { GameContext } from "../GameContext/GameContext";
 
 export class EventsHandler {
   static initEventsListeners(
     renderer: THREE.WebGLRenderer,
     capsInstancedMesh: THREE.InstancedMesh,
-    updatePlayerPosition: () => void,
   ) {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    const { gameMap, gameCamera, player } = GameState.getSingleton();
+    const { gameMap, gameCamera, player } = GameContext;
 
     window.addEventListener("keydown", (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === "c") {
@@ -56,8 +55,7 @@ export class EventsHandler {
             }
 
             if (player.isSelected) {
-              player.position = clickedHex;
-              updatePlayerPosition();
+              GameContext.player.moveTo(clickedHex);
               console.log(
                 `Gracz przemieszczony na Q:${(clickedHex as HexCoord).q}, R:${(clickedHex as HexCoord).r}`,
               );
