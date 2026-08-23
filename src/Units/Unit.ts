@@ -8,20 +8,27 @@ export abstract class Unit {
   public id: string;
   public position: HexCoord;
   private readonly instanceMesh: CustomInstancedMesh;
+  private readonly instanceIndex: number;
 
   constructor(
     id: string,
     initialPosition: HexCoord,
     instanceMesh: CustomInstancedMesh,
+    instanceIndex: number = 0,
   ) {
     this.id = id;
     this.position = initialPosition;
     this.instanceMesh = instanceMesh;
+    this.instanceIndex = instanceIndex;
   }
 
   // Przesunięcie jednostki na nowy heks i aktualizacja macierzy w InstancedMesh
   public moveTo(newHex: HexCoord): void {
     this.position = newHex;
+    this.updateTransform();
+  }
+
+  private updateTransform(rotationZ: number = 0): void {
     const field = GameContext.gameMap.getField(
       this.position.q,
       this.position.r,
@@ -30,10 +37,18 @@ export abstract class Unit {
     const targetZ =
       (level + 1) * GameConstants.HEX_DEPTH + GameConstants.UNITS_HEIGHT / 2;
 
-    const pos2D = Formulas.hexCoordToPlaneCoord(
-      this.position,
-      GameConstants.SIZE,
+    const pos2D = this.getPlanePosition();
+    this.instanceMesh.updateState(
+      pos2D.x,
+      pos2D.y,
+      targetZ,
+      this.instanceIndex,
+      1,
+      rotationZ,
     );
-    this.instanceMesh.updateState(pos2D.x, pos2D.y, targetZ, 0, 1);
+  }
+
+  private getPlanePosition() {
+    return Formulas.hexCoordToPlaneCoord(this.position, GameConstants.SIZE);
   }
 }

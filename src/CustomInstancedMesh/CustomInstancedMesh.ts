@@ -1,9 +1,8 @@
 import {
-  Color,
   InstancedMesh,
   Object3D,
   type BufferGeometry,
-  type MeshLambertMaterial,
+  type Material,
 } from "three";
 
 export class CustomInstancedMesh {
@@ -12,7 +11,7 @@ export class CustomInstancedMesh {
 
   constructor(
     geometry: BufferGeometry,
-    material: MeshLambertMaterial,
+    material: Material,
     count: number,
   ) {
     this._instancedMesh = new InstancedMesh(geometry, material, count);
@@ -24,19 +23,14 @@ export class CustomInstancedMesh {
     z: number,
     index: number,
     scaleZ: number,
+    rotationZ: number = 0,
   ): void {
     CustomInstancedMesh.dummy.position.set(x, y, z);
     CustomInstancedMesh.dummy.scale.set(1, 1, scaleZ);
+    CustomInstancedMesh.dummy.rotation.set(0, 0, rotationZ);
     CustomInstancedMesh.dummy.updateMatrix();
     this._instancedMesh.setMatrixAt(index, CustomInstancedMesh.dummy.matrix);
     this._instancedMesh.instanceMatrix.needsUpdate = true;
-  }
-
-  setColorAt(index: number, color: Color) {
-    this._instancedMesh.setColorAt(index, color);
-    if (this._instancedMesh.instanceColor) {
-      this._instancedMesh.instanceColor.needsUpdate = true;
-    }
   }
 
   get instancedMesh(): InstancedMesh {

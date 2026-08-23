@@ -1,6 +1,27 @@
 import type { HexCoord, PlaneCoord } from "@/types";
 
 export class Formulas {
+  /** Coordinates of a flat-top hexagon vertex, numbered clockwise from +X. */
+  public static hexVertex(index: number, radius: number): PlaneCoord {
+    const angle = index * (Math.PI / 3);
+
+    return {
+      x: radius * Math.cos(angle),
+      y: radius * Math.sin(angle),
+    };
+  }
+
+  /** Maps a point centered at (0, 0) to 0..1 texture coordinates around a hex. */
+  public static planeCoordToTextureCoordinates(
+    position: PlaneCoord,
+    outerRadius: number,
+  ): readonly [u: number, v: number] {
+    return [
+      0.5 + position.x / (2 * outerRadius),
+      0.5 + position.y / (2 * outerRadius),
+    ];
+  }
+
   // Przeliczenie heksu na piksele (płaski na górze)
   public static hexCoordToPlaneCoord(hex: HexCoord, size: number): PlaneCoord {
     const x = size * ((3 / 2) * hex.q);
