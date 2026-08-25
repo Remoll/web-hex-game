@@ -3,7 +3,7 @@ import type { PlaneCoord } from "@/game/types";
 import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
 
 export class Hex {
-  // Geometria samej górnej powierzchni z wyraźnym obrysem
+  // Top surface geometry with a visible border.
   static createHexTopGeometry(size: number, border: number): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();
 
@@ -18,12 +18,12 @@ export class Hex {
     const borderColor = new THREE.Color(0x222222);
     const innerColor = new THREE.Color(0xffffff);
 
-    // Środek
+    // Center vertex.
     positions.push(0, 0, 0);
     colors.push(innerColor.r, innerColor.g, innerColor.b);
     uvs.push(0.5, 0.5);
 
-    // Wewnętrzny sześciokąt
+    // Inner hexagon.
     for (let i = 0; i < 6; i++) {
       const point = HexLayout.hexVertex(i, innerRadius);
       const [u, v] = HexLayout.planeCoordToTextureCoordinates(
@@ -36,7 +36,7 @@ export class Hex {
       uvs.push(u, v);
     }
 
-    // Zewnętrzny sześciokąt
+    // Outer hexagon.
     for (let i = 0; i < 6; i++) {
       const point = HexLayout.hexVertex(i, outerRadius);
       const [u, v] = HexLayout.planeCoordToTextureCoordinates(
@@ -49,7 +49,7 @@ export class Hex {
       uvs.push(u, v);
     }
 
-    // Środek (fan)
+    // Center triangle fan.
     for (let i = 0; i < 6; i++) {
       const a = 1 + i;
       const b = 1 + ((i + 1) % 6);
@@ -57,7 +57,7 @@ export class Hex {
       indices.push(0, a, b);
     }
 
-    // Ramka
+    // Border ring.
     for (let i = 0; i < 6; i++) {
       const in1 = 1 + i;
       const in2 = 1 + ((i + 1) % 6);
@@ -85,7 +85,7 @@ export class Hex {
 
     return geometry;
   }
-  // Geometria samych ścian bocznych o wysokości 1 (do skalowania w osi Z)
+  // Side-wall geometry with unit height for Z-axis scaling.
   static createHexSidesGeometry(size: number): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();
     const outerRadius = size;
@@ -102,7 +102,7 @@ export class Hex {
       const start = outerPoints[i];
       const end = outerPoints[next];
 
-      // Trójkąty boczne (wysokość od Z=0 do Z=1)
+      // Side triangles spanning from Z=0 to Z=1.
       positions.push(start.x, start.y, 1, end.x, end.y, 0, end.x, end.y, 1);
       positions.push(start.x, start.y, 1, start.x, start.y, 0, end.x, end.y, 0);
     }

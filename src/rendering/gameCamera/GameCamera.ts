@@ -12,7 +12,7 @@ export class GameCamera {
   private frustumSize: number;
   private mapMaxRadius: number;
 
-  // Offsety dla rzutu izometrycznego
+  // Offsets for the isometric camera.
   private offsetY = -300;
   private offsetZ = 300;
 
@@ -35,10 +35,10 @@ export class GameCamera {
       this.frustumSize / 2,
       -this.frustumSize / 2,
       0.1,
-      2000, // Zwiększamy zasięg odcinania, bo kamera jest pod kątem
+      2000, // The far plane accommodates the angled camera.
     );
 
-    // Ustawiamy kamerę pod kątem (Rzut Izometryczny)
+    // Position the camera at an isometric angle.
     this.camera.position.set(0, this.offsetY, this.offsetZ);
 
     this.controls = new MapControls(this.camera, domElement);
@@ -56,7 +56,7 @@ export class GameCamera {
     this.controls.screenSpacePanning = true;
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
-    this.controls.enableRotate = false; // Blokujemy swobodne obracanie, aby utrzymać kąt izometryczny
+    this.controls.enableRotate = false; // Keep the isometric viewpoint fixed.
 
     this.controls.mouseButtons = {
       LEFT: THREE.MOUSE.PAN,
@@ -115,7 +115,7 @@ export class GameCamera {
       this.controls.target.y +=
         (targetPosition.y - this.controls.target.y) * 0.05;
 
-      // W trybie podążania utrzymujemy kąt pochylenia dodając offsety
+      // Preserve the camera tilt with fixed offsets in follow mode.
       this.camera.position.x = this.controls.target.x;
       this.camera.position.y = this.controls.target.y + this.offsetY;
       this.camera.position.z = this.controls.target.z + this.offsetZ;

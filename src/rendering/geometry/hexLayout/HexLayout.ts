@@ -22,21 +22,21 @@ export class HexLayout {
     ];
   }
 
-  // Przeliczenie heksu na piksele (płaski na górze)
+  // Converts a flat-top axial hex coordinate to plane coordinates.
   public static hexCoordToPlaneCoord(hex: HexCoord, size: number): PlaneCoord {
     const x = size * ((3 / 2) * hex.q);
     const y = size * ((Math.sqrt(3) / 2) * hex.q + Math.sqrt(3) * hex.r);
     return { x, y };
   }
 
-  // Przeliczenie pozycji (x, y) z ekranu 3D na najbliższy heks (q, r)
+  // Converts plane coordinates to the nearest axial hex coordinate.
   public static planeCoordToHexCoord(pos: PlaneCoord, size: number): HexCoord {
     const q = ((2 / 3) * pos.x) / size;
     const r = ((-1 / 3) * pos.x + (Math.sqrt(3) / 3) * pos.y) / size;
     return HexLayout.hexRound(q, r);
   }
 
-  // Zaokrąglanie współrzędnych ciągłych do najbliższych całkowitych w siatce heksagonów
+  // Rounds fractional axial coordinates to the nearest hex.
   private static hexRound(q: number, r: number): HexCoord {
     const s = -q - r;
 
