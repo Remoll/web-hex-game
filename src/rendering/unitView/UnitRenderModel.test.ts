@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
+import { UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 import { defaultRenderConfig } from "@/rendering/RenderConfig";
@@ -21,7 +22,11 @@ const mapData: MapArray = [
 describe("UnitRenderModel", () => {
   it("positions a unit over the top of its field", () => {
     const state = buildUnitRenderState(
-      new Player("player", { q: 1, r: -1 }),
+      new Player(
+        "player",
+        { q: 1, r: -1 },
+        UnitTexture.PlayerIdle,
+      ),
       new GameMap(mapData),
       defaultRenderConfig,
     );

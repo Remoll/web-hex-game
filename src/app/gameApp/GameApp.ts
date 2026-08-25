@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { GameController } from "@/app/gameController/GameController";
 import { InputController } from "@/app/inputController/InputController";
-import { GameMap } from "@/game/board/gameMap/GameMap";
-import { GameSession } from "@/game/gameSession/GameSession";
-import { Player } from "@/game/unit/player/Player";
-import type { MapArray } from "@/game/types";
+import type { GameSession } from "@/game/gameSession/GameSession";
+import {
+  createGameSession,
+} from "@/game/levels/createGameSession";
+import type { LevelDefinition } from "@/game/levels/LevelDefinition";
 import { CameraMode } from "@/rendering/gameCamera/CameraMode";
 import { GameCamera } from "@/rendering/gameCamera/GameCamera";
 import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
@@ -16,7 +17,7 @@ import {
 import { UnitView } from "@/rendering/unitView/UnitView";
 
 export interface GameAppOptions {
-  readonly map: MapArray;
+  readonly level: LevelDefinition;
   readonly container: HTMLElement;
   readonly renderConfig?: RenderConfig;
 }
@@ -30,10 +31,10 @@ export class GameApp {
   private readonly unitView: UnitView;
   private readonly input: InputController;
 
-  constructor({ map, container, renderConfig = defaultRenderConfig }: GameAppOptions) {
-    const gameMap = new GameMap(map);
-    const player = new Player("player", { q: 0, r: 0 });
-    this.session = new GameSession(gameMap, [player]);
+  constructor({ level, container, renderConfig = defaultRenderConfig }: GameAppOptions) {
+    const { session, player } = createGameSession(level);
+    this.session = session;
+    const gameMap = session.gameMap;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xffffff);
@@ -57,7 +58,9 @@ export class GameApp {
     );
     this.mapView = new MapView(scene, gameMap, renderConfig);
     this.unitView = new UnitView(scene, gameMap, renderConfig);
-    this.unitView.sync(player);
+    for (const unit of session.units) {
+      this.unitView.sync(unit);
+    }
 
     const gameController = new GameController(this.session, this.unitView);
     this.input = new InputController(

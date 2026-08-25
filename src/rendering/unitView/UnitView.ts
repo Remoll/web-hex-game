@@ -4,7 +4,9 @@ import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { Unit } from "@/game/unit/Unit";
 import { AtlasInstancedMesh } from "@/rendering/customInstancedMesh/atlasInstancedMesh/AtlasInstancedMesh";
 import type { RenderConfig } from "@/rendering/RenderConfig";
-import { unitAtlas, UnitSprite } from "@/rendering/textures/UnitAtlas";
+import { unitAtlas } from "@/rendering/textures/UnitAtlas";
+import { UnitSprite } from "@/rendering/textures/UnitSprite";
+import { getUnitSprite } from "@/rendering/textures/UnitTextureSprite";
 import { buildUnitRenderState } from "@/rendering/unitView/UnitRenderModel";
 
 export class UnitView implements UnitPresenter {
@@ -42,6 +44,7 @@ export class UnitView implements UnitPresenter {
     const index = this.getOrCreateIndex(unit.id);
     const state = buildUnitRenderState(unit, this.gameMap, this.config);
     this.mesh.updateState(state.x, state.y, state.z, index, 1);
+    this.mesh.setTextureIndex(index, getUnitSprite(unit.texture));
   }
 
   dispose(): void {
@@ -66,7 +69,6 @@ export class UnitView implements UnitPresenter {
 
     this.unitIndices.set(unitId, index);
     this.mesh.instancedMesh.count = index + 1;
-    this.mesh.setTextureIndex(index, UnitSprite.PlayerIdle);
     return index;
   }
 }

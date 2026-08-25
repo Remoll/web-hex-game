@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import { GameSession } from "@/game/gameSession/GameSession";
+import { UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 
@@ -38,7 +39,11 @@ const mapData: MapArray = [
 ];
 
 function createSession(): { session: GameSession; player: Player } {
-  const player = new Player("player", { q: 0, r: 0 });
+  const player = new Player(
+    "player",
+    { q: 0, r: 0 },
+    UnitTexture.PlayerIdle,
+  );
   return {
     session: new GameSession(new GameMap(mapData), [player]),
     player,

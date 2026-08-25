@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GameController, type UnitPresenter } from "@/app/gameController/GameController";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import { GameSession } from "@/game/gameSession/GameSession";
+import { UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 
@@ -30,7 +31,11 @@ const mapData: MapArray = [
 
 describe("GameController", () => {
   it("updates the unit presenter only when a click results in movement", () => {
-    const player = new Player("player", { q: 0, r: 0 });
+    const player = new Player(
+      "player",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+    );
     const session = new GameSession(new GameMap(mapData), [player]);
     const presenter: UnitPresenter = { sync: vi.fn() };
     const controller = new GameController(session, presenter);
