@@ -21,6 +21,8 @@ export function buildUnitRenderState(
   return {
     x: position.x,
     y: position.y,
-    z: (level + 1) * config.hexDepth + config.unitsHeight / 2,
+    z:
+      (level + config.terrainBaseLevel) * config.hexDepth
+      + config.unitsHeight / 2,
   };
 }

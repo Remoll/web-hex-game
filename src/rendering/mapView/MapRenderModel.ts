@@ -32,7 +32,8 @@ export function buildMapRenderModel(
       coord,
       x: position.x,
       y: position.y,
-      height: (field.getGroundLevel() + 1) * config.hexDepth,
+      height:
+        (field.getGroundLevel() + config.terrainBaseLevel) * config.hexDepth,
       terrainType: field.getTerrainType(),
     });
   });

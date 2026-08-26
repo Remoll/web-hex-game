@@ -1,5 +1,6 @@
 import { initGameApp } from "@/app/gameApp/initGameApp";
 import { loadLevel } from "@/app/gameApp/loadLevel";
+import "@/style.css";
 
 async function startGame(): Promise<void> {
   try {

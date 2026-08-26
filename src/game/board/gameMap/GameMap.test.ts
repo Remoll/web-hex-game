@@ -42,4 +42,74 @@ describe("GameMap", () => {
     expect(coordinates).toEqual(["0,0", "-2,3"]);
     expect(map.radiusInHex).toBe(3);
   });
+
+  it("finds passable shortest paths and excludes occupied or impassable hexes", () => {
+    const pathMap = new GameMap([
+      {
+        q: 0,
+        r: 0,
+        fieldAttrs: {
+          terrainType: TerrainType.Grass,
+          allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
+          groundLevel: 0,
+          leavingCostMultiplier: 99,
+        },
+      },
+      {
+        q: 1,
+        r: 0,
+        fieldAttrs: {
+          terrainType: TerrainType.Water,
+          allowedMovements: { [MovementType.Ground]: false, [MovementType.Flying]: true },
+          groundLevel: 0,
+          leavingCostMultiplier: 1,
+        },
+      },
+      {
+        q: 0,
+        r: 1,
+        fieldAttrs: {
+          terrainType: TerrainType.Grass,
+          allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
+          groundLevel: 10,
+          leavingCostMultiplier: 50,
+        },
+      },
+      {
+        q: 1,
+        r: 1,
+        fieldAttrs: {
+          terrainType: TerrainType.Grass,
+          allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
+          groundLevel: 0,
+          leavingCostMultiplier: 1,
+        },
+      },
+    ]);
+
+    expect(pathMap.getHexDistance({ q: 0, r: 0 }, { q: 1, r: 1 })).toBe(2);
+    expect(pathMap.getNeighbours({ q: 0, r: 0 })).toEqual(
+      expect.arrayContaining([{ q: 1, r: 0 }, { q: 0, r: 1 }]),
+    );
+    expect(
+      pathMap.findShortestPath(
+        { q: 0, r: 0 },
+        { q: 1, r: 1 },
+        MovementType.Ground,
+        3,
+      ),
+    ).toEqual({
+      cost: 2,
+      steps: [{ q: 0, r: 1 }, { q: 1, r: 1 }],
+    });
+    expect(
+      pathMap.findShortestPath(
+        { q: 0, r: 0 },
+        { q: 1, r: 1 },
+        MovementType.Ground,
+        3,
+        (coord) => coord.q === 0 && coord.r === 1,
+      ),
+    ).toBeUndefined();
+  });
 });

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { Faction } from "@/game/faction/Faction";
 import { createGameSession } from "@/game/levels/createGameSession";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
+import { MovementType, TerrainType } from "@/game/types";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
-import { MovementType, TerrainType } from "@/game/types";
 
 const level: LevelDefinition = {
   map: [
@@ -38,12 +39,24 @@ const level: LevelDefinition = {
     id: "player",
     position: { q: 0, r: 0 },
     texture: UnitTexture.PlayerIdle,
+    faction: Faction.Player,
+    movementType: MovementType.Ground,
+    movementRange: 3,
+    maxHp: 100,
+    currentHp: 100,
+    attackPower: 20,
   },
   units: [
     {
       id: "enemy-1",
       position: { q: 2, r: 0 },
       texture: UnitTexture.EnemyIdle,
+      faction: Faction.Enemy,
+      movementType: MovementType.Ground,
+      movementRange: 3,
+      maxHp: 100,
+      currentHp: 50,
+      attackPower: 20,
     },
   ],
 };
@@ -55,11 +68,25 @@ describe("createGameSession", () => {
 
     expect(player).toBeInstanceOf(Player);
     expect(player.texture).toBe(UnitTexture.PlayerIdle);
+    expect(player.faction).toBe(Faction.Player);
     expect(session.units.map((unit) => unit.id)).toEqual(["player", "enemy-1"]);
     expect(enemy).toBeInstanceOf(Unit);
     expect(enemy).not.toBeInstanceOf(Player);
     expect(enemy?.position).toEqual({ q: 2, r: 0 });
     expect(enemy?.texture).toBe(UnitTexture.EnemyIdle);
+    expect(enemy?.faction).toBe(Faction.Enemy);
+    expect(enemy?.currentHp).toBe(50);
     expect(session.gameMap.getField(2, 0)?.getGroundLevel()).toBe(1);
+  });
+
+  it("rejects a level that assigns the player an unsupported faction", () => {
+    const invalidPlayerLevel: LevelDefinition = {
+      ...level,
+      player: { ...level.player, faction: Faction.Enemy },
+    };
+
+    expect(() => createGameSession(invalidPlayerLevel)).toThrow(
+      "The level player must use the player faction",
+    );
   });
 });

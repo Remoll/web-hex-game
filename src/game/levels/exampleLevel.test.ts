@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { Faction } from "@/game/faction/Faction";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
+import { MovementType, TerrainType } from "@/game/types";
 import { UnitTexture } from "@/game/unit/Unit";
 
 const exampleLevelPath = fileURLToPath(
@@ -20,7 +22,7 @@ function hexDistance(
 }
 
 describe("example level", () => {
-  it("defines a player and one enemy two hexes away", async () => {
+  it("preserves the original map layout and defines all four faction fixtures", async () => {
     const level = JSON.parse(
       await readFile(exampleLevelPath, "utf8"),
     ) as LevelDefinition;
@@ -29,13 +31,67 @@ describe("example level", () => {
       id: "player",
       position: { q: 0, r: 0 },
       texture: UnitTexture.PlayerIdle,
+      faction: Faction.Player,
+      movementType: MovementType.Ground,
+      movementRange: 3,
+      maxHp: 100,
+      currentHp: 100,
+      attackPower: 20,
     });
-    expect(level.units).toHaveLength(1);
+    expect(
+      level.map.map(({ q, r, fieldAttrs }) => ({
+        q,
+        r,
+        terrainType: fieldAttrs.terrainType,
+        groundLevel: fieldAttrs.groundLevel,
+      })),
+    ).toEqual([
+      { q: 0, r: -2, terrainType: TerrainType.Grass, groundLevel: 3 },
+      { q: 1, r: -2, terrainType: TerrainType.Grass, groundLevel: 2 },
+      { q: 2, r: -2, terrainType: TerrainType.Grass, groundLevel: 2 },
+      { q: -1, r: -1, terrainType: TerrainType.Grass, groundLevel: 4 },
+      { q: 0, r: -1, terrainType: TerrainType.Water, groundLevel: 0 },
+      { q: 1, r: -1, terrainType: TerrainType.Water, groundLevel: 0 },
+      { q: 2, r: -1, terrainType: TerrainType.Grass, groundLevel: 1 },
+      { q: -2, r: 0, terrainType: TerrainType.Grass, groundLevel: 0 },
+      { q: -1, r: 0, terrainType: TerrainType.Grass, groundLevel: 0 },
+      { q: 0, r: 0, terrainType: TerrainType.Grass, groundLevel: 0 },
+      { q: 1, r: 0, terrainType: TerrainType.Grass, groundLevel: 0 },
+      { q: 2, r: 0, terrainType: TerrainType.Grass, groundLevel: 0 },
+      { q: -2, r: 1, terrainType: TerrainType.Grass, groundLevel: 0 },
+      { q: -1, r: 1, terrainType: TerrainType.Water, groundLevel: 0 },
+      { q: 0, r: 1, terrainType: TerrainType.Grass, groundLevel: 2 },
+      { q: 1, r: 1, terrainType: TerrainType.Grass, groundLevel: 1 },
+      { q: -2, r: 2, terrainType: TerrainType.Grass, groundLevel: 1 },
+      { q: -1, r: 2, terrainType: TerrainType.Grass, groundLevel: 1 },
+      { q: 0, r: 2, terrainType: TerrainType.Grass, groundLevel: 1 },
+    ]);
+    expect(level.map.filter((field) => !field.fieldAttrs.allowedMovements.ground))
+      .toHaveLength(3);
+    expect(level.units).toHaveLength(3);
     expect(level.units[0]).toMatchObject({
+      id: "friendly-1",
+      position: { q: -1, r: 0 },
+      texture: UnitTexture.PlayerIdle,
+      faction: Faction.Player,
+      movementType: MovementType.Ground,
+      movementRange: 3,
+      maxHp: 100,
+      currentHp: 100,
+      attackPower: 20,
+    });
+    expect(level.units[1]).toMatchObject({
       id: "enemy-1",
       position: { q: 2, r: 0 },
       texture: UnitTexture.EnemyIdle,
+      faction: Faction.Enemy,
     });
-    expect(hexDistance(level.player.position, level.units[0].position)).toBe(2);
+    expect(level.units[2]).toMatchObject({
+      id: "neutral-1",
+      position: { q: 2, r: -2 },
+      faction: Faction.Neutral,
+    });
+    expect(hexDistance(level.player.position, level.units[1].position)).toBe(2);
+    expect(hexDistance(level.player.position, level.units[2].position)).toBe(2);
   });
 });

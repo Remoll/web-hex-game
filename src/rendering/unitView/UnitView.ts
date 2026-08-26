@@ -12,6 +12,7 @@ import { buildUnitRenderState } from "@/rendering/unitView/UnitRenderModel";
 export class UnitView implements UnitPresenter {
   private readonly mesh: AtlasInstancedMesh<UnitSprite>;
   private readonly unitIndices = new Map<string, number>();
+  private readonly hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 
   constructor(
     scene: THREE.Scene,
@@ -37,11 +38,19 @@ export class UnitView implements UnitPresenter {
     );
     this.mesh.instancedMesh.count = 0;
     this.mesh.instancedMesh.frustumCulled = false;
+    this.mesh.instancedMesh.renderOrder = 3;
     scene.add(this.mesh.instancedMesh);
   }
 
   sync(unit: Unit): void {
     const index = this.getOrCreateIndex(unit.id);
+
+    if (!unit.isAlive) {
+      this.mesh.instancedMesh.setMatrixAt(index, this.hiddenMatrix);
+      this.mesh.instancedMesh.instanceMatrix.needsUpdate = true;
+      return;
+    }
+
     const state = buildUnitRenderState(unit, this.gameMap, this.config);
     this.mesh.updateState(state.x, state.y, state.z, index, 1);
     this.mesh.setTextureIndex(index, getUnitSprite(unit.texture));

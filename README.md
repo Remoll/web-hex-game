@@ -11,7 +11,53 @@ npm install
 npm run dev
 ```
 
-The development server starts at the address printed by Vite. Select the player by clicking its hex, then click any other map hex to move it. Press `C` to toggle the camera mode.
+The development server starts at the address printed by Vite. Press `C` to toggle the camera mode.
+
+## Tactical prototype controls
+
+The current example level contains a Player, an additional Player-faction unit,
+an Enemy, and a Neutral unit. All units begin with 100 HP, 20 attack power,
+Ground movement, and a movement range of three hexes.
+
+- Hover a Player-faction unit to see the selection cursor, then click it to
+  select it. Only Player-faction units are controllable in this slice.
+- After selection, reachable Ground hexes are highlighted in green. Click one
+  to move there along a valid path of up to three hexes. Every entered hex has
+  a cost of one; unused movement remains available until the three-point pool
+  is exhausted. Living units block paths and destinations.
+- Hover a living adjacent hostile unit to see a red attack cursor and target
+  highlight. Click it to deal 20 damage. A unit may attack only factions in
+  its `dispositionToFactions.enemy` category.
+- Movement does not consume the unit's attack action. An attack exhausts the
+  action and any remaining movement; a future round system will restore both
+  through the existing domain reset API. There is intentionally no turn UI yet.
+- Living units display a health bar. At zero HP, a unit becomes non-interactive
+  and leaves a visual-only temporary remains marker. Remains do not block
+  movement or receive input.
+
+The canvas uses the unavailable cursor by default (including empty hexes before
+selection), then switches to temporary selection, move, or attack cursor art
+when that action is valid.
+They are placeholders under `public/cursors/` and will be replaced by final
+game assets later.
+
+### Current faction dispositions
+
+| Acting faction | Friendly | Enemy | Neutral |
+| --- | --- | --- | --- |
+| Player | Player | Enemy | Neutral |
+| Enemy | Enemy | Player | Neutral |
+| Neutral | Neutral | — | Player, Enemy |
+
+The game stores this as `dispositionToFactions` with the three explicit
+categories `friendly`, `enemy`, and `neutral`. Every known faction appears in
+exactly one category for each acting faction.
+
+### Deferred systems
+
+Turns, rounds, enemy AI, counterattacks, player win/lose conditions, terrain
+cost multipliers, elevation rules, animated movement/attacks, interactive
+remains, final cursor art, and final unit art are intentionally deferred.
 
 ## Commands
 

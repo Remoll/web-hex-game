@@ -10,11 +10,14 @@ import { CameraMode } from "@/rendering/gameCamera/CameraMode";
 import { GameCamera } from "@/rendering/gameCamera/GameCamera";
 import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
 import { MapView } from "@/rendering/mapView/MapView";
+import { MapHighlightView } from "@/rendering/mapHighlightView/MapHighlightView";
+import { RemainsView } from "@/rendering/remainsView/RemainsView";
 import {
   defaultRenderConfig,
   type RenderConfig,
 } from "@/rendering/RenderConfig";
 import { UnitView } from "@/rendering/unitView/UnitView";
+import { UnitHealthView } from "@/rendering/unitHealthView/UnitHealthView";
 
 export interface GameAppOptions {
   readonly level: LevelDefinition;
@@ -28,7 +31,10 @@ export class GameApp {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly camera: GameCamera;
   private readonly mapView: MapView;
+  private readonly mapHighlightView: MapHighlightView;
   private readonly unitView: UnitView;
+  private readonly unitHealthView: UnitHealthView;
+  private readonly remainsView: RemainsView;
   private readonly input: InputController;
 
   constructor({ level, container, renderConfig = defaultRenderConfig }: GameAppOptions) {
@@ -57,12 +63,19 @@ export class GameApp {
       renderConfig,
     );
     this.mapView = new MapView(scene, gameMap, renderConfig);
+    this.mapHighlightView = new MapHighlightView(scene, gameMap, renderConfig);
     this.unitView = new UnitView(scene, gameMap, renderConfig);
+    this.unitHealthView = new UnitHealthView(scene, gameMap, renderConfig);
+    this.remainsView = new RemainsView(scene, gameMap, renderConfig);
     for (const unit of session.units) {
-      this.unitView.sync(unit);
+      this.syncUnitPresentation(unit);
     }
 
-    const gameController = new GameController(this.session, this.unitView);
+    const gameController = new GameController(
+      this.session,
+      { sync: (unit) => this.syncUnitPresentation(unit) },
+      this.mapHighlightView,
+    );
     this.input = new InputController(
       this.renderer.domElement,
       this.camera,
@@ -85,8 +98,17 @@ export class GameApp {
     this.input.dispose();
     this.camera.dispose();
     this.mapView.dispose();
+    this.mapHighlightView.dispose();
     this.unitView.dispose();
+    this.unitHealthView.dispose();
+    this.remainsView.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+  }
+
+  private syncUnitPresentation(unit: import("@/game/unit/Unit").Unit): void {
+    this.unitView.sync(unit);
+    this.unitHealthView.sync(unit);
+    this.remainsView.sync(unit);
   }
 }

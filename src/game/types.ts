@@ -1,5 +1,7 @@
 import type { Field } from "@/game/board/field/Field";
 
+export { Faction, FactionDisposition } from "@/game/faction/Faction";
+
 export interface HexCoord {
   q: Q;
   r: R;
@@ -11,16 +13,16 @@ export interface PlaneCoord {
 }
 
 export enum TerrainType {
-  Grass,
-  Water,
+  Grass = "grass",
+  Water = "water",
 }
 
 export enum MovementType {
-  Ground,
-  Flying,
+  Ground = "ground",
+  Flying = "flying",
 }
 
-export type AllowedMovements = Record<MovementType, boolean>;
+export type AllowedMovements = Readonly<Record<MovementType, boolean>>;
 
 export interface FieldAttrs {
   terrainType: TerrainType;
