@@ -42,10 +42,10 @@ export class UnitView implements UnitPresenter {
     scene.add(this.mesh.instancedMesh);
   }
 
-  sync(unit: Unit): void {
+  sync(unit: Unit, visible: boolean = true): void {
     const index = this.getOrCreateIndex(unit.id);
 
-    if (!unit.isAlive) {
+    if (!unit.isAlive || !visible) {
       this.mesh.instancedMesh.setMatrixAt(index, this.hiddenMatrix);
       this.mesh.instancedMesh.instanceMatrix.needsUpdate = true;
       return;

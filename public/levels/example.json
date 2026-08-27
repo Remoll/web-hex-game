@@ -5,7 +5,10 @@
       "r": -2,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 3,
         "leavingCostMultiplier": 1
       }
@@ -15,7 +18,10 @@
       "r": -2,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 2,
         "leavingCostMultiplier": 1
       }
@@ -25,7 +31,10 @@
       "r": -2,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 2,
         "leavingCostMultiplier": 1
       }
@@ -35,7 +44,10 @@
       "r": -1,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 4,
         "leavingCostMultiplier": 1
       }
@@ -45,7 +57,10 @@
       "r": -1,
       "fieldAttrs": {
         "terrainType": "water",
-        "allowedMovements": { "ground": false, "flying": true },
+        "allowedMovements": {
+          "ground": false,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -55,7 +70,10 @@
       "r": -1,
       "fieldAttrs": {
         "terrainType": "water",
-        "allowedMovements": { "ground": false, "flying": true },
+        "allowedMovements": {
+          "ground": false,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -65,7 +83,10 @@
       "r": -1,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
@@ -75,7 +96,10 @@
       "r": 0,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -85,7 +109,10 @@
       "r": 0,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -95,7 +122,10 @@
       "r": 0,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -105,7 +135,10 @@
       "r": 0,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -115,7 +148,10 @@
       "r": 0,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -125,7 +161,10 @@
       "r": 1,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -135,7 +174,10 @@
       "r": 1,
       "fieldAttrs": {
         "terrainType": "water",
-        "allowedMovements": { "ground": false, "flying": true },
+        "allowedMovements": {
+          "ground": false,
+          "flying": true
+        },
         "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
@@ -145,7 +187,10 @@
       "r": 1,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 2,
         "leavingCostMultiplier": 1
       }
@@ -155,7 +200,10 @@
       "r": 1,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
@@ -165,7 +213,10 @@
       "r": 2,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
@@ -175,7 +226,10 @@
       "r": 2,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
@@ -185,27 +239,1442 @@
       "r": 2,
       "fieldAttrs": {
         "terrainType": "grass",
-        "allowedMovements": { "ground": true, "flying": true },
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
         "groundLevel": 1,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -6,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -6,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -6,
+      "r": 2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -6,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -6,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -6,
+      "r": 5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -6,
+      "r": 6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -5,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -5,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -5,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -5,
+      "r": 2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -5,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -5,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -5,
+      "r": 5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -5,
+      "r": 6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": -2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": 2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": 5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -4,
+      "r": 6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": -2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": 2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": 5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -3,
+      "r": 6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -2,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -2,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -2,
+      "r": -2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -2,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -2,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -2,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -2,
+      "r": 5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -2,
+      "r": 6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": -5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": -2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": 5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": 6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": -6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": -5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": 5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": 6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": -6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": -5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": 2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": 5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 2,
+      "r": -6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 2,
+      "r": -5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 2,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 2,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 2,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 2,
+      "r": 2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 2,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 2,
+      "r": 4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": -6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": -5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": -2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": 2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 3,
+      "r": 3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": -6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": -5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": -2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 4,
+      "r": 2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 5,
+      "r": -6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 5,
+      "r": -5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 5,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 5,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 5,
+      "r": -2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 5,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 5,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 5,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 6,
+      "r": -6,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 6,
+      "r": -5,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 6,
+      "r": -4,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 6,
+      "r": -3,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 6,
+      "r": -2,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 6,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 6,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "grass",
+        "allowedMovements": {
+          "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
     }
   ],
   "player": {
     "id": "player",
-    "position": { "q": 0, "r": 0 },
+    "position": {
+      "q": 0,
+      "r": 0
+    },
     "texture": "player-idle",
     "faction": "player",
     "movementType": "ground",
     "movementRange": 3,
     "maxHp": 100,
     "currentHp": 100,
-    "attackPower": 20
+    "attackPower": 20,
+    "tacticalRole": "mage",
+    "viewRange": 4
   },
   "units": [
     {
       "id": "friendly-1",
-      "position": { "q": -1, "r": 0 },
+      "position": {
+        "q": -1,
+        "r": 0
+      },
       "texture": "player-idle",
       "faction": "player",
       "movementType": "ground",
@@ -216,7 +1685,10 @@
     },
     {
       "id": "enemy-1",
-      "position": { "q": 2, "r": 0 },
+      "position": {
+        "q": 2,
+        "r": 0
+      },
       "texture": "enemy-idle",
       "faction": "enemy",
       "movementType": "ground",
@@ -227,7 +1699,10 @@
     },
     {
       "id": "neutral-1",
-      "position": { "q": 2, "r": -2 },
+      "position": {
+        "q": 2,
+        "r": -2
+      },
       "texture": "enemy-idle",
       "faction": "neutral",
       "movementType": "ground",

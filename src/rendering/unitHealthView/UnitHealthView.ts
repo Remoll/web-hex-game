@@ -35,11 +35,11 @@ export class UnitHealthView {
     scene.add(this.background, this.fill);
   }
 
-  sync(unit: Unit): void {
+  sync(unit: Unit, visible: boolean = true): void {
     const index = this.getOrCreateIndex(unit.id);
     const state = buildUnitHealthRenderState(unit, this.gameMap, this.config);
 
-    if (!state) {
+    if (!state || !visible) {
       this.setHidden(this.background, index);
       this.setHidden(this.fill, index);
       return;

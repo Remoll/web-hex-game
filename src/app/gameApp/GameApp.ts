@@ -67,13 +67,11 @@ export class GameApp {
     this.unitView = new UnitView(scene, gameMap, renderConfig);
     this.unitHealthView = new UnitHealthView(scene, gameMap, renderConfig);
     this.remainsView = new RemainsView(scene, gameMap, renderConfig);
-    for (const unit of session.units) {
-      this.syncUnitPresentation(unit);
-    }
+    this.syncTacticalPresentation();
 
     const gameController = new GameController(
       this.session,
-      { sync: (unit) => this.syncUnitPresentation(unit) },
+      { sync: () => this.syncTacticalPresentation() },
       this.mapHighlightView,
     );
     this.input = new InputController(
@@ -107,8 +105,16 @@ export class GameApp {
   }
 
   private syncUnitPresentation(unit: import("@/game/unit/Unit").Unit): void {
-    this.unitView.sync(unit);
-    this.unitHealthView.sync(unit);
-    this.remainsView.sync(unit);
+    const visible = this.session.isUnitVisible(unit);
+    this.unitView.sync(unit, visible);
+    this.unitHealthView.sync(unit, visible);
+    this.remainsView.sync(unit, visible);
+  }
+
+  private syncTacticalPresentation(): void {
+    this.mapView.syncVisibility(this.session.visibility);
+    for (const unit of this.session.units) {
+      this.syncUnitPresentation(unit);
+    }
   }
 }

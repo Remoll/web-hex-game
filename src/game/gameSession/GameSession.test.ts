@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import { Faction } from "@/game/faction/Faction";
-import { GameSession } from "@/game/gameSession/GameSession";
+import {
+  GameActionPreviewType,
+  GameActionRejectionReason,
+  GameActionType,
+  GameSession,
+} from "@/game/gameSession/GameSession";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
+import { FieldVisibility } from "@/game/visibility/MageVisibility";
 
 const mapData: MapArray = [
   { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass) },
@@ -68,30 +74,30 @@ describe("GameSession", () => {
     const { session, playerAlly } = createSession();
 
     expect(session.clickHex({ q: 2, r: 0 })).toEqual({
-      type: "ignored",
-      reason: "not-player-controlled",
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotPlayerControlled,
     });
     expect(session.selectedUnitId).toBeNull();
 
     expect(session.previewHex({ q: 0, r: 0 })).toEqual({
-      type: "selection",
+      type: GameActionPreviewType.Selection,
       unitId: "player",
     });
     expect(session.clickHex({ q: 0, r: 0 })).toEqual({
-      type: "selected",
+      type: GameActionType.Selected,
       unitId: "player",
     });
     expect(session.clickHex(playerAlly.position)).toEqual({
-      type: "selected",
+      type: GameActionType.Selected,
       unitId: "player-ally",
     });
     expect(session.selectedUnitId).toBe("player-ally");
     expect(session.clickHex({ q: 0, r: 0 })).toEqual({
-      type: "selected",
+      type: GameActionType.Selected,
       unitId: "player",
     });
     expect(session.clickHex({ q: 0, r: 0 })).toEqual({
-      type: "deselected",
+      type: GameActionType.Deselected,
       unitId: "player",
     });
   });
@@ -101,7 +107,7 @@ describe("GameSession", () => {
     session.clickHex({ q: 0, r: 0 });
 
     expect(session.previewHex({ q: 0, r: -1 })).toEqual({
-      type: "valid-move",
+      type: GameActionPreviewType.ValidMove,
       unitId: "player",
       destination: { q: 0, r: -1 },
       path: {
@@ -114,7 +120,7 @@ describe("GameSession", () => {
     );
 
     expect(session.clickHex({ q: 0, r: -1 })).toEqual({
-      type: "moved",
+      type: GameActionType.Moved,
       unitId: "player",
       from: { q: 0, r: 0 },
       to: { q: 0, r: -1 },
@@ -122,7 +128,7 @@ describe("GameSession", () => {
     expect(player.remainingMovement).toBe(2);
     expect(player.remainingActions).toBe(1);
     expect(session.previewHex({ q: 0, r: -2 })).toMatchObject({
-      type: "valid-move",
+      type: GameActionPreviewType.ValidMove,
       destination: { q: 0, r: -2 },
     });
 
@@ -130,8 +136,8 @@ describe("GameSession", () => {
     expect(player.remainingMovement).toBe(0);
     expect(player.remainingActions).toBe(1);
     expect(session.previewHex({ q: 0, r: -2 })).toEqual({
-      type: "out-of-range",
-      reason: "round-exhausted",
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.RoundExhausted,
     });
 
     session.resetRoundBudgets();
@@ -144,16 +150,16 @@ describe("GameSession", () => {
     session.clickHex({ q: 0, r: 0 });
 
     expect(session.previewHex({ q: 0, r: 1 })).toEqual({
-      type: "out-of-range",
-      reason: "out-of-range",
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.OutOfRange,
     });
     expect(session.clickHex({ q: 0, r: 1 })).toEqual({
-      type: "ignored",
-      reason: "out-of-range",
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.OutOfRange,
     });
     expect(session.previewHex({ q: 3, r: 0 })).toEqual({
-      type: "out-of-range",
-      reason: "not-hostile",
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.NotHostile,
     });
   });
 
@@ -165,12 +171,12 @@ describe("GameSession", () => {
     expect(player.remainingActions).toBe(1);
 
     expect(session.previewHex({ q: 2, r: 0 })).toEqual({
-      type: "valid-attack",
+      type: GameActionPreviewType.ValidAttack,
       attackerId: "player",
       targetId: "enemy",
     });
     expect(session.clickHex({ q: 2, r: 0 })).toEqual({
-      type: "attacked",
+      type: GameActionType.Attacked,
       attackerId: "player",
       targetId: "enemy",
       damage: 20,
@@ -183,7 +189,7 @@ describe("GameSession", () => {
     for (let health = 60; health >= 0; health -= 20) {
       session.resetRoundBudgets();
       expect(session.clickHex({ q: 2, r: 0 })).toMatchObject({
-        type: "attacked",
+        type: GameActionType.Attacked,
         targetCurrentHp: health,
         targetDefeated: health === 0,
       });
@@ -196,8 +202,72 @@ describe("GameSession", () => {
 
     session.resetRoundBudgets();
     expect(session.previewHex({ q: 2, r: 0 })).toMatchObject({
-      type: "valid-move",
+      type: GameActionPreviewType.ValidMove,
       destination: { q: 2, r: 0 },
     });
+  });
+
+  it("tracks Mage discovery after movement and rejects hidden unit selection", () => {
+    const visibilityMap: MapArray = [0, 1, 2, 3].map((q) => ({
+      q,
+      r: 0,
+      fieldAttrs: field(TerrainType.Grass),
+    }));
+    const mage = new Player(
+      "mage",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { viewRange: 1 },
+    );
+    const hiddenAlly = new Unit(
+      "hidden-ally",
+      { q: 3, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const session = new GameSession(
+      new GameMap(visibilityMap),
+      [mage, hiddenAlly],
+    );
+
+    expect(session.getFieldVisibility({ q: 0, r: 0 })).toBe(
+      FieldVisibility.Visible,
+    );
+    expect(session.getFieldVisibility({ q: 2, r: 0 })).toBe(
+      FieldVisibility.Undiscovered,
+    );
+    expect(session.previewHex(hiddenAlly.position)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.NotVisible,
+    });
+    expect(session.clickHex(hiddenAlly.position)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotVisible,
+    });
+
+    session.clickHex(mage.position);
+    session.clickHex({ q: 1, r: 0 });
+    session.clickHex({ q: 2, r: 0 });
+
+    expect(session.getFieldVisibility({ q: 0, r: 0 })).toBe(
+      FieldVisibility.Discovered,
+    );
+    expect(session.getFieldVisibility({ q: 2, r: 0 })).toBe(
+      FieldVisibility.Visible,
+    );
+  });
+
+  it("requires exactly one living Mage", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const secondMage = new Player(
+      "second-mage",
+      { q: 1, r: 0 },
+      UnitTexture.PlayerIdle,
+    );
+
+    expect(() => new GameSession(
+      new GameMap(mapData),
+      [mage, secondMage],
+    )).toThrow("A game session requires exactly one living Mage");
   });
 });

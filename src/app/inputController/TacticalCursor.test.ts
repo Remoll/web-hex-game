@@ -4,16 +4,23 @@ import {
   getTacticalCursor,
   getTacticalCursorStyle,
 } from "@/app/inputController/TacticalCursor";
+import {
+  GameActionPreviewType,
+  GameActionRejectionReason,
+} from "@/game/gameSession/GameSession";
 
 describe("getTacticalCursor", () => {
   it("maps semantic interaction previews to the four tactical cursor states", () => {
-    expect(getTacticalCursor({ type: "selection", unitId: "player" })).toBe(
+    expect(getTacticalCursor({
+      type: GameActionPreviewType.Selection,
+      unitId: "player",
+    })).toBe(
       TacticalCursor.Select,
     );
     expect(
       getTacticalCursor(
         {
-          type: "valid-move",
+          type: GameActionPreviewType.ValidMove,
           unitId: "player",
           destination: { q: 1, r: 0 },
           path: { steps: [{ q: 1, r: 0 }], cost: 1 },
@@ -22,12 +29,19 @@ describe("getTacticalCursor", () => {
     ).toBe(TacticalCursor.Move);
     expect(
       getTacticalCursor(
-        { type: "valid-attack", attackerId: "player", targetId: "enemy" },
+        {
+          type: GameActionPreviewType.ValidAttack,
+          attackerId: "player",
+          targetId: "enemy",
+        },
       ),
     ).toBe(TacticalCursor.Attack);
     expect(
       getTacticalCursor(
-        { type: "out-of-range", reason: "out-of-range" },
+        {
+          type: GameActionPreviewType.OutOfRange,
+          reason: GameActionRejectionReason.OutOfRange,
+        },
       ),
     ).toBe(TacticalCursor.Unavailable);
   });
@@ -35,7 +49,10 @@ describe("getTacticalCursor", () => {
   it("uses the unavailable cursor as the default for empty terrain", () => {
     expect(
       getTacticalCursor(
-        { type: "out-of-range", reason: "out-of-range" },
+        {
+          type: GameActionPreviewType.OutOfRange,
+          reason: GameActionRejectionReason.OutOfRange,
+        },
       ),
     ).toBe(TacticalCursor.Unavailable);
     expect(getTacticalCursor(undefined)).toBe(TacticalCursor.Unavailable);

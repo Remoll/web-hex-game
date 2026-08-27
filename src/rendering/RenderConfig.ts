@@ -13,6 +13,11 @@ export interface RenderConfig {
   readonly remainsSize: number;
   readonly tacticalHighlightZOffset: number;
   readonly remainsZOffset: number;
+  /** Fog planes render above terrain and below tactical objects. */
+  readonly fogZOffset: number;
+  readonly undiscoveredFogColor: number;
+  readonly discoveredFogColor: number;
+  readonly discoveredFogOpacity: number;
 }
 
 export const defaultRenderConfig: RenderConfig = {
@@ -29,4 +34,8 @@ export const defaultRenderConfig: RenderConfig = {
   remainsSize: 44,
   tacticalHighlightZOffset: 0.2,
   remainsZOffset: 0.3,
+  fogZOffset: 0.05,
+  undiscoveredFogColor: 0x000000,
+  discoveredFogColor: 0x17202a,
+  discoveredFogOpacity: 0.45,
 };

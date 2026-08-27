@@ -1,5 +1,7 @@
 import {
   GameSession,
+  GameActionPreviewType,
+  GameActionType,
   type GameAction,
   type GameActionPreview,
 } from "@/game/gameSession/GameSession";
@@ -34,11 +36,11 @@ export class GameController {
   clickHex(coord: HexCoord): GameAction {
     const action = this.session.clickHex(coord);
 
-    if (action.type === "moved") {
+    if (action.type === GameActionType.Moved) {
       this.syncUnit(action.unitId);
     }
 
-    if (action.type === "attacked") {
+    if (action.type === GameActionType.Attacked) {
       this.syncUnit(action.attackerId);
       this.syncUnit(action.targetId);
     }
@@ -83,7 +85,7 @@ export class GameController {
       }
     }
 
-    if (preview?.type === "valid-attack") {
+    if (preview?.type === GameActionPreviewType.ValidAttack) {
       const target = this.session.getUnit(preview.targetId);
       if (target?.isAlive) {
         highlights.push({ kind: "attack", coord: target.position });

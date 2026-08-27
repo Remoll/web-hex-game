@@ -1,6 +1,6 @@
 import type { Faction } from "@/game/faction/Faction";
 import type { HexCoord, MapArray } from "@/game/types";
-import type { UnitTexture } from "@/game/unit/Unit";
+import type { UnitTacticalRole, UnitTexture } from "@/game/unit/Unit";
 import type { MovementType } from "@/game/types";
 
 export interface UnitDefinition {
@@ -14,6 +14,8 @@ export interface UnitDefinition {
   readonly maxHp?: number;
   readonly currentHp?: number;
   readonly attackPower?: number;
+  readonly tacticalRole?: UnitTacticalRole;
+  readonly viewRange?: number;
 }
 
 /** Serializable data needed to create one playable level. */

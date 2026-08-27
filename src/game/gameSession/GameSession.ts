@@ -4,15 +4,45 @@ import {
   FactionDisposition,
   getFactionDisposition,
 } from "@/game/faction/Faction";
-import { Unit } from "@/game/unit/Unit";
+import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
+import {
+  FieldVisibility,
+  MageVisibility,
+  type FieldVisibilityReader,
+} from "@/game/visibility/MageVisibility";
+
+export enum GameActionType {
+  Selected = "selected",
+  Deselected = "deselected",
+  Moved = "moved",
+  Attacked = "attacked",
+  Ignored = "ignored",
+}
+
+export enum GameActionPreviewType {
+  Selection = "selection",
+  ValidMove = "valid-move",
+  ValidAttack = "valid-attack",
+  OutOfRange = "out-of-range",
+}
+
+export enum GameActionRejectionReason {
+  MissingField = "missing-field",
+  NoSelectedUnit = "no-selected-unit",
+  NotPlayerControlled = "not-player-controlled",
+  NotHostile = "not-hostile",
+  NotVisible = "not-visible",
+  OutOfRange = "out-of-range",
+  RoundExhausted = "round-exhausted",
+}
 
 export type GameAction =
-  | { type: "selected"; unitId: string }
-  | { type: "deselected"; unitId: string }
-  | { type: "moved"; unitId: string; from: HexCoord; to: HexCoord }
+  | { type: GameActionType.Selected; unitId: string }
+  | { type: GameActionType.Deselected; unitId: string }
+  | { type: GameActionType.Moved; unitId: string; from: HexCoord; to: HexCoord }
   | {
-    type: "attacked";
+    type: GameActionType.Attacked;
     attackerId: string;
     targetId: string;
     damage: number;
@@ -20,33 +50,26 @@ export type GameAction =
     targetDefeated: boolean;
   }
   | {
-    type: "ignored";
-    reason:
-      | "missing-field"
-      | "no-selected-unit"
-      | "not-player-controlled"
-      | "not-hostile"
-      | "out-of-range"
-      | "round-exhausted";
+    type: GameActionType.Ignored;
+    reason: GameActionRejectionReason;
   };
 
 export type GameActionPreview =
-  | { type: "selection"; unitId: string }
+  | { type: GameActionPreviewType.Selection; unitId: string }
   | {
-    type: "valid-move";
+    type: GameActionPreviewType.ValidMove;
     unitId: string;
     destination: HexCoord;
     path: MovementPath;
   }
-  | { type: "valid-attack"; attackerId: string; targetId: string }
   | {
-    type: "out-of-range";
-    reason:
-      | "missing-field"
-      | "not-player-controlled"
-      | "not-hostile"
-      | "out-of-range"
-      | "round-exhausted";
+    type: GameActionPreviewType.ValidAttack;
+    attackerId: string;
+    targetId: string;
+  }
+  | {
+    type: GameActionPreviewType.OutOfRange;
+    reason: Exclude<GameActionRejectionReason, GameActionRejectionReason.NoSelectedUnit>;
   };
 
 export interface ReachableHex {
@@ -58,6 +81,8 @@ export interface ReachableHex {
 export class GameSession {
   private readonly unitsById = new Map<string, Unit>();
   private readonly livingUnitIdsByHex = new Map<string, string>();
+  private readonly mageId: string;
+  private readonly mageVisibility: MageVisibility;
   private _selectedUnitId: string | null = null;
 
   constructor(
@@ -68,12 +93,26 @@ export class GameSession {
       if (this.unitsById.has(unit.id)) {
         throw new Error(`A unit with id ${unit.id} already exists`);
       }
+      if (!this.gameMap.getField(unit.position.q, unit.position.r)) {
+        throw new Error(`Unit ${unit.id} starts outside the game map`);
+      }
 
       this.unitsById.set(unit.id, unit);
       if (unit.isAlive) {
         this.registerLivingUnit(unit);
       }
     }
+
+    const mages = [...this.unitsById.values()].filter(
+      (unit) => unit.isAlive && unit.tacticalRole === UnitTacticalRole.Mage,
+    );
+    if (mages.length !== 1) {
+      throw new Error("A game session requires exactly one living Mage");
+    }
+
+    this.mageId = mages[0].id;
+    this.mageVisibility = new MageVisibility(this.gameMap);
+    this.recalculateMageVisibility();
   }
 
   get selectedUnitId(): string | null {
@@ -87,6 +126,20 @@ export class GameSession {
 
   getUnit(id: string): Unit | undefined {
     return this.unitsById.get(id);
+  }
+
+  /** Stable read-only visibility API for app and rendering adapters. */
+  get visibility(): FieldVisibilityReader {
+    return this.mageVisibility;
+  }
+
+  getFieldVisibility(coord: HexCoord): FieldVisibility | undefined {
+    return this.mageVisibility.getFieldVisibility(coord);
+  }
+
+  /** Visibility remains meaningful for dead units so remains can be hidden safely. */
+  isUnitVisible(unit: Unit): boolean {
+    return this.getFieldVisibility(unit.position) === FieldVisibility.Visible;
   }
 
   /** Returns only a living occupant; corpses never block or receive input. */
@@ -111,91 +164,130 @@ export class GameSession {
   /** A non-mutating semantic result used by future hover, cursor, and highlight views. */
   previewHex(coord: HexCoord): GameActionPreview {
     if (!this.gameMap.getField(coord.q, coord.r)) {
-      return { type: "out-of-range", reason: "missing-field" };
+      return {
+        type: GameActionPreviewType.OutOfRange,
+        reason: GameActionRejectionReason.MissingField,
+      };
     }
 
     const selectedUnit = this.getSelectedPlayerUnit();
     const clickedUnit = this.getUnitAt(coord);
 
+    if (clickedUnit && !this.isUnitVisible(clickedUnit)) {
+      return {
+        type: GameActionPreviewType.OutOfRange,
+        reason: GameActionRejectionReason.NotVisible,
+      };
+    }
+
     if (!selectedUnit) {
       return clickedUnit?.faction === Faction.Player
-        ? { type: "selection", unitId: clickedUnit.id }
+        ? { type: GameActionPreviewType.Selection, unitId: clickedUnit.id }
         : {
-          type: "out-of-range",
-          reason: clickedUnit ? "not-player-controlled" : "out-of-range",
+          type: GameActionPreviewType.OutOfRange,
+          reason: clickedUnit
+            ? GameActionRejectionReason.NotPlayerControlled
+            : GameActionRejectionReason.OutOfRange,
         };
     }
 
     if (isSameHex(selectedUnit.position, coord)) {
-      return { type: "selection", unitId: selectedUnit.id };
+      return {
+        type: GameActionPreviewType.Selection,
+        unitId: selectedUnit.id,
+      };
     }
 
     // Switching between player-controlled units remains available even when
     // the currently selected unit has exhausted its provisional round budget.
     if (clickedUnit?.faction === Faction.Player) {
-      return { type: "selection", unitId: clickedUnit.id };
+      return {
+        type: GameActionPreviewType.Selection,
+        unitId: clickedUnit.id,
+      };
     }
 
     if (clickedUnit) {
       if (!this.hasActionAvailability(selectedUnit)) {
-        return { type: "out-of-range", reason: "round-exhausted" };
+        return {
+          type: GameActionPreviewType.OutOfRange,
+          reason: GameActionRejectionReason.RoundExhausted,
+        };
       }
 
       if (getFactionDisposition(selectedUnit.faction, clickedUnit.faction)
         !== FactionDisposition.Enemy) {
-        return { type: "out-of-range", reason: "not-hostile" };
+        return {
+          type: GameActionPreviewType.OutOfRange,
+          reason: GameActionRejectionReason.NotHostile,
+        };
       }
 
       return this.gameMap.getHexDistance(selectedUnit.position, coord) === 1
         ? {
-          type: "valid-attack",
+          type: GameActionPreviewType.ValidAttack,
           attackerId: selectedUnit.id,
           targetId: clickedUnit.id,
         }
-        : { type: "out-of-range", reason: "out-of-range" };
+        : {
+          type: GameActionPreviewType.OutOfRange,
+          reason: GameActionRejectionReason.OutOfRange,
+        };
     }
 
     if (!this.hasMovementAvailability(selectedUnit)) {
-      return { type: "out-of-range", reason: "round-exhausted" };
+      return {
+        type: GameActionPreviewType.OutOfRange,
+        reason: GameActionRejectionReason.RoundExhausted,
+      };
     }
 
     const path = this.getReachablePaths(selectedUnit).get(getCoordKey(coord));
     return path
       ? {
-        type: "valid-move",
+        type: GameActionPreviewType.ValidMove,
         unitId: selectedUnit.id,
         destination: { ...coord },
         path,
       }
-      : { type: "out-of-range", reason: "out-of-range" };
+      : {
+        type: GameActionPreviewType.OutOfRange,
+        reason: GameActionRejectionReason.OutOfRange,
+      };
   }
 
   clickHex(coord: HexCoord): GameAction {
     if (!this.gameMap.getField(coord.q, coord.r)) {
-      return { type: "ignored", reason: "missing-field" };
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.MissingField,
+      };
     }
 
     const selectedUnit = this.getSelectedPlayerUnit();
     if (selectedUnit && isSameHex(selectedUnit.position, coord)) {
       this._selectedUnitId = null;
-      return { type: "deselected", unitId: selectedUnit.id };
+      return { type: GameActionType.Deselected, unitId: selectedUnit.id };
     }
 
     const preview = this.previewHex(coord);
     switch (preview.type) {
-      case "selection":
+      case GameActionPreviewType.Selection:
         this._selectedUnitId = preview.unitId;
-        return { type: "selected", unitId: preview.unitId };
-      case "valid-move":
+        return { type: GameActionType.Selected, unitId: preview.unitId };
+      case GameActionPreviewType.ValidMove:
         return this.moveSelectedUnit(preview);
-      case "valid-attack":
+      case GameActionPreviewType.ValidAttack:
         return this.attack(preview);
-      case "out-of-range":
+      case GameActionPreviewType.OutOfRange:
         if (!selectedUnit && !this.getUnitAt(coord)) {
-          return { type: "ignored", reason: "no-selected-unit" };
+          return {
+            type: GameActionType.Ignored,
+            reason: GameActionRejectionReason.NoSelectedUnit,
+          };
         }
 
-        return { type: "ignored", reason: preview.reason };
+        return { type: GameActionType.Ignored, reason: preview.reason };
     }
   }
 
@@ -206,10 +298,15 @@ export class GameSession {
     }
   }
 
-  private moveSelectedUnit(preview: Extract<GameActionPreview, { type: "valid-move" }>): GameAction {
+  private moveSelectedUnit(
+    preview: Extract<GameActionPreview, { type: GameActionPreviewType.ValidMove }>,
+  ): GameAction {
     const unit = this.unitsById.get(preview.unitId);
     if (!unit || !unit.isAlive) {
-      return { type: "ignored", reason: "no-selected-unit" };
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoSelectedUnit,
+      };
     }
 
     const from = unit.position;
@@ -217,30 +314,41 @@ export class GameSession {
     this.unregisterLivingUnit(unit);
     unit.moveTo(preview.destination);
     this.registerLivingUnit(unit);
+    if (unit.id === this.mageId) {
+      this.recalculateMageVisibility();
+    }
 
     return {
-      type: "moved",
+      type: GameActionType.Moved,
       unitId: unit.id,
       from,
       to: unit.position,
     };
   }
 
-  private attack(preview: Extract<GameActionPreview, { type: "valid-attack" }>): GameAction {
+  private attack(
+    preview: Extract<GameActionPreview, { type: GameActionPreviewType.ValidAttack }>,
+  ): GameAction {
     const attacker = this.unitsById.get(preview.attackerId);
     const target = this.unitsById.get(preview.targetId);
     if (!attacker || !target || !attacker.isAlive || !target.isAlive) {
-      return { type: "ignored", reason: "out-of-range" };
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.OutOfRange,
+      };
     }
 
     target.receiveDamage(attacker.attackPower);
     attacker.exhaustRoundBudget();
     if (!target.isAlive) {
       this.unregisterLivingUnit(target);
+      if (target.id === this.mageId) {
+        this.recalculateMageVisibility();
+      }
     }
 
     return {
-      type: "attacked",
+      type: GameActionType.Attacked,
       attackerId: attacker.id,
       targetId: target.id,
       damage: attacker.attackPower,
@@ -255,7 +363,10 @@ export class GameSession {
     }
 
     const selectedUnit = this.unitsById.get(this._selectedUnitId);
-    if (!selectedUnit || !selectedUnit.isAlive || selectedUnit.faction !== Faction.Player) {
+    if (!selectedUnit
+      || !selectedUnit.isAlive
+      || selectedUnit.faction !== Faction.Player
+      || !this.isUnitVisible(selectedUnit)) {
       this._selectedUnitId = null;
       return undefined;
     }
@@ -295,6 +406,15 @@ export class GameSession {
     if (this.livingUnitIdsByHex.get(key) === unit.id) {
       this.livingUnitIdsByHex.delete(key);
     }
+  }
+
+  private recalculateMageVisibility(): void {
+    const mage = this.unitsById.get(this.mageId);
+    if (!mage) {
+      throw new Error("The session Mage is missing");
+    }
+
+    this.mageVisibility.recalculate(mage);
   }
 }
 

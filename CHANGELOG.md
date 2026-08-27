@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-27
+
+- Added a radius-6 tactical encounter with Mage-centred three-state fog of war:
+  undiscovered, discovered terrain, and current visibility.
+
 ## 2026-08-26
 
 - Added Player, Enemy, and Neutral factions with explicit

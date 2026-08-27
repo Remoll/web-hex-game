@@ -43,6 +43,12 @@ describe("GameMap", () => {
     expect(map.radiusInHex).toBe(3);
   });
 
+  it("rejects duplicate field coordinates", () => {
+    expect(() => new GameMap([mapData[0], mapData[0]])).toThrow(
+      "The map contains duplicate field coordinates at 0,0",
+    );
+  });
+
   it("finds passable shortest paths and excludes occupied or impassable hexes", () => {
     const pathMap = new GameMap([
       {

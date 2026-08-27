@@ -36,9 +36,11 @@ export class RemainsView {
     scene.add(this.mesh);
   }
 
-  sync(unit: Unit): void {
+  sync(unit: Unit, visible: boolean = true): void {
     const index = this.getOrCreateIndex(unit.id);
-    const state = buildRemainsRenderState(unit, this.gameMap, this.config);
+    const state = visible
+      ? buildRemainsRenderState(unit, this.gameMap, this.config)
+      : undefined;
 
     RemainsView.dummy.position.set(state?.x ?? 0, state?.y ?? 0, state?.z ?? 0);
     RemainsView.dummy.scale.setScalar(state ? 1 : 0);

@@ -1,4 +1,7 @@
-import type { GameActionPreview } from "@/game/gameSession/GameSession";
+import {
+  GameActionPreviewType,
+  type GameActionPreview,
+} from "@/game/gameSession/GameSession";
 
 export enum TacticalCursor {
   Select = "select",
@@ -38,13 +41,13 @@ export function getTacticalCursor(
   }
 
   switch (preview.type) {
-    case "selection":
+    case GameActionPreviewType.Selection:
       return TacticalCursor.Select;
-    case "valid-move":
+    case GameActionPreviewType.ValidMove:
       return TacticalCursor.Move;
-    case "valid-attack":
+    case GameActionPreviewType.ValidAttack:
       return TacticalCursor.Attack;
-    case "out-of-range":
+    case GameActionPreviewType.OutOfRange:
       return TacticalCursor.Unavailable;
   }
 }

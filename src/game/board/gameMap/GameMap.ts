@@ -35,7 +35,12 @@ export class GameMap {
         this.fieldsMap.set(q, new Map());
       }
 
-      this.fieldsMap.get(q)!.set(r, new Field(fieldAttrs));
+      const column = this.fieldsMap.get(q)!;
+      if (column.has(r)) {
+        throw new Error(`The map contains duplicate field coordinates at ${q},${r}`);
+      }
+
+      column.set(r, new Field(fieldAttrs));
     });
 
     this._radiusInHex = this.getRadiusInHex();

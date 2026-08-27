@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { Faction } from "@/game/faction/Faction";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
 import { MovementType, TerrainType } from "@/game/types";
-import { UnitTexture } from "@/game/unit/Unit";
+import { UnitTacticalRole, UnitTexture } from "@/game/unit/Unit";
 
 const exampleLevelPath = fileURLToPath(
   new URL("../../../public/levels/example.json", import.meta.url),
@@ -37,14 +37,18 @@ describe("example level", () => {
       maxHp: 100,
       currentHp: 100,
       attackPower: 20,
+      tacticalRole: UnitTacticalRole.Mage,
+      viewRange: 4,
     });
     expect(
-      level.map.map(({ q, r, fieldAttrs }) => ({
+      level.map
+        .filter((cell) => hexDistance(cell, { q: 0, r: 0 }) <= 2)
+        .map(({ q, r, fieldAttrs }) => ({
         q,
         r,
         terrainType: fieldAttrs.terrainType,
         groundLevel: fieldAttrs.groundLevel,
-      })),
+        })),
     ).toEqual([
       { q: 0, r: -2, terrainType: TerrainType.Grass, groundLevel: 3 },
       { q: 1, r: -2, terrainType: TerrainType.Grass, groundLevel: 2 },
@@ -66,6 +70,10 @@ describe("example level", () => {
       { q: -1, r: 2, terrainType: TerrainType.Grass, groundLevel: 1 },
       { q: 0, r: 2, terrainType: TerrainType.Grass, groundLevel: 1 },
     ]);
+    expect(level.map).toHaveLength(127);
+    expect(Math.max(
+      ...level.map.map((cell) => hexDistance(cell, { q: 0, r: 0 })),
+    )).toBe(6);
     expect(level.map.filter((field) => !field.fieldAttrs.allowedMovements.ground))
       .toHaveLength(3);
     expect(level.units).toHaveLength(3);

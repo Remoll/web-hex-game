@@ -3,9 +3,11 @@ import { Faction } from "@/game/faction/Faction";
 import { GameSession } from "@/game/gameSession/GameSession";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
 import {
+  defaultMageViewRange,
   defaultUnitConfig,
   Unit,
   type UnitConfig,
+  UnitTacticalRole,
 } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 
@@ -16,9 +18,16 @@ export interface LevelSession {
 
 /** Builds the mutable domain state from a serializable level definition. */
 export function createGameSession(level: LevelDefinition): LevelSession {
-  const playerConfig = getUnitConfig(level.player, Faction.Player);
+  const playerConfig = getUnitConfig(
+    level.player,
+    Faction.Player,
+    UnitTacticalRole.Mage,
+  );
   if (playerConfig.faction !== Faction.Player) {
     throw new Error("The level player must use the player faction");
+  }
+  if (playerConfig.tacticalRole !== UnitTacticalRole.Mage) {
+    throw new Error("The level player must use the mage tactical role");
   }
 
   const player = new Player(
@@ -32,7 +41,7 @@ export function createGameSession(level: LevelDefinition): LevelSession {
       definition.id,
       definition.position,
       definition.texture,
-      getUnitConfig(definition, Faction.Enemy),
+      getUnitConfig(definition, Faction.Enemy, UnitTacticalRole.None),
     ),
   );
 
@@ -45,7 +54,10 @@ export function createGameSession(level: LevelDefinition): LevelSession {
 function getUnitConfig(
   definition: LevelDefinition["player"],
   fallbackFaction: Faction,
+  fallbackTacticalRole: UnitTacticalRole,
 ): UnitConfig {
+  const tacticalRole = definition.tacticalRole ?? fallbackTacticalRole;
+
   return {
     faction: definition.faction ?? fallbackFaction,
     movementType: definition.movementType ?? defaultUnitConfig.movementType,
@@ -53,10 +65,21 @@ function getUnitConfig(
     maxHp: definition.maxHp ?? defaultUnitConfig.maxHp,
     currentHp: definition.currentHp ?? defaultUnitConfig.currentHp,
     attackPower: definition.attackPower ?? defaultUnitConfig.attackPower,
+    tacticalRole,
+    viewRange: definition.viewRange
+      ?? (tacticalRole === UnitTacticalRole.Mage ? defaultMageViewRange : undefined),
   };
 }
 
-function withoutFaction(config: UnitConfig): Omit<UnitConfig, "faction"> {
-  const { faction: _faction, ...playerConfig } = config;
-  return playerConfig;
+function withoutFaction(
+  config: UnitConfig,
+): Omit<UnitConfig, "faction" | "tacticalRole"> {
+  return {
+    movementType: config.movementType,
+    movementRange: config.movementRange,
+    maxHp: config.maxHp,
+    currentHp: config.currentHp,
+    attackPower: config.attackPower,
+    viewRange: config.viewRange,
+  };
 }

@@ -10,6 +10,14 @@ export enum UnitTexture {
   EnemyIdle = "enemy-idle",
 }
 
+/** Stable gameplay identity; it is never inferred from a sprite or display name. */
+export enum UnitTacticalRole {
+  None = "none",
+  Mage = "mage",
+}
+
+export const defaultMageViewRange = 4;
+
 export interface UnitConfig {
   readonly faction: Faction;
   readonly movementType: MovementType;
@@ -17,6 +25,8 @@ export interface UnitConfig {
   readonly maxHp: number;
   readonly currentHp: number;
   readonly attackPower: number;
+  readonly tacticalRole: UnitTacticalRole;
+  readonly viewRange?: number;
 }
 
 /**
@@ -30,6 +40,7 @@ export const defaultUnitConfig: UnitConfig = {
   maxHp: 100,
   currentHp: 100,
   attackPower: 20,
+  tacticalRole: UnitTacticalRole.None,
 };
 
 export class Unit {
@@ -57,6 +68,8 @@ export class Unit {
     this.maxHp = resolvedConfig.maxHp;
     this._currentHp = resolvedConfig.currentHp;
     this.attackPower = resolvedConfig.attackPower;
+    this.tacticalRole = resolvedConfig.tacticalRole;
+    this.viewRange = resolvedConfig.viewRange;
     this._remainingMovement = this.isAlive ? this.movementRange : 0;
     this._remainingActions = this.isAlive ? 1 : 0;
   }
@@ -66,6 +79,8 @@ export class Unit {
   public readonly movementRange: number;
   public readonly maxHp: number;
   public readonly attackPower: number;
+  public readonly tacticalRole: UnitTacticalRole;
+  public readonly viewRange: number | undefined;
 
   get position(): HexCoord {
     return { ...this._position };
@@ -153,5 +168,19 @@ function validateConfig(config: UnitConfig, unitId: string): void {
 
   if (!Number.isInteger(config.attackPower) || config.attackPower < 0) {
     throw new Error(`Unit ${unitId} must have a non-negative integer attack power`);
+  }
+
+  if (config.tacticalRole === UnitTacticalRole.Mage) {
+    const mageViewRange = config.viewRange;
+    if (mageViewRange === undefined
+      || !Number.isInteger(mageViewRange)
+      || mageViewRange <= 0) {
+      throw new Error(`Mage unit ${unitId} must have a positive integer view range`);
+    }
+    return;
+  }
+
+  if (config.viewRange !== undefined) {
+    throw new Error(`Only Mage unit ${unitId} can define a view range`);
   }
 }

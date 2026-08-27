@@ -15,9 +15,28 @@ The development server starts at the address printed by Vite. Press `C` to toggl
 
 ## Tactical prototype controls
 
-The current example level contains a Player, an additional Player-faction unit,
+The current example level contains a Mage, an additional Player-faction unit,
 an Enemy, and a Neutral unit. All units begin with 100 HP, 20 attack power,
 Ground movement, and a movement range of three hexes.
+
+### Mage vision and exploration
+
+The encounter is a radius-6 hex map (127 fields). Its original radius-2
+terrain layout, including terrain and elevation values, is preserved at the
+centre; the additional outer rings are exploration space.
+
+The Mage is the only current source of player sight and has a fixed view range
+of four hexes. Visibility is recalculated only when relevant game state changes
+(currently session setup and Mage movement), never by the render loop.
+
+- **Undiscovered** hexes are covered by black fog.
+- **Discovered** hexes retain visible terrain under translucent fog, but units
+  and remains are hidden.
+- **Visible** hexes show terrain, living units, and remains normally.
+
+Player-faction units can be selected only while currently Visible to the Mage.
+Hovering or clicking a hidden unit remains unavailable and reveals no unit
+information.
 
 - Hover a Player-faction unit to see the selection cursor, then click it to
   select it. Only Player-faction units are controllable in this slice.
@@ -55,9 +74,10 @@ exactly one category for each acting faction.
 
 ### Deferred systems
 
-Turns, rounds, enemy AI, counterattacks, player win/lose conditions, terrain
-cost multipliers, elevation rules, animated movement/attacks, interactive
-remains, final cursor art, and final unit art are intentionally deferred.
+The Event Timeline, turns/rounds, enemy AI, standing orders, counterattacks,
+player win/lose conditions, terrain cost multipliers, height-based line of
+sight, facing, stealth, animated movement/attacks, interactive remains, final
+cursor art, and final unit art are intentionally deferred.
 
 ## Commands
 
