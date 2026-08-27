@@ -5,11 +5,15 @@ import type { LevelDefinition } from "@/game/levels/LevelDefinition";
 import {
   defaultMageViewRange,
   defaultUnitConfig,
+  type UnitConfigInput,
   Unit,
   type UnitConfig,
   UnitTacticalRole,
 } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
+import {
+  resolveTacticalAttributes,
+} from "@/game/unit/tacticalAttributes/TacticalAttributes";
 
 export interface LevelSession {
   readonly session: GameSession;
@@ -62,24 +66,22 @@ function getUnitConfig(
     faction: definition.faction ?? fallbackFaction,
     movementType: definition.movementType ?? defaultUnitConfig.movementType,
     movementRange: definition.movementRange ?? defaultUnitConfig.movementRange,
-    maxHp: definition.maxHp ?? defaultUnitConfig.maxHp,
-    currentHp: definition.currentHp ?? defaultUnitConfig.currentHp,
     attackPower: definition.attackPower ?? defaultUnitConfig.attackPower,
     tacticalRole,
     viewRange: definition.viewRange
       ?? (tacticalRole === UnitTacticalRole.Mage ? defaultMageViewRange : undefined),
+    attributes: resolveTacticalAttributes(definition.attributes),
   };
 }
 
 function withoutFaction(
   config: UnitConfig,
-): Omit<UnitConfig, "faction" | "tacticalRole"> {
+): Omit<UnitConfigInput, "faction" | "tacticalRole"> {
   return {
     movementType: config.movementType,
     movementRange: config.movementRange,
-    maxHp: config.maxHp,
-    currentHp: config.currentHp,
     attackPower: config.attackPower,
     viewRange: config.viewRange,
+    attributes: config.attributes,
   };
 }

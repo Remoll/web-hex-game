@@ -22,7 +22,6 @@ describe("buildRemainsRenderState", () => {
       faction: Faction.Enemy,
       movementType: MovementType.Ground,
       movementRange: 3,
-      maxHp: 100,
       currentHp: 20,
       attackPower: 20,
     });

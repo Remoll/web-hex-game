@@ -1,5 +1,15 @@
 import { Faction } from "@/game/faction/Faction";
 import { MovementType, type HexCoord } from "@/game/types";
+import {
+  defaultTacticalAttributes,
+  deriveMaximumHp,
+  deriveMeleeDamage,
+  deriveTempo,
+  deriveViewRange,
+  resolveTacticalAttributes,
+  type TacticalAttributeInput,
+  type TacticalAttributes,
+} from "@/game/unit/tacticalAttributes/TacticalAttributes";
 
 /**
  * Stable visual keys owned by the game domain. The renderer maps them to its
@@ -22,25 +32,30 @@ export interface UnitConfig {
   readonly faction: Faction;
   readonly movementType: MovementType;
   readonly movementRange: number;
-  readonly maxHp: number;
-  readonly currentHp: number;
+  /** Omitted units spawn at their Vitality-derived maximum HP. */
+  readonly currentHp?: number;
   readonly attackPower: number;
   readonly tacticalRole: UnitTacticalRole;
   readonly viewRange?: number;
+  readonly attributes: TacticalAttributes;
 }
 
+/** Supports compact serialized input while resolving all four scores in Unit. */
+export type UnitConfigInput = Omit<Partial<UnitConfig>, "attributes"> & {
+  readonly attributes?: TacticalAttributeInput;
+};
+
 /**
- * Defaults preserve compatibility for callers that construct a generic unit
- * directly. Serialized levels always provide the complete configuration.
+ * Defaults keep generic units compatible while static level definitions omit
+ * derived and runtime-only state.
  */
 export const defaultUnitConfig: UnitConfig = {
   faction: Faction.Enemy,
   movementType: MovementType.Ground,
   movementRange: 3,
-  maxHp: 100,
-  currentHp: 100,
   attackPower: 20,
   tacticalRole: UnitTacticalRole.None,
+  attributes: defaultTacticalAttributes,
 };
 
 export class Unit {
@@ -53,23 +68,30 @@ export class Unit {
     public readonly id: string,
     initialPosition: HexCoord,
     public readonly texture: UnitTexture,
-    config: Partial<UnitConfig> = {},
+    config: UnitConfigInput = {},
   ) {
     const resolvedConfig: UnitConfig = {
       ...defaultUnitConfig,
       ...config,
+      attributes: resolveTacticalAttributes(config.attributes),
     };
 
-    validateConfig(resolvedConfig, id);
+    validateBaseConfig(resolvedConfig, id);
     this._position = { ...initialPosition };
     this.faction = resolvedConfig.faction;
     this.movementType = resolvedConfig.movementType;
     this.movementRange = resolvedConfig.movementRange;
-    this.maxHp = resolvedConfig.maxHp;
-    this._currentHp = resolvedConfig.currentHp;
-    this.attackPower = resolvedConfig.attackPower;
+    this.attributes = resolvedConfig.attributes;
+    this.maxHp = deriveMaximumHp(this.attributes);
+    const initialCurrentHp = resolvedConfig.currentHp ?? this.maxHp;
+    validateCurrentHp(initialCurrentHp, this.maxHp, id);
+    this._currentHp = initialCurrentHp;
+    this.attackPower = deriveMeleeDamage(resolvedConfig.attackPower, this.attributes);
+    this.tempo = deriveTempo(this.attributes);
     this.tacticalRole = resolvedConfig.tacticalRole;
-    this.viewRange = resolvedConfig.viewRange;
+    this.viewRange = resolvedConfig.viewRange === undefined
+      ? undefined
+      : deriveViewRange(resolvedConfig.viewRange, this.attributes);
     this._remainingMovement = this.isAlive ? this.movementRange : 0;
     this._remainingActions = this.isAlive ? 1 : 0;
   }
@@ -77,8 +99,10 @@ export class Unit {
   public readonly faction: Faction;
   public readonly movementType: MovementType;
   public readonly movementRange: number;
+  public readonly attributes: TacticalAttributes;
   public readonly maxHp: number;
   public readonly attackPower: number;
+  public readonly tempo: number;
   public readonly tacticalRole: UnitTacticalRole;
   public readonly viewRange: number | undefined;
 
@@ -151,19 +175,9 @@ export class Unit {
   }
 }
 
-function validateConfig(config: UnitConfig, unitId: string): void {
+function validateBaseConfig(config: UnitConfig, unitId: string): void {
   if (!Number.isInteger(config.movementRange) || config.movementRange < 0) {
     throw new Error(`Unit ${unitId} must have a non-negative integer movement range`);
-  }
-
-  if (!Number.isInteger(config.maxHp) || config.maxHp <= 0) {
-    throw new Error(`Unit ${unitId} must have a positive integer maximum HP`);
-  }
-
-  if (!Number.isInteger(config.currentHp)
-    || config.currentHp < 0
-    || config.currentHp > config.maxHp) {
-    throw new Error(`Unit ${unitId} must have current HP between zero and maximum HP`);
   }
 
   if (!Number.isInteger(config.attackPower) || config.attackPower < 0) {
@@ -182,5 +196,15 @@ function validateConfig(config: UnitConfig, unitId: string): void {
 
   if (config.viewRange !== undefined) {
     throw new Error(`Only Mage unit ${unitId} can define a view range`);
+  }
+}
+
+function validateCurrentHp(
+  currentHp: number,
+  maximumHp: number,
+  unitId: string,
+): void {
+  if (!Number.isInteger(currentHp) || currentHp < 0 || currentHp > maximumHp) {
+    throw new Error(`Unit ${unitId} must have current HP between zero and maximum HP`);
   }
 }

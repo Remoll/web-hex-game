@@ -16,8 +16,9 @@ The development server starts at the address printed by Vite. Press `C` to toggl
 ## Tactical prototype controls
 
 The current example level contains a Mage, an additional Player-faction unit,
-an Enemy, and a Neutral unit. All units begin with 100 HP, 20 attack power,
-Ground movement, and a movement range of three hexes.
+an Enemy, and a Neutral unit. Every unit has base 100 maximum HP, 20 melee
+damage, Ground movement, and a movement range of three hexes before tactical
+attributes are derived.
 
 ### Mage vision and exploration
 
@@ -44,9 +45,10 @@ timer. The timeline HUD at the top of the screen shows the current simulation
 time, the ready actor, and the named cost of each Mage action. The Mage starts
 ready at time `0`.
 
-- A Mage move costs `100` timeline time, an attack costs `140`, and **Wait**
-  costs `100`. A move may still traverse a legal Ground path of up to three
-  hexes; its path length does not change this temporary tempo cost.
+- A Mage move has base cost `100` timeline time, an attack `140`, and **Wait**
+  `100`. Tempo adjusts those recovery delays; the HUD always displays the
+  resolved integer cost. A move may still traverse a legal Ground path of up
+  to three hexes; its path length does not change this temporary base cost.
 - After a Mage action, inactive units take deterministic no-op Wait events
   until the next Mage decision. There is no timer, polling, or background AI
   in this slice.
@@ -76,6 +78,29 @@ selection), then switches to temporary selection, move, or attack cursor art
 when that action is valid.
 They are placeholders under `public/cursors/` and will be replaced by final
 game assets later.
+
+### Tactical attributes
+
+Every unit has the serialized integer attributes `might`, `finesse`,
+`vitality`, and `insight`. Omitted attributes default to `10`; values must be
+non-negative integers. Their common modifier is:
+
+```text
+modifier = floor((score - 10) / 2)
+```
+
+- **Might:** melee damage = base damage + `2 × modifier`.
+- **Vitality:** maximum HP = base maximum HP + `10 × modifier`. An explicit
+  save-state `currentHp` must not exceed that value; otherwise a new unit
+  begins at its derived maximum.
+- **Finesse:** Tempo = `clamp(100 + modifier, 90, 110)`. Recovery delay is
+  `round(base action cost × 100 / Tempo)`, so higher Finesse acts sooner.
+- **Insight:** Mage view range = base view range + modifier (minimum one hex).
+  Future enemy perception will use this same domain-derived statistic.
+
+These values are derived when a unit is constructed, never in the render loop.
+The example JSON deliberately gives its units different scores so the health,
+vision, damage, and tempo effects are observable.
 
 ### Current faction dispositions
 

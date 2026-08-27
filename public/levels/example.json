@@ -1662,11 +1662,15 @@
     "faction": "player",
     "movementType": "ground",
     "movementRange": 3,
-    "maxHp": 100,
-    "currentHp": 100,
     "attackPower": 20,
     "tacticalRole": "mage",
-    "viewRange": 4
+    "viewRange": 4,
+    "attributes": {
+      "might": 12,
+      "finesse": 12,
+      "vitality": 12,
+      "insight": 12
+    }
   },
   "units": [
     {
@@ -1679,9 +1683,13 @@
       "faction": "player",
       "movementType": "ground",
       "movementRange": 3,
-      "maxHp": 100,
-      "currentHp": 100,
-      "attackPower": 20
+      "attackPower": 20,
+      "attributes": {
+        "might": 10,
+        "finesse": 11,
+        "vitality": 12,
+        "insight": 9
+      }
     },
     {
       "id": "enemy-1",
@@ -1693,9 +1701,13 @@
       "faction": "enemy",
       "movementType": "ground",
       "movementRange": 3,
-      "maxHp": 100,
-      "currentHp": 100,
-      "attackPower": 20
+      "attackPower": 20,
+      "attributes": {
+        "might": 14,
+        "finesse": 9,
+        "vitality": 12,
+        "insight": 10
+      }
     },
     {
       "id": "neutral-1",
@@ -1707,9 +1719,13 @@
       "faction": "neutral",
       "movementType": "ground",
       "movementRange": 3,
-      "maxHp": 100,
-      "currentHp": 100,
-      "attackPower": 20
+      "attackPower": 20,
+      "attributes": {
+        "might": 8,
+        "finesse": 10,
+        "vitality": 10,
+        "insight": 10
+      }
     }
   ]
 }

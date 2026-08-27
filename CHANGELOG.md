@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added derived Might, Finesse, Vitality, and Insight attributes to tactical
+  units, including level serialization and current combat, tempo, and vision
+  effects.
 - Added a deterministic discrete Event Timeline for Mage movement, attacks,
   and waiting, with named integer action costs and a minimal timeline HUD.
 - Added a radius-6 tactical encounter with Mage-centred three-state fog of war:

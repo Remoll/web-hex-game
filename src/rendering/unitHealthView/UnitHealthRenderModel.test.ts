@@ -31,7 +31,6 @@ describe("buildUnitHealthRenderState", () => {
         faction: Faction.Player,
         movementType: MovementType.Ground,
         movementRange: 3,
-        maxHp: 100,
         currentHp: 50,
         attackPower: 20,
       },

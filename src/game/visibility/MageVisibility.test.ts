@@ -3,6 +3,7 @@ import { GameMap } from "@/game/board/gameMap/GameMap";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 import { UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
+import { TacticalAttribute } from "@/game/unit/tacticalAttributes/TacticalAttributes";
 import { FieldVisibility, MageVisibility } from "@/game/visibility/MageVisibility";
 
 const mapData: MapArray = [0, 1, 2].map((q) => ({
@@ -58,6 +59,26 @@ describe("MageVisibility", () => {
 
     expect(visibility.getFieldVisibility({ q: 0, r: 0 })).toBe(
       FieldVisibility.Discovered,
+    );
+  });
+
+  it("uses the Mage's derived Insight range during visibility recalculation", () => {
+    const mage = new Player(
+      "mage",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      {
+        viewRange: 1,
+        attributes: { [TacticalAttribute.Insight]: 12 },
+      },
+    );
+    const visibility = new MageVisibility(new GameMap(mapData));
+
+    visibility.recalculate(mage);
+
+    expect(mage.viewRange).toBe(2);
+    expect(visibility.getFieldVisibility({ q: 2, r: 0 })).toBe(
+      FieldVisibility.Visible,
     );
   });
 });

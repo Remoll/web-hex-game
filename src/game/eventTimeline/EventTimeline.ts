@@ -1,3 +1,5 @@
+import { baseTacticalTempo } from "@/game/unit/tacticalAttributes/TacticalAttributes";
+
 /**
  * The only information the timeline needs from a scheduled unit. Keeping this
  * structural prevents the scheduler from owning combat, movement, or AI rules.
@@ -5,6 +7,7 @@
 export interface TimelineParticipant {
   readonly id: string;
   readonly isAlive: boolean;
+  readonly tempo: number;
 }
 
 /** Stable action names used by the domain and the minimal timeline HUD. */
@@ -20,6 +23,23 @@ export const timelineActionCosts: Readonly<Record<TimelineAction, number>> = {
   [TimelineAction.Attack]: 140,
   [TimelineAction.Wait]: 100,
 };
+
+export const minimumTimelineRecoveryDelay = 1;
+
+/** Converts a unit's tempo into integer simulation time for one action. */
+export function getTimelineRecoveryDelay(
+  action: TimelineAction,
+  tempo: number,
+): number {
+  if (!Number.isInteger(tempo) || tempo <= 0) {
+    throw new Error("Timeline tempo must be a positive integer");
+  }
+
+  return Math.max(
+    minimumTimelineRecoveryDelay,
+    Math.round(timelineActionCosts[action] * baseTacticalTempo / tempo),
+  );
+}
 
 export interface TimelineActor {
   readonly unitId: string;
@@ -90,10 +110,17 @@ export class EventTimeline implements EventTimelineReader {
   }
 
   get presentation(): TimelinePresentation {
+    const readyActor = this.readyActor;
+    const readyEntry = readyActor
+      ? this.entriesByUnitId.get(readyActor.unitId)
+      : undefined;
+
     return {
       currentTime: this.currentTime,
-      readyActorId: this.readyActor?.unitId,
-      actionCosts: timelineActionCosts,
+      readyActorId: readyActor?.unitId,
+      actionCosts: readyEntry
+        ? getTimelineActionCosts(readyEntry.participant.tempo)
+        : timelineActionCosts,
     };
   }
 
@@ -114,7 +141,8 @@ export class EventTimeline implements EventTimelineReader {
    */
   consumeReadyAction(unitId: string, action: TimelineAction): void {
     const entry = this.requireReadyEntry(unitId);
-    entry.nextReadyAt = this._currentTime + timelineActionCosts[action];
+    entry.nextReadyAt = this._currentTime
+      + getTimelineRecoveryDelay(action, entry.participant.tempo);
   }
 
   /** Explicitly removes a future event, for example when a unit is defeated. */
@@ -141,7 +169,7 @@ export class EventTimeline implements EventTimelineReader {
     while (nextEntry && nextEntry.participant.id !== mageId) {
       this._currentTime = nextEntry.nextReadyAt;
       nextEntry.nextReadyAt = this._currentTime
-        + timelineActionCosts[TimelineAction.Wait];
+        + getTimelineRecoveryDelay(TimelineAction.Wait, nextEntry.participant.tempo);
       nextEntry = this.getNextEntry();
     }
 
@@ -186,4 +214,14 @@ export class EventTimeline implements EventTimelineReader {
       }
     }
   }
+}
+
+function getTimelineActionCosts(
+  tempo: number,
+): Readonly<Record<TimelineAction, number>> {
+  return {
+    [TimelineAction.Move]: getTimelineRecoveryDelay(TimelineAction.Move, tempo),
+    [TimelineAction.Attack]: getTimelineRecoveryDelay(TimelineAction.Attack, tempo),
+    [TimelineAction.Wait]: getTimelineRecoveryDelay(TimelineAction.Wait, tempo),
+  };
 }

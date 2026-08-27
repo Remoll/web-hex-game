@@ -7,8 +7,10 @@ import {
   GameActionType,
   GameSession,
 } from "@/game/gameSession/GameSession";
+import { TimelineAction } from "@/game/eventTimeline/EventTimeline";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
+import { TacticalAttribute } from "@/game/unit/tacticalAttributes/TacticalAttributes";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 import { FieldVisibility } from "@/game/visibility/MageVisibility";
 
@@ -223,6 +225,36 @@ describe("GameSession", () => {
       type: GameActionPreviewType.ValidMove,
       destination: { q: 2, r: 0 },
     });
+  });
+
+  it("applies Might to melee damage and Finesse to Mage recovery time", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+      attributes: {
+        [TacticalAttribute.Might]: 12,
+        [TacticalAttribute.Finesse]: 14,
+      },
+    });
+    const enemy = new Unit("enemy", { q: 2, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(new GameMap(mapData), [mage, enemy]);
+
+    expect(session.timelinePresentation.actionCosts).toMatchObject({
+      [TimelineAction.Move]: 98,
+      [TimelineAction.Attack]: 137,
+      [TimelineAction.Wait]: 98,
+    });
+
+    session.clickHex(mage.position);
+    session.clickHex({ q: 1, r: 0 });
+    expect(session.timelinePresentation.currentTime).toBe(98);
+
+    expect(session.clickHex(enemy.position)).toMatchObject({
+      type: GameActionType.Attacked,
+      damage: 22,
+      targetCurrentHp: 78,
+    });
+    expect(session.timelinePresentation.currentTime).toBe(235);
   });
 
   it("tracks Mage discovery after movement and rejects hidden unit selection", () => {

@@ -5,6 +5,7 @@ import { Faction } from "@/game/faction/Faction";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
 import { MovementType, TerrainType } from "@/game/types";
 import { UnitTacticalRole, UnitTexture } from "@/game/unit/Unit";
+import { TacticalAttribute } from "@/game/unit/tacticalAttributes/TacticalAttributes";
 
 const exampleLevelPath = fileURLToPath(
   new URL("../../../public/levels/example.json", import.meta.url),
@@ -34,11 +35,15 @@ describe("example level", () => {
       faction: Faction.Player,
       movementType: MovementType.Ground,
       movementRange: 3,
-      maxHp: 100,
-      currentHp: 100,
       attackPower: 20,
       tacticalRole: UnitTacticalRole.Mage,
       viewRange: 4,
+      attributes: {
+        [TacticalAttribute.Might]: 12,
+        [TacticalAttribute.Finesse]: 12,
+        [TacticalAttribute.Vitality]: 12,
+        [TacticalAttribute.Insight]: 12,
+      },
     });
     expect(
       level.map
@@ -76,6 +81,10 @@ describe("example level", () => {
     )).toBe(6);
     expect(level.map.filter((field) => !field.fieldAttrs.allowedMovements.ground))
       .toHaveLength(3);
+    for (const definition of [level.player, ...level.units]) {
+      expect(definition).not.toHaveProperty("maxHp");
+      expect(definition).not.toHaveProperty("currentHp");
+    }
     expect(level.units).toHaveLength(3);
     expect(level.units[0]).toMatchObject({
       id: "friendly-1",
@@ -84,20 +93,36 @@ describe("example level", () => {
       faction: Faction.Player,
       movementType: MovementType.Ground,
       movementRange: 3,
-      maxHp: 100,
-      currentHp: 100,
       attackPower: 20,
+      attributes: {
+        [TacticalAttribute.Might]: 10,
+        [TacticalAttribute.Finesse]: 11,
+        [TacticalAttribute.Vitality]: 12,
+        [TacticalAttribute.Insight]: 9,
+      },
     });
     expect(level.units[1]).toMatchObject({
       id: "enemy-1",
       position: { q: 2, r: 0 },
       texture: UnitTexture.EnemyIdle,
       faction: Faction.Enemy,
+      attributes: {
+        [TacticalAttribute.Might]: 14,
+        [TacticalAttribute.Finesse]: 9,
+        [TacticalAttribute.Vitality]: 12,
+        [TacticalAttribute.Insight]: 10,
+      },
     });
     expect(level.units[2]).toMatchObject({
       id: "neutral-1",
       position: { q: 2, r: -2 },
       faction: Faction.Neutral,
+      attributes: {
+        [TacticalAttribute.Might]: 8,
+        [TacticalAttribute.Finesse]: 10,
+        [TacticalAttribute.Vitality]: 10,
+        [TacticalAttribute.Insight]: 10,
+      },
     });
     expect(hexDistance(level.player.position, level.units[1].position)).toBe(2);
     expect(hexDistance(level.player.position, level.units[2].position)).toBe(2);

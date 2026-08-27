@@ -2,14 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   EventTimeline,
   TimelineAction,
+  getTimelineRecoveryDelay,
   timelineActionCosts,
   type TimelineParticipant,
 } from "@/game/eventTimeline/EventTimeline";
+import { baseTacticalTempo } from "@/game/unit/tacticalAttributes/TacticalAttributes";
 
 class Participant implements TimelineParticipant {
   public isAlive = true;
 
-  constructor(public readonly id: string) {}
+  constructor(
+    public readonly id: string,
+    public readonly tempo = baseTacticalTempo,
+  ) {}
 }
 
 describe("EventTimeline", () => {
@@ -50,6 +55,16 @@ describe("EventTimeline", () => {
       nextReadyAt: 100,
     });
     expect(timeline.getNextReadyAt(enemy.id)).toBe(200);
+  });
+
+  it("uses a unit's tempo for the next recovery delay", () => {
+    const swift = new Participant("swift", 110);
+    const timeline = new EventTimeline([swift]);
+
+    expect(getTimelineRecoveryDelay(TimelineAction.Move, swift.tempo)).toBe(91);
+    expect(getTimelineRecoveryDelay(TimelineAction.Attack, swift.tempo)).toBe(127);
+    timeline.consumeReadyAction(swift.id, TimelineAction.Move);
+    expect(timeline.getNextReadyAt(swift.id)).toBe(91);
   });
 
   it("advances passive units through Wait events to the next Mage decision", () => {

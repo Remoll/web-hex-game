@@ -2,7 +2,7 @@ import { Faction } from "@/game/faction/Faction";
 import {
   defaultMageViewRange,
   Unit,
-  type UnitConfig,
+  type UnitConfigInput,
   UnitTacticalRole,
   type UnitTexture,
 } from "@/game/unit/Unit";
@@ -13,7 +13,7 @@ export class Player extends Unit {
     id: string,
     initialPosition: HexCoord,
     texture: UnitTexture,
-    config: Partial<Omit<UnitConfig, "faction" | "tacticalRole">> = {},
+    config: Omit<UnitConfigInput, "faction" | "tacticalRole"> = {},
   ) {
     super(id, initialPosition, texture, {
       ...config,
