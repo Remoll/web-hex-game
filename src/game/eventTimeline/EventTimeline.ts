@@ -10,36 +10,48 @@ export interface TimelineParticipant {
   readonly tempo: number;
 }
 
-/** Stable action names used by the domain and the minimal timeline HUD. */
+/** Stable action names shared by autonomous-resolution callers. */
 export enum TimelineAction {
   Move = "move",
   Attack = "attack",
-  Command = "command",
   Wait = "wait",
 }
 
-/** Integer timeline costs. These are simulation time, never wall-clock time. */
-export const timelineActionCosts: Readonly<Record<TimelineAction, number>> = {
-  [TimelineAction.Move]: 100,
-  [TimelineAction.Attack]: 140,
-  [TimelineAction.Command]: 100,
-  [TimelineAction.Wait]: 100,
-};
+/** Current tactical actions use AP; they do not set separate Timeline delays. */
+export enum TacticalActionPointCost {
+  Move = 1,
+  Attack = 2,
+  Wait = 0,
+}
 
+export const actionPointsPerActivation = 3;
+export const baseTimelineRecoveryDelay = 100;
 export const minimumTimelineRecoveryDelay = 1;
 
-/** Converts a unit's tempo into integer simulation time for one action. */
-export function getTimelineRecoveryDelay(
-  action: TimelineAction,
-  tempo: number,
-): number {
+/** Returns the AP spent by a resolved tactical action. */
+export function getTacticalActionPointCost(action: TimelineAction): number {
+  switch (action) {
+    case TimelineAction.Move:
+      return TacticalActionPointCost.Move;
+    case TimelineAction.Attack:
+      return TacticalActionPointCost.Attack;
+    case TimelineAction.Wait:
+      return TacticalActionPointCost.Wait;
+  }
+}
+
+/**
+ * Converts a unit's Finesse-derived tempo into integer simulation time for its
+ * next activation. Recovery is independent of the actions spent this turn.
+ */
+export function getTimelineRecoveryDelay(tempo: number): number {
   if (!Number.isInteger(tempo) || tempo <= 0) {
     throw new Error("Timeline tempo must be a positive integer");
   }
 
   return Math.max(
     minimumTimelineRecoveryDelay,
-    Math.round(timelineActionCosts[action] * baseTacticalTempo / tempo),
+    Math.round(baseTimelineRecoveryDelay * baseTacticalTempo / tempo),
   );
 }
 
@@ -51,7 +63,10 @@ export interface TimelineActor {
 export interface TimelinePresentation {
   readonly currentTime: number;
   readonly readyActorId: string | undefined;
-  readonly actionCosts: Readonly<Record<TimelineAction, number>>;
+  readonly readyActorActionPoints: number | undefined;
+  readonly actionPointsPerActivation: number;
+  readonly readyActorHasWaited: boolean;
+  readonly readyActorRecoveryDelay: number | undefined;
 }
 
 export interface EventTimelineReader {
@@ -59,32 +74,38 @@ export interface EventTimelineReader {
   readonly readyActor: TimelineActor | undefined;
   readonly presentation: TimelinePresentation;
   getNextReadyAt(unitId: string): number | undefined;
+  getRemainingActionPoints(unitId: string): number | undefined;
+  hasWaitedDuringReadyActivation(unitId: string): boolean;
   isReady(unitId: string): boolean;
 }
 
-/** Resolves exactly one autonomous action for a non-Mage timeline entry. */
+/** Resolves the next autonomous action for a non-Mage timeline entry. */
 export type ResolveAutonomousTimelineAction = (
   participant: TimelineParticipant,
+  remainingActionPoints: number,
 ) => TimelineAction;
 
 interface TimelineEntry {
   readonly participant: TimelineParticipant;
   readonly registrationOrder: number;
   nextReadyAt: number;
+  tieBreakOrder: number;
+  remainingActionPoints: number;
+  hasWaited: boolean;
 }
 
 const initialReadyAt = 0;
+const noActionPoints = 0;
 
 /**
- * A deterministic discrete-event scheduler. Actors are ordered by the lowest
- * `nextReadyAt`, then by their initial registration order. Rescheduling an
- * actor replaces its sole entry, so a previously scheduled event cannot fire
- * later as stale work. Defeated actors are pruned before every public query or
- * transition.
+ * A deterministic discrete-event scheduler. Each scheduled participant owns
+ * one activation with a fixed AP pool. It only receives recovery after that
+ * activation ends, so actions can be combined without creating stale events.
  */
 export class EventTimeline implements EventTimelineReader {
   private readonly entriesByUnitId = new Map<string, TimelineEntry>();
   private _currentTime = initialReadyAt;
+  private nextDeferredTieBreakOrder = 0;
 
   constructor(participants: Iterable<TimelineParticipant>) {
     let registrationOrder = 0;
@@ -98,10 +119,15 @@ export class EventTimeline implements EventTimelineReader {
           participant,
           registrationOrder,
           nextReadyAt: initialReadyAt,
+          tieBreakOrder: registrationOrder,
+          remainingActionPoints: actionPointsPerActivation,
+          hasWaited: false,
         });
       }
       registrationOrder += 1;
     }
+
+    this.nextDeferredTieBreakOrder = registrationOrder;
   }
 
   get currentTime(): number {
@@ -125,9 +151,12 @@ export class EventTimeline implements EventTimelineReader {
     return {
       currentTime: this.currentTime,
       readyActorId: readyActor?.unitId,
-      actionCosts: readyEntry
-        ? getTimelineActionCosts(readyEntry.participant.tempo)
-        : timelineActionCosts,
+      readyActorActionPoints: readyEntry?.remainingActionPoints,
+      actionPointsPerActivation,
+      readyActorHasWaited: readyEntry?.hasWaited ?? false,
+      readyActorRecoveryDelay: readyEntry
+        ? getTimelineRecoveryDelay(readyEntry.participant.tempo)
+        : undefined,
     };
   }
 
@@ -136,20 +165,63 @@ export class EventTimeline implements EventTimelineReader {
     return this.entriesByUnitId.get(unitId)?.nextReadyAt;
   }
 
+  getRemainingActionPoints(unitId: string): number | undefined {
+    this.removeDefeatedParticipants();
+    return this.entriesByUnitId.get(unitId)?.remainingActionPoints;
+  }
+
+  hasWaitedDuringReadyActivation(unitId: string): boolean {
+    this.removeDefeatedParticipants();
+    return this.entriesByUnitId.get(unitId)?.hasWaited ?? false;
+  }
+
   /** An actor is ready only when it is the deterministic next event. */
   isReady(unitId: string): boolean {
     const readyActor = this.readyActor;
     return readyActor?.unitId === unitId && readyActor.nextReadyAt <= this._currentTime;
   }
 
+  /** Spends AP without rescheduling the active participant. */
+  spendReadyActionPoints(unitId: string, cost: number): number {
+    if (!Number.isInteger(cost) || cost < 0) {
+      throw new Error("Action point cost must be a non-negative integer");
+    }
+
+    const entry = this.requireReadyEntry(unitId);
+    if (entry.remainingActionPoints < cost) {
+      throw new Error(`Timeline participant ${unitId} has insufficient action points`);
+    }
+
+    entry.remainingActionPoints -= cost;
+    return entry.remainingActionPoints;
+  }
+
   /**
-   * Records the one action the current ready actor performed. Replacing the
-   * entry is deliberate: this timeline has no stale duplicate events.
+   * Defers exactly once to the end of the actors currently ready at this time.
+   * The participant remains in its activation and cannot wait again.
    */
-  consumeReadyAction(unitId: string, action: TimelineAction): void {
+  deferReadyActivation(unitId: string): void {
+    const entry = this.requireReadyEntry(unitId);
+    if (entry.hasWaited) {
+      throw new Error(`Timeline participant ${unitId} already waited this activation`);
+    }
+
+    entry.hasWaited = true;
+    entry.tieBreakOrder = this.nextDeferredTieBreakOrder;
+    this.nextDeferredTieBreakOrder += 1;
+  }
+
+  /**
+   * Applies the single Finesse-adjusted recovery delay after an activation.
+   * Any unspent AP is intentionally discarded.
+   */
+  endReadyActivation(unitId: string): void {
     const entry = this.requireReadyEntry(unitId);
     entry.nextReadyAt = this._currentTime
-      + getTimelineRecoveryDelay(action, entry.participant.tempo);
+      + getTimelineRecoveryDelay(entry.participant.tempo);
+    entry.tieBreakOrder = entry.registrationOrder;
+    entry.remainingActionPoints = actionPointsPerActivation;
+    entry.hasWaited = false;
   }
 
   /** Explicitly removes a future event, for example when a unit is defeated. */
@@ -158,9 +230,10 @@ export class EventTimeline implements EventTimelineReader {
   }
 
   /**
-   * Resolves one autonomous action for each non-Mage actor until the Mage is
-   * the next decision point. This is an event-driven synchronous simulation
-   * step; it never installs a timer or polls.
+   * Resolves autonomous actions for each non-Mage actor until the Mage is the
+   * next decision point. An actor keeps resolving legal actions until it runs
+   * out of AP or intentionally returns Wait. This is an event-driven
+   * synchronous simulation step; it never installs a timer or polls.
    */
   advanceAutonomousUnitsToMageDecision(
     mageId: string,
@@ -178,10 +251,9 @@ export class EventTimeline implements EventTimelineReader {
     let nextEntry = this.getNextEntry();
     while (nextEntry && nextEntry.participant.id !== mageId) {
       this._currentTime = nextEntry.nextReadyAt;
-      const action = resolveAutonomousAction(nextEntry.participant);
       if (nextEntry.participant.isAlive) {
-        nextEntry.nextReadyAt = this._currentTime
-          + getTimelineRecoveryDelay(action, nextEntry.participant.tempo);
+        this.resolveAutonomousActivation(nextEntry, resolveAutonomousAction);
+        this.endReadyActivation(nextEntry.participant.id);
       } else {
         this.entriesByUnitId.delete(nextEntry.participant.id);
       }
@@ -210,6 +282,25 @@ export class EventTimeline implements EventTimelineReader {
     return entry;
   }
 
+  private resolveAutonomousActivation(
+    entry: TimelineEntry,
+    resolveAutonomousAction: ResolveAutonomousTimelineAction,
+  ): void {
+    while (entry.participant.isAlive && entry.remainingActionPoints > noActionPoints) {
+      const action = resolveAutonomousAction(
+        entry.participant,
+        entry.remainingActionPoints,
+      );
+      const actionPointCost = getTacticalActionPointCost(action);
+      if (actionPointCost === noActionPoints
+        || actionPointCost > entry.remainingActionPoints) {
+        return;
+      }
+
+      this.spendReadyActionPoints(entry.participant.id, actionPointCost);
+    }
+  }
+
   private getNextEntry(): TimelineEntry | undefined {
     this.removeDefeatedParticipants();
 
@@ -218,7 +309,7 @@ export class EventTimeline implements EventTimelineReader {
       if (!next
         || entry.nextReadyAt < next.nextReadyAt
         || (entry.nextReadyAt === next.nextReadyAt
-          && entry.registrationOrder < next.registrationOrder)) {
+          && entry.tieBreakOrder < next.tieBreakOrder)) {
         next = entry;
       }
     }
@@ -233,15 +324,4 @@ export class EventTimeline implements EventTimelineReader {
       }
     }
   }
-}
-
-function getTimelineActionCosts(
-  tempo: number,
-): Readonly<Record<TimelineAction, number>> {
-  return {
-    [TimelineAction.Move]: getTimelineRecoveryDelay(TimelineAction.Move, tempo),
-    [TimelineAction.Attack]: getTimelineRecoveryDelay(TimelineAction.Attack, tempo),
-    [TimelineAction.Command]: getTimelineRecoveryDelay(TimelineAction.Command, tempo),
-    [TimelineAction.Wait]: getTimelineRecoveryDelay(TimelineAction.Wait, tempo),
-  };
 }

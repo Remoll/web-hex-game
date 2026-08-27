@@ -6,6 +6,7 @@ import {
 } from "@/game/faction/Faction";
 import {
   EventTimeline,
+  TacticalActionPointCost,
   TimelineAction,
   type EventTimelineReader,
   type TimelinePresentation,
@@ -39,6 +40,7 @@ export enum GameActionType {
   StrategyAssigned = "strategy-assigned",
   StrategyCleared = "strategy-cleared",
   Waited = "waited",
+  TurnEnded = "turn-ended",
   Ignored = "ignored",
 }
 
@@ -65,6 +67,7 @@ export enum GameActionRejectionReason {
   NotHostile = "not-hostile",
   NotVisible = "not-visible",
   NotReady = "not-ready",
+  InsufficientActionPoints = "insufficient-action-points",
   NoCommandTarget = "no-command-target",
   NoActiveStrategy = "no-active-strategy",
   InvalidEnemyTarget = "invalid-enemy-target",
@@ -108,6 +111,7 @@ export type GameAction =
   }
   | { type: GameActionType.StrategyCleared; servantId: string }
   | { type: GameActionType.Waited; unitId: string }
+  | { type: GameActionType.TurnEnded; unitId: string }
   | {
     type: GameActionType.Ignored;
     reason: GameActionRejectionReason;
@@ -429,7 +433,10 @@ export class GameSession {
       if (!this.hasActionAvailability(selectedUnit)) {
         return {
           type: GameActionPreviewType.OutOfRange,
-          reason: this.getAvailabilityRejectionReason(selectedUnit),
+          reason: this.getAvailabilityRejectionReason(
+            selectedUnit,
+            TacticalActionPointCost.Attack,
+          ),
         };
       }
 
@@ -456,7 +463,10 @@ export class GameSession {
     if (!this.hasMovementAvailability(selectedUnit)) {
       return {
         type: GameActionPreviewType.OutOfRange,
-        reason: this.getAvailabilityRejectionReason(selectedUnit),
+        reason: this.getAvailabilityRejectionReason(
+          selectedUnit,
+          TacticalActionPointCost.Move,
+        ),
       };
     }
 
@@ -749,7 +759,7 @@ export class GameSession {
     }
 
     this.servantStrategiesByUnitId.delete(servant.id);
-    this.timeline.consumeReadyAction(this.mageId, TimelineAction.Command);
+    this.endMageActivationAfterCommand();
     this.clearServantCommandTarget();
     return { type: GameActionType.StrategyCleared, servantId: servant.id };
   }
@@ -765,15 +775,15 @@ export class GameSession {
 
     this.timeline.advanceAutonomousUnitsToMageDecision(
       this.mageId,
-      (participant) => this.resolveAutonomousAction(participant.id),
+      (participant, remainingActionPoints) => this.resolveAutonomousAction(
+        participant.id,
+        remainingActionPoints,
+      ),
     );
     this.clearStaleCommandTarget();
   }
 
-  /**
-   * Ends the Mage's current activation without changing board state. Autonomous
-   * units resolve synchronously until the next deterministic Mage decision.
-   */
+  /** Defers once, then ends the deferred Mage activation on the next request. */
   waitForMage(): GameAction {
     const mage = this.unitsById.get(this.mageId);
     if (!mage || !mage.isAlive || !this.timeline.isReady(mage.id)) {
@@ -783,7 +793,14 @@ export class GameSession {
       };
     }
 
-    this.timeline.consumeReadyAction(mage.id, TimelineAction.Wait);
+    if (this.timeline.hasWaitedDuringReadyActivation(mage.id)) {
+      this.timeline.endReadyActivation(mage.id);
+      this.clearServantCommandTarget();
+      this.resolveAutonomousActivations();
+      return { type: GameActionType.TurnEnded, unitId: mage.id };
+    }
+
+    this.timeline.deferReadyActivation(mage.id);
     this.clearServantCommandTarget();
     this.resolveAutonomousActivations();
     return { type: GameActionType.Waited, unitId: mage.id };
@@ -806,14 +823,17 @@ export class GameSession {
         reason: GameActionRejectionReason.NotReady,
       };
     }
-    this.timeline.consumeReadyAction(unit.id, TimelineAction.Move);
+    const remainingActionPoints = this.timeline.spendReadyActionPoints(
+      unit.id,
+      preview.path.cost * TacticalActionPointCost.Move,
+    );
 
     const from = unit.position;
     this.moveLivingUnit(unit, preview.destination);
     if (unit.id === this.mageId) {
       this.recalculateMageVisibility();
       this.clearServantCommandTarget();
-      this.resolveAutonomousActivations();
+      this.resolveAutonomousActivationsIfActivationEnded(unit.id, remainingActionPoints);
     }
 
     return {
@@ -842,11 +862,17 @@ export class GameSession {
         reason: GameActionRejectionReason.NotReady,
       };
     }
-    this.timeline.consumeReadyAction(attacker.id, TimelineAction.Attack);
+    const remainingActionPoints = this.timeline.spendReadyActionPoints(
+      attacker.id,
+      TacticalActionPointCost.Attack,
+    );
     this.clearServantCommandTarget();
 
     this.applyMeleeDamage(attacker, target, false);
-    this.resolveAutonomousActivations();
+    this.resolveAutonomousActivationsIfActivationEnded(
+      attacker.id,
+      remainingActionPoints,
+    );
 
     return {
       type: GameActionType.Attacked,
@@ -886,23 +912,45 @@ export class GameSession {
   }
 
   private hasMovementAvailability(unit: Unit): boolean {
-    return this.isMage(unit) && this.isMageReady();
+    return this.hasActionPointAvailability(unit, TacticalActionPointCost.Move);
   }
 
   private hasActionAvailability(unit: Unit): boolean {
-    return this.isMage(unit) && this.isMageReady();
+    return this.hasActionPointAvailability(unit, TacticalActionPointCost.Attack);
   }
 
   private getMovementRangeForCurrentAction(unit: Unit): number {
-    return unit.movementRange;
+    const remainingActionPoints = this.timeline.getRemainingActionPoints(unit.id)
+      ?? noActionPoints;
+    return Math.min(
+      unit.movementRange,
+      Math.floor(remainingActionPoints / TacticalActionPointCost.Move),
+    );
   }
 
   private getAvailabilityRejectionReason(
     unit: Unit,
+    actionPointCost: TacticalActionPointCost,
   ): Exclude<GameActionRejectionReason, GameActionRejectionReason.NoSelectedUnit> {
-    return this.isMage(unit)
+    if (!this.isMage(unit)) {
+      return GameActionRejectionReason.NotPlayerControlled;
+    }
+
+    return !this.isMageReady()
       ? GameActionRejectionReason.NotReady
-      : GameActionRejectionReason.NotPlayerControlled;
+      : !this.hasActionPointAvailability(unit, actionPointCost)
+        ? GameActionRejectionReason.InsufficientActionPoints
+        : GameActionRejectionReason.NotReady;
+  }
+
+  private hasActionPointAvailability(
+    unit: Unit,
+    actionPointCost: TacticalActionPointCost,
+  ): boolean {
+    return this.isMage(unit)
+      && this.isMageReady()
+      && (this.timeline.getRemainingActionPoints(unit.id) ?? noActionPoints)
+        >= actionPointCost;
   }
 
   private isMage(unit: Unit): boolean {
@@ -998,7 +1046,7 @@ export class GameSession {
     servantId: string,
     strategy: ServantStrategy,
   ): GameAction {
-    this.timeline.consumeReadyAction(this.mageId, TimelineAction.Command);
+    this.endMageActivationAfterCommand();
     this.clearServantCommandTarget();
 
     switch (strategy.type) {
@@ -1025,14 +1073,34 @@ export class GameSession {
     }
   }
 
-  private resolveAutonomousAction(unitId: string): TimelineAction {
+  /** Existing servant commands remain whole-activation decisions for now. */
+  private endMageActivationAfterCommand(): void {
+    this.timeline.endReadyActivation(this.mageId);
+  }
+
+  private resolveAutonomousActivationsIfActivationEnded(
+    unitId: string,
+    remainingActionPoints: number,
+  ): void {
+    if (remainingActionPoints > 0) {
+      return;
+    }
+
+    this.timeline.endReadyActivation(unitId);
+    this.resolveAutonomousActivations();
+  }
+
+  private resolveAutonomousAction(
+    unitId: string,
+    remainingActionPoints: number,
+  ): TimelineAction {
     const unit = this.unitsById.get(unitId);
     if (!unit) {
       return TimelineAction.Wait;
     }
 
     if (unit.faction === Faction.Enemy) {
-      return this.resolveEnemyActivation(unit);
+      return this.resolveEnemyActivation(unit, remainingActionPoints);
     }
 
     if (!this.isPlayerFactionServant(unit)) {
@@ -1048,9 +1116,17 @@ export class GameSession {
       case ServantStrategyType.Hold:
         return TimelineAction.Wait;
       case ServantStrategyType.PursueDesignatedEnemy:
-        return this.resolvePursueDesignatedEnemy(unit, strategy);
+        return this.resolvePursueDesignatedEnemy(
+          unit,
+          strategy,
+          remainingActionPoints,
+        );
       case ServantStrategyType.SecureDesignatedHex:
-        return this.resolveSecureDesignatedHex(unit, strategy);
+        return this.resolveSecureDesignatedHex(
+          unit,
+          strategy,
+          remainingActionPoints,
+        );
     }
   }
 
@@ -1061,6 +1137,7 @@ export class GameSession {
       ServantStrategy,
       { type: ServantStrategyType.PursueDesignatedEnemy }
     >,
+    remainingActionPoints: number,
   ): TimelineAction {
     const target = this.unitsById.get(strategy.targetEnemyId);
     if (!target
@@ -1074,12 +1151,26 @@ export class GameSession {
 
     if (this.gameMap.getHexDistance(servant.position, target.position)
       === adjacentHexDistance) {
+      if (!this.canAffordAutonomousAction(
+        remainingActionPoints,
+        TacticalActionPointCost.Attack,
+      )) {
+        return TimelineAction.Wait;
+      }
+
       this.applyMeleeDamage(servant, target, true);
       return TimelineAction.Attack;
     }
 
     const path = this.findShortestApproachPath(servant, target.position);
     if (!path || path.steps.length === 0) {
+      return TimelineAction.Wait;
+    }
+
+    if (!this.canAffordAutonomousAction(
+      remainingActionPoints,
+      TacticalActionPointCost.Move,
+    )) {
       return TimelineAction.Wait;
     }
 
@@ -1097,6 +1188,7 @@ export class GameSession {
       ServantStrategy,
       { type: ServantStrategyType.SecureDesignatedHex }
     >,
+    remainingActionPoints: number,
   ): TimelineAction {
     const targetField = this.gameMap.getField(
       strategy.targetHex.q,
@@ -1118,8 +1210,22 @@ export class GameSession {
         === FactionDisposition.Enemy
         && this.gameMap.getHexDistance(servant.position, targetOccupant.position)
           === adjacentHexDistance) {
+        if (!this.canAffordAutonomousAction(
+          remainingActionPoints,
+          TacticalActionPointCost.Attack,
+        )) {
+          return TimelineAction.Wait;
+        }
+
         this.applyMeleeDamage(servant, targetOccupant, true);
         return TimelineAction.Attack;
+      }
+
+      if (!this.canAffordAutonomousAction(
+        remainingActionPoints,
+        TacticalActionPointCost.Move,
+      )) {
+        return TimelineAction.Wait;
       }
 
       return this.moveServantTowardHex(servant, strategy.targetHex)
@@ -1137,6 +1243,13 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
+    if (!this.canAffordAutonomousAction(
+      remainingActionPoints,
+      TacticalActionPointCost.Move,
+    )) {
+      return TimelineAction.Wait;
+    }
+
     const destination = path.steps[0];
     this.moveAutonomousUnit(servant, destination);
     if (isSameHex(destination, strategy.targetHex)) {
@@ -1145,8 +1258,11 @@ export class GameSession {
     return TimelineAction.Move;
   }
 
-  /** Resolves exactly one non-omniscient Enemy action for its timeline event. */
-  private resolveEnemyActivation(enemy: Unit): TimelineAction {
+  /** Resolves the next non-omniscient Enemy action in its current activation. */
+  private resolveEnemyActivation(
+    enemy: Unit,
+    remainingActionPoints: number,
+  ): TimelineAction {
     const visibleHostile = this.findNearestVisibleHostile(enemy);
     if (visibleHostile) {
       this.enemyTacticalMemory.rememberHostilePosition(
@@ -1156,8 +1272,22 @@ export class GameSession {
       );
       if (this.gameMap.getHexDistance(enemy.position, visibleHostile.position)
         === adjacentHexDistance) {
+        if (!this.canAffordAutonomousAction(
+          remainingActionPoints,
+          TacticalActionPointCost.Attack,
+        )) {
+          return TimelineAction.Wait;
+        }
+
         this.applyMeleeDamage(enemy, visibleHostile, true);
         return TimelineAction.Attack;
+      }
+
+      if (!this.canAffordAutonomousAction(
+        remainingActionPoints,
+        TacticalActionPointCost.Move,
+      )) {
+        return TimelineAction.Wait;
       }
 
       return this.moveEnemyToward(enemy, visibleHostile.position)
@@ -1176,9 +1306,23 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
+    if (!this.canAffordAutonomousAction(
+      remainingActionPoints,
+      TacticalActionPointCost.Move,
+    )) {
+      return TimelineAction.Wait;
+    }
+
     return this.moveEnemyToward(enemy, lastKnownHostilePosition)
       ? TimelineAction.Move
       : TimelineAction.Wait;
+  }
+
+  private canAffordAutonomousAction(
+    remainingActionPoints: number,
+    actionPointCost: TacticalActionPointCost,
+  ): boolean {
+    return remainingActionPoints >= actionPointCost;
   }
 
   /** Ties use the original level registration order preserved by unitsById. */
@@ -1358,3 +1502,4 @@ function compareHexCoords(first: HexCoord, second: HexCoord): number {
 }
 
 const adjacentHexDistance = 1;
+const noActionPoints = 0;

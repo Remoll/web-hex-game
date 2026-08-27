@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionPointsPerActivation,
+  baseTimelineRecoveryDelay,
   EventTimeline,
-  TimelineAction,
   getTimelineRecoveryDelay,
-  timelineActionCosts,
+  TacticalActionPointCost,
+  TimelineAction,
   type TimelineParticipant,
 } from "@/game/eventTimeline/EventTimeline";
 import { baseTacticalTempo } from "@/game/unit/tacticalAttributes/TacticalAttributes";
+
+const initialSimulationTime = 0;
 
 class Participant implements TimelineParticipant {
   public isAlive = true;
@@ -18,155 +22,136 @@ class Participant implements TimelineParticipant {
 }
 
 describe("EventTimeline", () => {
-  it("uses integer named costs and stable registration-order tie breaking", () => {
+  it("keeps a ready actor active while it spends only part of its AP pool", () => {
     const beta = new Participant("beta");
     const alpha = new Participant("alpha");
     const timeline = new EventTimeline([beta, alpha]);
 
-    expect(timelineActionCosts).toEqual({
-      [TimelineAction.Move]: 100,
-      [TimelineAction.Attack]: 140,
-      [TimelineAction.Command]: 100,
-      [TimelineAction.Wait]: 100,
+    expect(timeline.readyActor).toEqual({
+      unitId: beta.id,
+      nextReadyAt: initialSimulationTime,
     });
-    expect(timeline.readyActor).toEqual({ unitId: "beta", nextReadyAt: 0 });
+    expect(timeline.getRemainingActionPoints(beta.id)).toBe(actionPointsPerActivation);
 
-    timeline.consumeReadyAction("beta", TimelineAction.Move);
-    expect(timeline.readyActor).toEqual({ unitId: "alpha", nextReadyAt: 0 });
-    expect(timeline.isReady("beta")).toBe(false);
-    expect(() => timeline.consumeReadyAction("beta", TimelineAction.Attack)).toThrow(
-      "Timeline participant beta is not ready",
+    timeline.spendReadyActionPoints(beta.id, TacticalActionPointCost.Move);
+
+    expect(timeline.readyActor).toEqual({
+      unitId: beta.id,
+      nextReadyAt: initialSimulationTime,
+    });
+    expect(timeline.getRemainingActionPoints(beta.id)).toBe(
+      actionPointsPerActivation - TacticalActionPointCost.Move,
     );
+    expect(timeline.getNextReadyAt(alpha.id)).toBe(initialSimulationTime);
   });
 
-  it("resolves passive waits in the documented registration order", () => {
+  it("rejects AP overspending and only schedules recovery after ending an activation", () => {
+    const beta = new Participant("beta");
+    const alpha = new Participant("alpha");
+    const timeline = new EventTimeline([beta, alpha]);
+
+    expect(() => timeline.spendReadyActionPoints(
+      beta.id,
+      actionPointsPerActivation + TacticalActionPointCost.Move,
+    )).toThrow("Timeline participant beta has insufficient action points");
+
+    timeline.spendReadyActionPoints(beta.id, actionPointsPerActivation);
+    timeline.endReadyActivation(beta.id);
+
+    expect(timeline.getNextReadyAt(beta.id)).toBe(baseTimelineRecoveryDelay);
+    expect(timeline.getRemainingActionPoints(beta.id)).toBe(actionPointsPerActivation);
+    expect(timeline.readyActor).toEqual({
+      unitId: alpha.id,
+      nextReadyAt: initialSimulationTime,
+    });
+  });
+
+  it("uses Finesse-derived tempo for whole-activation recovery only", () => {
+    const swift = new Participant("swift", 110);
+    const timeline = new EventTimeline([swift]);
+
+    expect(getTimelineRecoveryDelay(swift.tempo)).toBe(91);
+    timeline.spendReadyActionPoints(swift.id, TacticalActionPointCost.Attack);
+    expect(timeline.getNextReadyAt(swift.id)).toBe(initialSimulationTime);
+
+    timeline.endReadyActivation(swift.id);
+    expect(timeline.getNextReadyAt(swift.id)).toBe(91);
+  });
+
+  it("defers once behind the currently-ready actors and then exposes the same AP pool", () => {
+    const mage = new Participant("mage");
     const enemy = new Participant("enemy");
-    const mage = new Participant("mage");
-    const timeline = new EventTimeline([enemy, mage]);
-
-    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
-      unitId: mage.id,
-      nextReadyAt: 0,
-    });
-    expect(timeline.getNextReadyAt(enemy.id)).toBe(100);
-
-    timeline.consumeReadyAction(mage.id, TimelineAction.Move);
-    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
-      unitId: mage.id,
-      nextReadyAt: 100,
-    });
-    expect(timeline.getNextReadyAt(enemy.id)).toBe(200);
-  });
-
-  it("schedules the one autonomous action selected for each passive actor", () => {
-    const servant = new Participant("servant");
-    const mage = new Participant("mage");
-    const timeline = new EventTimeline([servant, mage]);
+    const neutral = new Participant("neutral");
+    const timeline = new EventTimeline([mage, enemy, neutral]);
     const resolvedActorIds: string[] = [];
+
+    timeline.deferReadyActivation(mage.id);
+    expect(timeline.hasWaitedDuringReadyActivation(mage.id)).toBe(true);
 
     expect(timeline.advanceAutonomousUnitsToMageDecision(
       mage.id,
       (participant) => {
         resolvedActorIds.push(participant.id);
-        return TimelineAction.Attack;
+        return TimelineAction.Wait;
       },
     )).toEqual({
       unitId: mage.id,
-      nextReadyAt: 0,
+      nextReadyAt: initialSimulationTime,
     });
-    expect(resolvedActorIds).toEqual([servant.id]);
-    expect(timeline.getNextReadyAt(servant.id)).toBe(
-      timelineActionCosts[TimelineAction.Attack],
+    expect(resolvedActorIds).toEqual([enemy.id, neutral.id]);
+    expect(timeline.getRemainingActionPoints(mage.id)).toBe(actionPointsPerActivation);
+    expect(() => timeline.deferReadyActivation(mage.id)).toThrow(
+      "Timeline participant mage already waited this activation",
     );
+
+    timeline.endReadyActivation(mage.id);
+    expect(timeline.getNextReadyAt(mage.id)).toBe(baseTimelineRecoveryDelay);
+    expect(timeline.hasWaitedDuringReadyActivation(mage.id)).toBe(false);
   });
 
-  it("ends autonomous resolution safely when an action defeats the Mage", () => {
+  it("keeps resolving autonomous actions until the AP pool is exhausted", () => {
     const servant = new Participant("servant");
     const mage = new Participant("mage");
     const timeline = new EventTimeline([servant, mage]);
+    const actionPointSnapshots: number[] = [];
 
     expect(timeline.advanceAutonomousUnitsToMageDecision(
       mage.id,
-      () => {
-        mage.isAlive = false;
-        return TimelineAction.Attack;
+      (_participant, remainingActionPoints) => {
+        actionPointSnapshots.push(remainingActionPoints);
+        return TimelineAction.Move;
       },
-    )).toBeUndefined();
-    expect(timeline.readyActor).toEqual({
-      unitId: servant.id,
-      nextReadyAt: timelineActionCosts[TimelineAction.Attack],
+    )).toEqual({
+      unitId: mage.id,
+      nextReadyAt: initialSimulationTime,
     });
+    expect(actionPointSnapshots).toEqual([
+      actionPointsPerActivation,
+      actionPointsPerActivation - TacticalActionPointCost.Move,
+      actionPointsPerActivation
+        - TacticalActionPointCost.Move
+        - TacticalActionPointCost.Move,
+    ]);
+    expect(timeline.getNextReadyAt(servant.id)).toBe(baseTimelineRecoveryDelay);
+    expect(timeline.getRemainingActionPoints(servant.id)).toBe(actionPointsPerActivation);
   });
 
-  it("uses a unit's tempo for the next recovery delay", () => {
-    const swift = new Participant("swift", 110);
-    const timeline = new EventTimeline([swift]);
-
-    expect(getTimelineRecoveryDelay(TimelineAction.Move, swift.tempo)).toBe(91);
-    expect(getTimelineRecoveryDelay(TimelineAction.Attack, swift.tempo)).toBe(127);
-    timeline.consumeReadyAction(swift.id, TimelineAction.Move);
-    expect(timeline.getNextReadyAt(swift.id)).toBe(91);
-  });
-
-  it("advances passive units through Wait events to the next Mage decision", () => {
-    const mage = new Participant("mage");
-    const enemy = new Participant("enemy");
-    const neutral = new Participant("neutral");
-    const timeline = new EventTimeline([mage, enemy, neutral]);
-
-    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
-      unitId: mage.id,
-      nextReadyAt: 0,
-    });
-    expect(timeline.getNextReadyAt(enemy.id)).toBe(0);
-    expect(timeline.getNextReadyAt(neutral.id)).toBe(0);
-
-    timeline.consumeReadyAction(mage.id, TimelineAction.Move);
-    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
-      unitId: mage.id,
-      nextReadyAt: 100,
-    });
-    expect(timeline.currentTime).toBe(100);
-    expect(timeline.getNextReadyAt(enemy.id)).toBe(100);
-
-    timeline.consumeReadyAction(mage.id, TimelineAction.Attack);
-    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
-      unitId: mage.id,
-      nextReadyAt: 240,
-    });
-    expect(timeline.currentTime).toBe(240);
-    expect(timeline.getNextReadyAt(enemy.id)).toBe(300);
-  });
-
-  it("invalidates explicitly stale and defeated participants before they can act", () => {
+  it("invalidates defeated participants before they can act", () => {
     const mage = new Participant("mage");
     const defeated = new Participant("defeated");
     const timeline = new EventTimeline([mage, defeated]);
 
     defeated.isAlive = false;
     expect(timeline.getNextReadyAt(defeated.id)).toBeUndefined();
-    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
-      unitId: mage.id,
-      nextReadyAt: 0,
-    });
-
     timeline.invalidateUnit(mage.id);
-    expect(timeline.readyActor).toBeUndefined();
-    expect(advanceToMageDecision(timeline, mage.id)).toBeUndefined();
+
     expect(timeline.presentation).toEqual({
-      currentTime: 0,
+      currentTime: initialSimulationTime,
       readyActorId: undefined,
-      actionCosts: timelineActionCosts,
+      readyActorActionPoints: undefined,
+      actionPointsPerActivation,
+      readyActorHasWaited: false,
+      readyActorRecoveryDelay: undefined,
     });
   });
 });
-
-function advanceToMageDecision(
-  timeline: EventTimeline,
-  mageId: string,
-) {
-  return timeline.advanceAutonomousUnitsToMageDecision(
-    mageId,
-    () => TimelineAction.Wait,
-  );
-}

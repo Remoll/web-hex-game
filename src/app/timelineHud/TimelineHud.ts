@@ -1,5 +1,5 @@
 import {
-  TimelineAction,
+  TacticalActionPointCost,
   type TimelinePresentation,
 } from "@/game/eventTimeline/EventTimeline";
 
@@ -45,11 +45,16 @@ export class TimelineHud {
     this.currentTime.textContent = `Time: ${presentation.currentTime}`;
     this.readyActor.textContent = `Ready: ${this.getActorLabel(presentation.readyActorId)}`;
     this.actionCosts.textContent = [
-      `Move +${presentation.actionCosts[TimelineAction.Move]}`,
-      `Attack +${presentation.actionCosts[TimelineAction.Attack]}`,
-      `Command +${presentation.actionCosts[TimelineAction.Command]}`,
+      `AP: ${presentation.readyActorActionPoints === undefined
+        ? "—"
+        : presentation.readyActorActionPoints}/${presentation.actionPointsPerActivation}`,
+      `Move ${TacticalActionPointCost.Move} AP`,
+      `Attack ${TacticalActionPointCost.Attack} AP`,
     ].join(" · ");
-    this.waitButton.textContent = `Wait +${presentation.actionCosts[TimelineAction.Wait]}`;
+    this.waitButton.textContent = presentation.readyActorHasWaited
+      && presentation.readyActorRecoveryDelay !== undefined
+      ? `End Turn +${presentation.readyActorRecoveryDelay}`
+      : "Wait";
     this.waitButton.disabled = presentation.readyActorId !== this.options.mageId;
   }
 

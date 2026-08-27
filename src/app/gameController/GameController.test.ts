@@ -13,8 +13,8 @@ import {
   ServantStrategyTargetSelection,
 } from "@/game/gameSession/GameSession";
 import {
-  TimelineAction,
-  timelineActionCosts,
+  actionPointsPerActivation,
+  baseTimelineRecoveryDelay,
 } from "@/game/eventTimeline/EventTimeline";
 import { Faction } from "@/game/faction/Faction";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
@@ -98,16 +98,22 @@ describe("GameController", () => {
     expect(timelinePresenter.sync).toHaveBeenLastCalledWith({
       currentTime: 0,
       readyActorId: player.id,
-      actionCosts: timelineActionCosts,
+      readyActorActionPoints: actionPointsPerActivation,
+      actionPointsPerActivation,
+      readyActorHasWaited: false,
+      readyActorRecoveryDelay: baseTimelineRecoveryDelay,
     });
     expect(controller.waitForMage()).toEqual({
       type: GameActionType.Waited,
       unitId: player.id,
     });
     expect(timelinePresenter.sync).toHaveBeenLastCalledWith({
-      currentTime: timelineActionCosts[TimelineAction.Wait],
+      currentTime: 0,
       readyActorId: player.id,
-      actionCosts: timelineActionCosts,
+      readyActorActionPoints: actionPointsPerActivation,
+      actionPointsPerActivation,
+      readyActorHasWaited: true,
+      readyActorRecoveryDelay: baseTimelineRecoveryDelay,
     });
   });
 
@@ -175,7 +181,7 @@ describe("GameController", () => {
       servantId: servant.id,
     });
     expect(session.timelinePresentation).toMatchObject({
-      currentTime: timelineActionCosts[TimelineAction.Command],
+      currentTime: baseTimelineRecoveryDelay,
       readyActorId: mage.id,
     });
     expect(commandPresenter.sync).toHaveBeenLastCalledWith({

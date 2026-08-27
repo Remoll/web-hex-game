@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added three-AP tactical activations: path-based movement costs one AP per
+  hex, melee attacks cost two AP, and each completed activation receives one
+  Finesse-adjusted recovery delay.
+- Added full-AP autonomous activations, allowing servants and Enemies to make
+  successive legal movement and attack decisions until they exhaust AP or have
+  no affordable action.
+- Added a one-time Wait that defers the Mage without spending AP, followed by
+  an explicit End Turn control for the remainder of that activation.
 - Added Mage-issued Secure Designated Hex orders, with autonomous legal-path
   approach, hostile-only assault, and completion on reaching an empty target.
 - Added Mage-issued Pursue Designated Enemy orders, with delayed autonomous
@@ -15,8 +23,7 @@ All notable changes to this project are documented in this file.
 - Added derived Might, Finesse, Vitality, and Insight attributes to tactical
   units, including level serialization and current combat, tempo, and vision
   effects.
-- Added a deterministic discrete Event Timeline for Mage movement, attacks,
-  and waiting, with named integer action costs and a minimal timeline HUD.
+- Added a deterministic discrete Event Timeline and a minimal tactical HUD.
 - Added a radius-6 tactical encounter with Mage-centred three-state fog of war:
   undiscovered, discovered terrain, and current visibility.
 - Fixed isometric camera clipping that could expose white gaps along the lower
