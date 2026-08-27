@@ -2,7 +2,12 @@ import * as THREE from "three";
 import type { Unit } from "@/game/unit/Unit";
 import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { RenderConfig } from "@/rendering/RenderConfig";
-import { buildUnitHealthRenderState } from "@/rendering/unitHealthView/UnitHealthRenderModel";
+import {
+  buildUnitHealthRenderState,
+  getHealthBarFillX,
+  getUnitHealthBarZFromUnitCenter,
+} from "@/rendering/unitHealthView/UnitHealthRenderModel";
+import type { UnitRenderState } from "@/rendering/unitView/UnitRenderModel";
 
 /** Draws health bars with two reusable instanced meshes. */
 export class UnitHealthView {
@@ -35,7 +40,11 @@ export class UnitHealthView {
     scene.add(this.background, this.fill);
   }
 
-  sync(unit: Unit, visible: boolean = true): void {
+  sync(
+    unit: Unit,
+    visible: boolean = true,
+    preservePosition: boolean = false,
+  ): void {
     const index = this.getOrCreateIndex(unit.id);
     const state = buildUnitHealthRenderState(unit, this.gameMap, this.config);
 
@@ -45,16 +54,28 @@ export class UnitHealthView {
       return;
     }
 
-    this.setMatrix(this.background, index, state.x, state.y, state.z, 1, 1);
-    this.setMatrix(
-      this.fill,
-      index,
-      state.x - (this.config.healthBarWidth * (1 - state.fillRatio)) / 2,
-      state.y,
-      state.z + this.config.healthBarFillZOffset,
-      state.fillRatio,
-      1,
-    );
+    if (!preservePosition) {
+      this.applyHealthBar(index, state.x, state.y, state.z, state.fillRatio);
+    }
+  }
+
+  applyMovementFrame(
+    unit: Unit,
+    from: UnitRenderState,
+    to: UnitRenderState,
+    progress: number,
+  ): void {
+    const fillRatio = getFillRatio(unit);
+    if (fillRatio === undefined) {
+      return;
+    }
+
+    const index = this.getOrCreateIndex(unit.id);
+    const x = interpolate(from.x, to.x, progress);
+    const y = interpolate(from.y, to.y, progress);
+    const unitZ = interpolate(from.z, to.z, progress);
+    const z = getUnitHealthBarZFromUnitCenter(unitZ, this.config);
+    this.applyHealthBar(index, x, y, z, fillRatio);
   }
 
   dispose(): void {
@@ -74,6 +95,25 @@ export class UnitHealthView {
     mesh.frustumCulled = false;
     mesh.renderOrder = 4;
     return mesh;
+  }
+
+  private applyHealthBar(
+    index: number,
+    x: number,
+    y: number,
+    z: number,
+    fillRatio: number,
+  ): void {
+    this.setMatrix(this.background, index, x, y, z, 1, 1);
+    this.setMatrix(
+      this.fill,
+      index,
+      getHealthBarFillX(x, fillRatio, this.config),
+      y,
+      z + this.config.healthBarFillZOffset,
+      fillRatio,
+      1,
+    );
   }
 
   private getOrCreateIndex(unitId: string): number {
@@ -119,4 +159,19 @@ function disposeMaterials(material: THREE.Material | THREE.Material[]): void {
   for (const item of Array.isArray(material) ? material : [material]) {
     item.dispose();
   }
+}
+
+function interpolate(from: number, to: number, progress: number): number {
+  return from + (to - from) * progress;
+}
+
+function getFillRatio(unit: Unit): number | undefined {
+  if (!unit.isAlive || unit.maxHp <= 0) {
+    return undefined;
+  }
+
+  const fillRatio = unit.currentHp / unit.maxHp;
+  return Number.isFinite(fillRatio) && fillRatio > 0 && fillRatio <= 1
+    ? fillRatio
+    : undefined;
 }

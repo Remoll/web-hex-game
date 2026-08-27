@@ -1,11 +1,13 @@
 import {
   GameSession,
+  GameActionRejectionReason,
   GameActionPreviewType,
   GameActionType,
   type GameAction,
   type GameActionPreview,
   type InitiativeQueuePresentation,
   type ServantCommandPresentation,
+  type UnitMovementEvent,
 } from "@/game/gameSession/GameSession";
 import type { TimelinePresentation } from "@/game/eventTimeline/EventTimeline";
 import type { Unit } from "@/game/unit/Unit";
@@ -35,6 +37,12 @@ export interface InitiativeQueuePresenter {
   sync(presentation: InitiativeQueuePresentation): void;
 }
 
+/** Presentation-only movement playback; it never changes the GameSession. */
+export interface UnitMovementPresenter {
+  readonly isAnimating: boolean;
+  sync(events: readonly UnitMovementEvent[]): void;
+}
+
 const noopFeedbackPresenter: TacticalFeedbackPresenter = {
   sync: () => undefined,
 };
@@ -51,6 +59,11 @@ const noopInitiativeQueuePresenter: InitiativeQueuePresenter = {
   sync: () => undefined,
 };
 
+const noopUnitMovementPresenter: UnitMovementPresenter = {
+  isAnimating: false,
+  sync: () => undefined,
+};
+
 /** Connects domain actions to the presentation layer without exposing Three.js to the game. */
 export class GameController {
   private initiativeQueueHighlightedUnitId: string | undefined;
@@ -62,6 +75,7 @@ export class GameController {
     private readonly timelinePresenter: TimelinePresenter = noopTimelinePresenter,
     private readonly servantCommandPresenter: ServantCommandPresenter = noopServantCommandPresenter,
     private readonly initiativeQueuePresenter: InitiativeQueuePresenter = noopInitiativeQueuePresenter,
+    private readonly unitMovementPresenter: UnitMovementPresenter = noopUnitMovementPresenter,
   ) {
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();
@@ -70,12 +84,18 @@ export class GameController {
   }
 
   clickHex(coord: HexCoord): GameAction {
+    if (this.unitMovementPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
     const action = this.session.clickHex(coord);
 
     if (action.type === GameActionType.StrategyAssigned
       || action.type === GameActionType.StrategyCleared) {
       this.session.resolveAutonomousActivations();
     }
+
+    this.syncMovementPresentation();
 
     if (action.type === GameActionType.Moved) {
       this.syncUnit(action.unitId);
@@ -96,7 +116,12 @@ export class GameController {
   }
 
   waitForMage(): GameAction {
+    if (this.unitMovementPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
     const action = this.session.waitForMage();
+    this.syncMovementPresentation();
     this.syncAutonomousUnitUpdates();
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();
@@ -106,30 +131,55 @@ export class GameController {
   }
 
   assignHoldStrategy(): GameAction {
+    if (this.unitMovementPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
     const action = this.session.assignHoldStrategy();
     this.resolveAutonomousActivationsAfterCommand(action);
     return action;
   }
 
   beginPursueDesignatedEnemySelection(): GameAction {
+    if (this.unitMovementPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
     const action = this.session.beginPursueDesignatedEnemySelection();
     this.resolveAutonomousActivationsAfterCommand(action);
     return action;
   }
 
   beginSecureDesignatedHexSelection(): GameAction {
+    if (this.unitMovementPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
     const action = this.session.beginSecureDesignatedHexSelection();
     this.resolveAutonomousActivationsAfterCommand(action);
     return action;
   }
 
   clearServantStrategy(): GameAction {
+    if (this.unitMovementPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
     const action = this.session.clearServantStrategy();
     this.resolveAutonomousActivationsAfterCommand(action);
     return action;
   }
 
   previewHex(coord: HexCoord): GameActionPreview {
+    if (this.unitMovementPresenter.isAnimating) {
+      const preview: GameActionPreview = {
+        type: GameActionPreviewType.OutOfRange,
+        reason: GameActionRejectionReason.PresentationBusy,
+      };
+      this.refreshTacticalFeedback();
+      return preview;
+    }
+
     const preview = this.session.previewHex(coord);
     this.refreshTacticalFeedback(preview);
     return preview;
@@ -166,6 +216,18 @@ export class GameController {
     for (const unit of this.session.consumeAutonomousUnitUpdates()) {
       this.unitPresenter.sync(unit);
     }
+  }
+
+  private syncMovementPresentation(): void {
+    this.unitMovementPresenter.sync(this.session.consumeMovementEvents());
+  }
+
+  private presentationBusyAction(): GameAction {
+    this.refreshTacticalFeedback();
+    return {
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.PresentationBusy,
+    };
   }
 
   private refreshTacticalFeedback(preview?: GameActionPreview): void {
@@ -289,6 +351,7 @@ export class GameController {
       this.session.resolveAutonomousActivations();
     }
 
+    this.syncMovementPresentation();
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();
     this.syncAutonomousUnitUpdates();

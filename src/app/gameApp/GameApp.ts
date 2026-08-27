@@ -1,17 +1,22 @@
 import * as THREE from "three";
-import { GameController } from "@/app/gameController/GameController";
+import {
+  GameController,
+  type UnitMovementPresenter,
+} from "@/app/gameController/GameController";
 import { InputController } from "@/app/inputController/InputController";
 import { TimelineHud } from "@/app/timelineHud/TimelineHud";
 import { InitiativeQueueHud } from "@/app/initiativeQueueHud/InitiativeQueueHud";
 import { ServantCommandHud } from "@/app/servantCommandHud/ServantCommandHud";
-import type { GameSession } from "@/game/gameSession/GameSession";
+import {
+  type GameSession,
+  type UnitMovementEvent,
+} from "@/game/gameSession/GameSession";
 import {
   createGameSession,
 } from "@/game/levels/createGameSession";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
 import { CameraMode } from "@/rendering/gameCamera/CameraMode";
 import { GameCamera } from "@/rendering/gameCamera/GameCamera";
-import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
 import { MapView } from "@/rendering/mapView/MapView";
 import { MapHighlightView } from "@/rendering/mapHighlightView/MapHighlightView";
 import { RemainsView } from "@/rendering/remainsView/RemainsView";
@@ -21,6 +26,11 @@ import {
 } from "@/rendering/RenderConfig";
 import { UnitView } from "@/rendering/unitView/UnitView";
 import { UnitHealthView } from "@/rendering/unitHealthView/UnitHealthView";
+import {
+  UnitMovementAnimationQueue,
+  type UnitMovementAnimation,
+} from "@/rendering/unitMotion/UnitMovementAnimationQueue";
+import { buildVisibleUnitMovementAnimation } from "@/rendering/unitMotion/UnitMovementAnimationModel";
 
 export interface GameAppOptions {
   readonly level: LevelDefinition;
@@ -32,11 +42,13 @@ export class GameApp {
   public readonly session: GameSession;
 
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly renderConfig: RenderConfig;
   private readonly camera: GameCamera;
   private readonly mapView: MapView;
   private readonly mapHighlightView: MapHighlightView;
   private readonly unitView: UnitView;
   private readonly unitHealthView: UnitHealthView;
+  private readonly unitMovementAnimationQueue: UnitMovementAnimationQueue;
   private readonly remainsView: RemainsView;
   private readonly timelineHud: TimelineHud;
   private readonly initiativeQueueHud: InitiativeQueueHud;
@@ -44,6 +56,7 @@ export class GameApp {
   private readonly input: InputController;
 
   constructor({ level, container, renderConfig = defaultRenderConfig }: GameAppOptions) {
+    this.renderConfig = renderConfig;
     const { session, player } = createGameSession(level);
     this.session = session;
     const gameMap = session.gameMap;
@@ -72,6 +85,10 @@ export class GameApp {
     this.mapHighlightView = new MapHighlightView(scene, gameMap, renderConfig);
     this.unitView = new UnitView(scene, gameMap, renderConfig);
     this.unitHealthView = new UnitHealthView(scene, gameMap, renderConfig);
+    this.unitMovementAnimationQueue = new UnitMovementAnimationQueue(
+      renderConfig.unitMovementStepDurationMs,
+      isMovementAnimationEnabled(),
+    );
     this.remainsView = new RemainsView(scene, gameMap, renderConfig);
     let gameController: GameController | undefined;
     this.timelineHud = new TimelineHud({
@@ -93,6 +110,14 @@ export class GameApp {
     });
     this.syncTacticalPresentation();
 
+    const unitMovementAnimationQueue = this.unitMovementAnimationQueue;
+    const unitMovementPresenter: UnitMovementPresenter = {
+      sync: (events) => this.enqueueUnitMovementAnimations(events),
+      get isAnimating(): boolean {
+        return unitMovementAnimationQueue.isAnimating;
+      },
+    };
+
     gameController = new GameController(
       this.session,
       { sync: () => this.syncTacticalPresentation() },
@@ -100,6 +125,7 @@ export class GameApp {
       this.timelineHud,
       this.servantCommandHud,
       this.initiativeQueueHud,
+      unitMovementPresenter,
     );
     this.input = new InputController(
       this.renderer.domElement,
@@ -109,11 +135,8 @@ export class GameApp {
     );
 
     this.renderer.setAnimationLoop(() => {
-      const playerPlanePosition = HexLayout.hexCoordToPlaneCoord(
-        player.position,
-        renderConfig.hexSize,
-      );
-      this.camera.update(playerPlanePosition);
+      this.updateUnitMovementPresentation();
+      this.camera.update(this.unitView.getDisplayedPlanePosition(player.id));
       this.renderer.render(scene, this.camera.camera);
     });
   }
@@ -124,6 +147,7 @@ export class GameApp {
     this.camera.dispose();
     this.mapView.dispose();
     this.mapHighlightView.dispose();
+    this.unitMovementAnimationQueue.clear();
     this.unitView.dispose();
     this.unitHealthView.dispose();
     this.remainsView.dispose();
@@ -136,8 +160,10 @@ export class GameApp {
 
   private syncUnitPresentation(unit: import("@/game/unit/Unit").Unit): void {
     const visible = this.session.isUnitVisible(unit);
-    this.unitView.sync(unit, visible);
-    this.unitHealthView.sync(unit, visible);
+    const preservePosition = this.unitMovementAnimationQueue
+      .hasAnimationForUnit(unit.id);
+    this.unitView.sync(unit, visible, preservePosition);
+    this.unitHealthView.sync(unit, visible, preservePosition);
     this.remainsView.sync(unit, visible);
   }
 
@@ -147,4 +173,57 @@ export class GameApp {
       this.syncUnitPresentation(unit);
     }
   }
+
+  private enqueueUnitMovementAnimations(events: readonly UnitMovementEvent[]): void {
+    const animations: UnitMovementAnimation[] = [];
+
+    for (const event of events) {
+      const unit = this.session.getUnit(event.unitId);
+      const animation = buildVisibleUnitMovementAnimation(
+        event,
+        unit,
+        unit !== undefined && this.session.isUnitVisible(unit),
+        this.session.gameMap,
+        this.renderConfig,
+      );
+      if (animation) {
+        animations.push(animation);
+      }
+    }
+
+    this.unitMovementAnimationQueue.enqueue(animations);
+  }
+
+  private updateUnitMovementPresentation(): void {
+    const completedUnitIds = this.unitMovementAnimationQueue.update(
+      performance.now(),
+      (unitId, from, to, progress) => {
+        const unit = this.session.getUnit(unitId);
+        if (!unit?.isAlive || !this.session.isUnitVisible(unit)) {
+          return;
+        }
+
+        this.unitView.applyMovementFrame(unitId, from, to, progress);
+        this.unitHealthView.applyMovementFrame(unit, from, to, progress);
+      },
+    );
+
+    for (const unitId of completedUnitIds) {
+      if (this.unitMovementAnimationQueue.hasAnimationForUnit(unitId)) {
+        continue;
+      }
+
+      const unit = this.session.getUnit(unitId);
+      if (unit) {
+        this.syncUnitPresentation(unit);
+      }
+    }
+  }
+}
+
+const reducedMotionMediaQuery = "(prefers-reduced-motion: reduce)";
+
+function isMovementAnimationEnabled(): boolean {
+  return typeof window.matchMedia !== "function"
+    || !window.matchMedia(reducedMotionMediaQuery).matches;
 }

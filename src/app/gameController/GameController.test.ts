@@ -5,11 +5,14 @@ import {
   type ServantCommandPresenter,
   type TacticalFeedbackPresenter,
   type TimelinePresenter,
+  type UnitMovementPresenter,
   type UnitPresenter,
 } from "@/app/gameController/GameController";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import {
   GameActionType,
+  GameActionPreviewType,
+  GameActionRejectionReason,
   GameSession,
   ServantStrategyTargetSelection,
 } from "@/game/gameSession/GameSession";
@@ -125,6 +128,56 @@ describe("GameController", () => {
     controller.clickHex({ q: 1, r: 0 });
     expect(presenter.sync).toHaveBeenCalledTimes(1);
     expect(presenter.sync).toHaveBeenCalledWith(player);
+  });
+
+  it("queues movement presentation before the final unit sync and blocks conflicting input", () => {
+    const player = new Player(
+      "player",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+    );
+    const session = new GameSession(new GameMap(mapData), [player]);
+    const unitPresenter: UnitPresenter = { sync: vi.fn() };
+    let isAnimating = false;
+    const movementPresenter: UnitMovementPresenter = {
+      get isAnimating(): boolean {
+        return isAnimating;
+      },
+      sync: vi.fn((events) => {
+        isAnimating = events.length > 0;
+      }),
+    };
+    const controller = new GameController(
+      session,
+      unitPresenter,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      movementPresenter,
+    );
+
+    controller.clickHex(player.position);
+    expect(controller.clickHex({ q: 1, r: 0 })).toMatchObject({
+      type: GameActionType.Moved,
+      unitId: player.id,
+    });
+    expect(movementPresenter.sync).toHaveBeenLastCalledWith([
+      {
+        unitId: player.id,
+        from: { q: 0, r: 0 },
+        steps: [{ q: 1, r: 0 }],
+      },
+    ]);
+    expect(unitPresenter.sync).toHaveBeenLastCalledWith(player);
+    expect(controller.previewHex({ q: 0, r: 0 })).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.PresentationBusy,
+    });
+    expect(controller.clickHex({ q: 0, r: 0 })).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.PresentationBusy,
+    });
   });
 
   it("publishes the timeline state after the Mage waits", () => {

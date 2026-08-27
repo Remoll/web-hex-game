@@ -1,5 +1,6 @@
 import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { Unit } from "@/game/unit/Unit";
+import type { HexCoord } from "@/game/types";
 import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 
@@ -14,8 +15,17 @@ export function buildUnitRenderState(
   gameMap: GameMap,
   config: RenderConfig,
 ): UnitRenderState {
-  const position = HexLayout.hexCoordToPlaneCoord(unit.position, config.hexSize);
-  const field = gameMap.getField(unit.position.q, unit.position.r);
+  return buildUnitRenderStateAt(unit.position, gameMap, config);
+}
+
+/** Builds a unit transform for one visual movement keyframe. */
+export function buildUnitRenderStateAt(
+  coord: Readonly<HexCoord>,
+  gameMap: GameMap,
+  config: RenderConfig,
+): UnitRenderState {
+  const position = HexLayout.hexCoordToPlaneCoord(coord, config.hexSize);
+  const field = gameMap.getField(coord.q, coord.r);
   const level = field?.getGroundLevel() ?? 0;
 
   return {

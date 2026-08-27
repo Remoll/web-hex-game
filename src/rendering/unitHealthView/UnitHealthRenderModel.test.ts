@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Faction, MovementType, TerrainType, type MapArray } from "@/game/types";
-import { buildUnitHealthRenderState } from "@/rendering/unitHealthView/UnitHealthRenderModel";
+import {
+  buildUnitHealthRenderState,
+  getHealthBarFillX,
+  getUnitHealthBarZFromUnitCenter,
+} from "@/rendering/unitHealthView/UnitHealthRenderModel";
 import { defaultRenderConfig } from "@/rendering/RenderConfig";
 
 const map: MapArray = [
@@ -48,5 +52,14 @@ describe("buildUnitHealthRenderState", () => {
           defaultRenderConfig.healthBarOffset,
       }),
     );
+  });
+
+  it("derives health-bar geometry from named unit-centre and fill-alignment rules", () => {
+    const unitCenterZ = 57.6;
+
+    expect(
+      getUnitHealthBarZFromUnitCenter(unitCenterZ, defaultRenderConfig),
+    ).toBe(91.2);
+    expect(getHealthBarFillX(100, 0.5, defaultRenderConfig)).toBe(90);
   });
 });

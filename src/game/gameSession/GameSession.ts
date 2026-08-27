@@ -74,6 +74,7 @@ export enum GameActionRejectionReason {
   InvalidEnemyTarget = "invalid-enemy-target",
   StrategyUnchanged = "strategy-unchanged",
   OutOfRange = "out-of-range",
+  PresentationBusy = "presentation-busy",
 }
 
 export type GameAction =
@@ -152,6 +153,16 @@ export interface ReachableHex {
   readonly cost: number;
 }
 
+/**
+ * An immutable presentation event emitted after a legal domain movement.
+ * `steps` excludes `from` and preserves the legal path's original order.
+ */
+export interface UnitMovementEvent {
+  readonly unitId: string;
+  readonly from: Readonly<HexCoord>;
+  readonly steps: readonly Readonly<HexCoord>[];
+}
+
 /** Information-safe visual states for initiative cards. */
 export enum InitiativeQueueCardState {
   Unknown = "unknown",
@@ -209,6 +220,7 @@ export class GameSession {
   private readonly servantTacticalMemory = new ServantTacticalMemory();
   private readonly servantStrategiesByUnitId = new Map<string, ServantStrategy>();
   private readonly autonomousUnitUpdates = new Set<string>();
+  private readonly movementEvents: UnitMovementEvent[] = [];
   private _selectedUnitId: string | null = null;
   private _selectedServantCommandId: string | null = null;
   private _targetSelection: ServantStrategyTargetSelection | undefined;
@@ -313,6 +325,14 @@ export class GameSession {
     }
     this.autonomousUnitUpdates.clear();
     return updatedUnits;
+  }
+
+  /**
+   * Returns each ordered movement exactly once for renderer-only playback.
+   * The simulation has already reached its final authoritative state.
+   */
+  consumeMovementEvents(): readonly UnitMovementEvent[] {
+    return this.movementEvents.splice(0);
   }
 
   /** Stable read-only visibility API for app and rendering adapters. */
@@ -921,6 +941,7 @@ export class GameSession {
 
     const from = unit.position;
     this.moveLivingUnit(unit, preview.destination);
+    this.publishMovementEvent(unit.id, from, preview.path.steps);
     if (unit.id === this.mageId) {
       this.recalculateMageVisibility();
       this.clearServantCommandTarget();
@@ -1601,8 +1622,25 @@ export class GameSession {
   }
 
   private moveAutonomousUnit(unit: Unit, destination: HexCoord): void {
+    const from = unit.position;
     this.moveLivingUnit(unit, destination);
+    this.publishMovementEvent(unit.id, from, [destination]);
     this.autonomousUnitUpdates.add(unit.id);
+  }
+
+  private publishMovementEvent(
+    unitId: string,
+    from: HexCoord,
+    steps: readonly HexCoord[],
+  ): void {
+    const immutableSteps = Object.freeze(
+      steps.map((step) => Object.freeze({ ...step })),
+    );
+    this.movementEvents.push(Object.freeze({
+      unitId,
+      from: Object.freeze({ ...from }),
+      steps: immutableSteps,
+    }));
   }
 
   private applyMeleeDamage(

@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added smooth, FIFO tactical movement presentation for Mage and autonomous
+  paths, including per-hex timing, fog-safe final state, health-bar movement,
+  temporary action locking, and a reduced-motion immediate fallback.
 - Added default autonomous servant engagement: unordered servants retain the
   first perceived hostile, pursue it with legal AP-limited paths, and re-acquire
   a target after it becomes invalid; Hold now permits adjacent self-defence.

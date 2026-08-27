@@ -124,6 +124,15 @@ its current map position.
   to move there along a valid path that fits both the unit's current movement
   range and remaining AP. Every entered hex currently costs one AP and one
   pathfinding point; living units block paths and destinations.
+- Each resolved movement path is presented as a smooth, ordered walk through
+  every entered hex. Simulation still resolves the legal destination, AP,
+  occupancy, timeline, AI, and fog immediately; while its visual queue catches
+  up, conflicting tactical actions are temporarily unavailable. The camera
+  follows the Mage's displayed position rather than jumping to the final hex.
+  The default is `180 ms` per hex through the named
+  `unitMovementStepDurationMs` render configuration. A system
+  `prefers-reduced-motion: reduce` preference skips the animation and leaves
+  controls available with the correct final state.
 - Hover a living adjacent hostile unit to see a red attack cursor and target
   highlight. Click it to deal 20 damage. A unit may attack only factions in
   its `dispositionToFactions.enemy` category.
@@ -179,8 +188,8 @@ exactly one category for each acting faction.
 
 Turns/rounds beyond the current event timeline, advanced Enemy AI,
 counterattacks, player win/lose conditions, terrain cost multipliers,
-height-based line of sight, facing, stealth, animated movement/attacks,
-interactive remains, final cursor art, and final unit art are intentionally
+height-based line of sight, facing, stealth, animated attacks, interactive
+remains, final cursor art, and final unit art are intentionally
 deferred.
 
 ## Commands

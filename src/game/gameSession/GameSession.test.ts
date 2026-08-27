@@ -94,6 +94,61 @@ function createSession(): {
 }
 
 describe("GameSession", () => {
+  it("publishes ordered immutable paths after authoritative player movement", () => {
+    const { session, player } = createSession();
+    session.clickHex(player.position);
+
+    expect(session.clickHex({ q: 0, r: -2 })).toMatchObject({
+      type: GameActionType.Moved,
+      unitId: player.id,
+    });
+    const events = session.consumeMovementEvents();
+    expect(events).toEqual([
+      {
+        unitId: player.id,
+        from: { q: 0, r: 0 },
+        steps: [{ q: 0, r: -1 }, { q: 0, r: -2 }],
+      },
+    ]);
+    expect(Object.isFrozen(events[0])).toBe(true);
+    expect(Object.isFrozen(events[0].from)).toBe(true);
+    expect(Object.isFrozen(events[0].steps)).toBe(true);
+    expect(player.position).toEqual({ q: 0, r: -2 });
+    expect(session.consumeMovementEvents()).toEqual([]);
+  });
+
+  it("preserves autonomous movement event order independently of final state", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const enemy = new Unit("enemy", { q: 3, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 2, r: 0 },
+        { q: 3, r: 0 },
+      ])),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(session.consumeMovementEvents()).toEqual([
+      {
+        unitId: enemy.id,
+        from: { q: 3, r: 0 },
+        steps: [{ q: 2, r: 0 }],
+      },
+      {
+        unitId: enemy.id,
+        from: { q: 2, r: 0 },
+        steps: [{ q: 1, r: 0 }],
+      },
+    ]);
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+  });
+
   it("keeps direct control Mage-exclusive and selects a servant only as a command target", () => {
     const { session, playerAlly } = createSession();
 

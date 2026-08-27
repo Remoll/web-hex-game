@@ -1,3 +1,5 @@
+export const defaultUnitMovementStepDurationMs = 180;
+
 export interface RenderConfig {
   readonly hexSize: number;
   readonly borderWidth: number;
@@ -18,6 +20,8 @@ export interface RenderConfig {
   readonly undiscoveredFogColor: number;
   readonly discoveredFogColor: number;
   readonly discoveredFogOpacity: number;
+  /** Presentation duration for traversing one legal tactical hex. */
+  readonly unitMovementStepDurationMs: number;
 }
 
 export const defaultRenderConfig: RenderConfig = {
@@ -38,4 +42,5 @@ export const defaultRenderConfig: RenderConfig = {
   undiscoveredFogColor: 0x000000,
   discoveredFogColor: 0x17202a,
   discoveredFogOpacity: 0.45,
+  unitMovementStepDurationMs: defaultUnitMovementStepDurationMs,
 };
