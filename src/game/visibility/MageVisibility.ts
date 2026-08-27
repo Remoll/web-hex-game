@@ -36,8 +36,7 @@ export class MageVisibility implements FieldVisibilityReader {
 
   recalculate(mage: Unit): void {
     const hasMageVision = mage.isAlive
-      && mage.tacticalRole === UnitTacticalRole.Mage
-      && mage.viewRange !== undefined;
+      && mage.tacticalRole === UnitTacticalRole.Mage;
     const magePosition = mage.position;
 
     this.gameMap.forEachField((q, r) => {

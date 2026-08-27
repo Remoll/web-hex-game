@@ -67,6 +67,7 @@ export class GameController {
       this.syncUnit(action.attackerId);
       this.syncUnit(action.targetId);
     }
+    this.syncAutonomousUnitUpdates();
 
     this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
@@ -77,6 +78,7 @@ export class GameController {
 
   waitForMage(): GameAction {
     const action = this.session.waitForMage();
+    this.syncAutonomousUnitUpdates();
     this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();
@@ -112,6 +114,12 @@ export class GameController {
   private syncUnit(unitId: string): void {
     const unit = this.session.getUnit(unitId);
     if (unit) {
+      this.unitPresenter.sync(unit);
+    }
+  }
+
+  private syncAutonomousUnitUpdates(): void {
+    for (const unit of this.session.consumeAutonomousUnitUpdates()) {
       this.unitPresenter.sync(unit);
     }
   }
@@ -184,6 +192,7 @@ export class GameController {
       this.session.resolveAutonomousActivations();
     }
 
+    this.syncAutonomousUnitUpdates();
     this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();

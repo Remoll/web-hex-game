@@ -15,7 +15,12 @@ import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 import { ServantStrategyType } from "@/game/unit/servantStrategy/ServantStrategy";
 import { TacticalAttribute } from "@/game/unit/tacticalAttributes/TacticalAttributes";
-import { MovementType, TerrainType, type MapArray } from "@/game/types";
+import {
+  MovementType,
+  TerrainType,
+  type HexCoord,
+  type MapArray,
+} from "@/game/types";
 import { FieldVisibility } from "@/game/visibility/MageVisibility";
 
 const mapData: MapArray = [
@@ -42,6 +47,14 @@ function field(terrainType: TerrainType, ground = true) {
   };
 }
 
+function createGrassMap(coords: readonly HexCoord[]): MapArray {
+  return coords.map(({ q, r }) => ({
+    q,
+    r,
+    fieldAttrs: field(TerrainType.Grass),
+  }));
+}
+
 function createSession(): {
   session: GameSession;
   player: Player;
@@ -49,7 +62,9 @@ function createSession(): {
   enemy: Unit;
   neutral: Unit;
 } {
-  const player = new Player("player", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+  const player = new Player("player", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+    attributes: { [TacticalAttribute.Vitality]: 12 },
+  });
   const playerAlly = new Unit(
     "player-ally",
     { q: -1, r: 0 },
@@ -358,6 +373,147 @@ describe("GameSession", () => {
       type: GameActionPreviewType.ValidMove,
       destination: { q: 2, r: 0 },
     });
+  });
+
+  it("pursues the nearest visible hostile with a deterministic local step", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 1 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const enemy = new Unit(
+      "enemy",
+      { q: 2, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: 0, r: 0 },
+        { q: 0, r: 1 },
+        { q: 1, r: 0 },
+        { q: 1, r: 1 },
+        { q: 2, r: 0 },
+      ])),
+      [mage, servant, enemy],
+    );
+
+    expect(session.waitForMage()).toEqual({
+      type: GameActionType.Waited,
+      unitId: mage.id,
+    });
+
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+    expect(session.getEnemyLastKnownHostilePosition(enemy.id)).toEqual(
+      mage.position,
+    );
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
+      timelineActionCosts[TimelineAction.Move],
+    );
+  });
+
+  it("attacks an adjacent visible hostile once during an Enemy activation", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const enemy = new Unit(
+      "enemy",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([{ q: 0, r: 0 }, { q: 1, r: 0 }])),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
+      timelineActionCosts[TimelineAction.Attack],
+    );
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: timelineActionCosts[TimelineAction.Wait],
+      readyActorId: mage.id,
+    });
+  });
+
+  it("pursues a last known hostile position and clears memory on arrival", () => {
+    const mage = new Player("mage", { q: 2, r: 0 }, UnitTexture.PlayerIdle);
+    const enemy = new Unit(
+      "enemy",
+      { q: 3, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy, viewRange: 1 },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: 0, r: -1 },
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 2, r: 0 },
+        { q: 3, r: 0 },
+      ])),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
+    expect(session.getEnemyLastKnownHostilePosition(enemy.id)).toEqual({
+      q: 2,
+      r: 0,
+    });
+
+    session.clickHex(mage.position);
+    session.clickHex({ q: 0, r: -1 });
+
+    expect(enemy.position).toEqual({ q: 2, r: 0 });
+    expect(session.getEnemyLastKnownHostilePosition(enemy.id)).toEqual({
+      q: 2,
+      r: 0,
+    });
+
+    session.waitForMage();
+
+    expect(enemy.position).toEqual({ q: 2, r: 0 });
+    expect(session.getEnemyLastKnownHostilePosition(enemy.id)).toBeUndefined();
+  });
+
+  it("holds when no legal local step decreases the distance to a visible hostile", () => {
+    const mage = new Player("mage", { q: -1, r: 0 }, UnitTexture.PlayerIdle);
+    const blocker = new Unit(
+      "blocker",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Neutral },
+    );
+    const enemy = new Unit(
+      "enemy",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: -1, r: 0 },
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+      ])),
+      [mage, blocker, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+    expect(session.getEnemyLastKnownHostilePosition(enemy.id)).toEqual({
+      q: -1,
+      r: 0,
+    });
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
+      timelineActionCosts[TimelineAction.Wait],
+    );
   });
 
   it("applies Might to melee damage and Finesse to Mage recovery time", () => {

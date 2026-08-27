@@ -10,6 +10,7 @@ import {
   type EventTimelineReader,
   type TimelinePresentation,
 } from "@/game/eventTimeline/EventTimeline";
+import { EnemyTacticalMemory } from "@/game/enemyAi/EnemyTacticalMemory";
 import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
 import {
   holdServantStrategy,
@@ -119,7 +120,9 @@ export class GameSession {
   private readonly mageId: string;
   private readonly mageVisibility: MageVisibility;
   private readonly timeline: EventTimeline;
+  private readonly enemyTacticalMemory = new EnemyTacticalMemory();
   private readonly servantStrategiesByUnitId = new Map<string, ServantStrategy>();
+  private readonly autonomousUnitUpdates = new Set<string>();
   private _selectedUnitId: string | null = null;
   private _selectedServantCommandId: string | null = null;
 
@@ -180,6 +183,30 @@ export class GameSession {
 
   getUnit(id: string): Unit | undefined {
     return this.unitsById.get(id);
+  }
+
+  /**
+   * Simulation state for tests and future AI orchestration. Player-facing
+   * presentation must not render this private Enemy memory outside Mage sight.
+   */
+  getEnemyLastKnownHostilePosition(enemyId: string): HexCoord | undefined {
+    return this.enemyTacticalMemory.getLastKnownHostilePosition(enemyId);
+  }
+
+  /**
+   * Returns the units changed by autonomous resolution since the last call.
+   * The application layer uses this to synchronize existing presentation only.
+   */
+  consumeAutonomousUnitUpdates(): readonly Unit[] {
+    const updatedUnits: Unit[] = [];
+    for (const unitId of this.autonomousUnitUpdates) {
+      const unit = this.unitsById.get(unitId);
+      if (unit) {
+        updatedUnits.push(unit);
+      }
+    }
+    this.autonomousUnitUpdates.clear();
+    return updatedUnits;
   }
 
   /** Stable read-only visibility API for app and rendering adapters. */
@@ -510,9 +537,7 @@ export class GameSession {
     this.timeline.consumeReadyAction(unit.id, TimelineAction.Move);
 
     const from = unit.position;
-    this.unregisterLivingUnit(unit);
-    unit.moveTo(preview.destination);
-    this.registerLivingUnit(unit);
+    this.moveLivingUnit(unit, preview.destination);
     if (unit.id === this.mageId) {
       this.recalculateMageVisibility();
       this.clearServantCommandTarget();
@@ -548,14 +573,7 @@ export class GameSession {
     this.timeline.consumeReadyAction(attacker.id, TimelineAction.Attack);
     this.clearServantCommandTarget();
 
-    target.receiveDamage(attacker.attackPower);
-    if (!target.isAlive) {
-      this.unregisterLivingUnit(target);
-      this.timeline.invalidateUnit(target.id);
-      if (target.id === this.mageId) {
-        this.recalculateMageVisibility();
-      }
-    }
+    this.applyMeleeDamage(attacker, target, false);
     this.resolveAutonomousActivations();
 
     return {
@@ -693,7 +711,15 @@ export class GameSession {
 
   private resolveAutonomousAction(unitId: string): TimelineAction {
     const unit = this.unitsById.get(unitId);
-    if (!unit || !this.isPlayerFactionServant(unit)) {
+    if (!unit) {
+      return TimelineAction.Wait;
+    }
+
+    if (unit.faction === Faction.Enemy) {
+      return this.resolveEnemyActivation(unit);
+    }
+
+    if (!this.isPlayerFactionServant(unit)) {
       return TimelineAction.Wait;
     }
 
@@ -708,6 +734,122 @@ export class GameSession {
     }
 
     return TimelineAction.Wait;
+  }
+
+  /** Resolves exactly one non-omniscient Enemy action for its timeline event. */
+  private resolveEnemyActivation(enemy: Unit): TimelineAction {
+    const visibleHostile = this.findNearestVisibleHostile(enemy);
+    if (visibleHostile) {
+      this.enemyTacticalMemory.rememberHostilePosition(
+        enemy.id,
+        visibleHostile.id,
+        visibleHostile.position,
+      );
+      if (this.gameMap.getHexDistance(enemy.position, visibleHostile.position)
+        === adjacentHexDistance) {
+        this.applyMeleeDamage(enemy, visibleHostile, true);
+        return TimelineAction.Attack;
+      }
+
+      return this.moveEnemyToward(enemy, visibleHostile.position)
+        ? TimelineAction.Move
+        : TimelineAction.Wait;
+    }
+
+    const lastKnownHostilePosition = this.enemyTacticalMemory
+      .getLastKnownHostilePosition(enemy.id);
+    if (!lastKnownHostilePosition) {
+      return TimelineAction.Wait;
+    }
+
+    if (isSameHex(enemy.position, lastKnownHostilePosition)) {
+      this.enemyTacticalMemory.clear(enemy.id);
+      return TimelineAction.Wait;
+    }
+
+    return this.moveEnemyToward(enemy, lastKnownHostilePosition)
+      ? TimelineAction.Move
+      : TimelineAction.Wait;
+  }
+
+  /** Ties use the original level registration order preserved by unitsById. */
+  private findNearestVisibleHostile(enemy: Unit): Unit | undefined {
+    let nearestHostile: Unit | undefined;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    for (const candidate of this.unitsById.values()) {
+      if (!candidate.isAlive
+        || getFactionDisposition(enemy.faction, candidate.faction)
+          !== FactionDisposition.Enemy) {
+        continue;
+      }
+
+      const distance = this.gameMap.getHexDistance(enemy.position, candidate.position);
+      if (distance > enemy.viewRange || distance >= nearestDistance) {
+        continue;
+      }
+
+      nearestHostile = candidate;
+      nearestDistance = distance;
+    }
+
+    return nearestHostile;
+  }
+
+  /**
+   * Makes one legal local step only. Equal candidates use ascending axial q,
+   * then ascending r; this keeps paths deterministic without global search.
+   */
+  private moveEnemyToward(enemy: Unit, destination: HexCoord): boolean {
+    const currentDistance = this.gameMap.getHexDistance(enemy.position, destination);
+    const candidate = this.gameMap.getNeighbours(enemy.position)
+      .filter((coord) => this.canUnitEnter(enemy, coord))
+      .filter((coord) => this.gameMap.getHexDistance(coord, destination) < currentDistance)
+      .sort(compareHexCoords)[0];
+
+    if (!candidate) {
+      return false;
+    }
+
+    this.moveLivingUnit(enemy, candidate);
+    this.autonomousUnitUpdates.add(enemy.id);
+    return true;
+  }
+
+  private canUnitEnter(unit: Unit, coord: HexCoord): boolean {
+    const field = this.gameMap.getField(coord.q, coord.r);
+    return field !== undefined
+      && field.getAllowedMovements()[unit.movementType]
+      && this.getUnitAt(coord) === undefined;
+  }
+
+  private moveLivingUnit(unit: Unit, destination: HexCoord): void {
+    this.unregisterLivingUnit(unit);
+    unit.moveTo(destination);
+    this.registerLivingUnit(unit);
+  }
+
+  private applyMeleeDamage(
+    attacker: Unit,
+    target: Unit,
+    isAutonomousAction: boolean,
+  ): void {
+    target.receiveDamage(attacker.attackPower);
+    if (isAutonomousAction) {
+      this.autonomousUnitUpdates.add(attacker.id);
+      this.autonomousUnitUpdates.add(target.id);
+    }
+
+    if (!target.isAlive) {
+      this.unregisterLivingUnit(target);
+      this.timeline.invalidateUnit(target.id);
+      this.servantStrategiesByUnitId.delete(target.id);
+      this.enemyTacticalMemory.clear(target.id);
+      this.enemyTacticalMemory.forgetHostile(target.id);
+      if (target.id === this.mageId) {
+        this.recalculateMageVisibility();
+      }
+    }
   }
 
   private clearStaleCommandTarget(): void {
@@ -752,3 +894,9 @@ function getCoordKey(coord: HexCoord): string {
 function isSameHex(first: HexCoord, second: HexCoord): boolean {
   return first.q === second.q && first.r === second.r;
 }
+
+function compareHexCoords(first: HexCoord, second: HexCoord): number {
+  return first.q - second.q || first.r - second.r;
+}
+
+const adjacentHexDistance = 1;

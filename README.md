@@ -26,7 +26,7 @@ The encounter is a radius-6 hex map (127 fields). Its original radius-2
 terrain layout, including terrain and elevation values, is preserved at the
 centre; the additional outer rings are exploration space.
 
-The Mage is the only current source of player sight and has a fixed view range
+The Mage is the only current source of player sight and has a base view range
 of four hexes. Visibility is recalculated only when relevant game state changes
 (currently session setup and Mage movement), never by the render loop.
 
@@ -54,8 +54,17 @@ action. The Mage starts ready at time `0`.
   the servant's scheduled activation or make the servant act immediately.
 - When a servant receives its own later activation, its autonomous resolver
   performs at most one legal strategy action. The only currently supported
-  strategy is **Hold**, which resolves as a no-op Wait. Enemy and Neutral units
-  also Hold in this slice. There is no timer, polling, or background AI.
+  strategy is **Hold**, which resolves as a no-op Wait.
+- On its activation, an Enemy evaluates only hostiles within its own derived
+  view range. It remembers the nearest visible hostile's position, attacks an
+  adjacent target once, or otherwise takes one legal neighbouring step that
+  reduces hex distance. If sight is lost, it continues toward that last-known
+  position and Holds there when it cannot reacquire a target. Target ties use
+  level registration order; equally valid local steps use axial `q`, then `r`.
+  A defeated target is forgotten. This private Enemy perception never changes
+  Mage fog or reveals hidden units.
+- Neutral units Hold in this slice. There is no timer, polling, or global
+  pathfinding AI.
 - When two actors are ready at the same simulation time, their original level
   registration order is the stable tie-breaker. Dead units are removed from
   the event timeline before they can receive another activation.
@@ -106,8 +115,8 @@ modifier = floor((score - 10) / 2)
   begins at its derived maximum.
 - **Finesse:** Tempo = `clamp(100 + modifier, 90, 110)`. Recovery delay is
   `round(base action cost × 100 / Tempo)`, so higher Finesse acts sooner.
-- **Insight:** Mage view range = base view range + modifier (minimum one hex).
-  Future enemy perception will use this same domain-derived statistic.
+- **Insight:** unit view range = base view range + modifier (minimum one hex).
+  Mage range drives player fog; Enemy range drives private perception only.
 
 These values are derived when a unit is constructed, never in the render loop.
 The example JSON deliberately gives its units different scores so the health,
@@ -127,11 +136,11 @@ exactly one category for each acting faction.
 
 ### Deferred systems
 
-Turns/rounds beyond the current event timeline, enemy AI, pursue-designated-
-enemy and secure-designated-hex servant strategies, counterattacks, player
-win/lose conditions, terrain cost multipliers, height-based line of sight,
-facing, stealth, animated movement/attacks, interactive remains, final cursor
-art, and final unit art are intentionally deferred.
+Turns/rounds beyond the current event timeline, advanced Enemy AI, pursue-
+designated-enemy and secure-designated-hex servant strategies, counterattacks,
+player win/lose conditions, terrain cost multipliers, height-based line of
+sight, facing, stealth, animated movement/attacks, interactive remains, final
+cursor art, and final unit art are intentionally deferred.
 
 ## Commands
 

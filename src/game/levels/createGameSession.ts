@@ -3,7 +3,6 @@ import { Faction } from "@/game/faction/Faction";
 import { GameSession } from "@/game/gameSession/GameSession";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
 import {
-  defaultMageViewRange,
   defaultUnitConfig,
   type UnitConfigInput,
   Unit,
@@ -68,8 +67,7 @@ function getUnitConfig(
     movementRange: definition.movementRange ?? defaultUnitConfig.movementRange,
     attackPower: definition.attackPower ?? defaultUnitConfig.attackPower,
     tacticalRole,
-    viewRange: definition.viewRange
-      ?? (tacticalRole === UnitTacticalRole.Mage ? defaultMageViewRange : undefined),
+    viewRange: definition.viewRange ?? defaultUnitConfig.viewRange,
     attributes: resolveTacticalAttributes(definition.attributes),
   };
 }

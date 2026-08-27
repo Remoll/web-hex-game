@@ -20,6 +20,7 @@ describe("Unit", () => {
     expect(unit.id).toBe("enemy-1");
     expect(unit.texture).toBe(UnitTexture.EnemyIdle);
     expect(unit.position).toEqual({ q: 1, r: -2 });
+    expect(unit.viewRange).toBe(4);
   });
 
   it("retains its tactical configuration and becomes defeated at zero HP", () => {
@@ -70,6 +71,7 @@ describe("Unit", () => {
     expect(unit.maxHp).toBe(120);
     expect(unit.currentHp).toBe(120);
     expect(unit.tempo).toBe(102);
+    expect(unit.viewRange).toBe(6);
     expect(mage.viewRange).toBe(6);
   });
 

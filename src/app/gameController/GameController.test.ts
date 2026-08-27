@@ -92,6 +92,22 @@ describe("GameController", () => {
     });
   });
 
+  it("synchronizes units changed by an autonomous Enemy activation", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(new GameMap(mapData), [mage, enemy]);
+    const presenter: UnitPresenter = { sync: vi.fn() };
+    const controller = new GameController(session, presenter);
+
+    controller.waitForMage();
+
+    expect(presenter.sync).toHaveBeenCalledWith(mage);
+    expect(presenter.sync).toHaveBeenCalledWith(enemy);
+    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
+  });
+
   it("presents a servant as a command target without granting direct control", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const servant = new Unit("servant", { q: 1, r: 0 }, UnitTexture.PlayerIdle, {
