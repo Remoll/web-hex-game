@@ -47,6 +47,7 @@ export class TimelineHud {
     this.actionCosts.textContent = [
       `Move +${presentation.actionCosts[TimelineAction.Move]}`,
       `Attack +${presentation.actionCosts[TimelineAction.Attack]}`,
+      `Command +${presentation.actionCosts[TimelineAction.Command]}`,
     ].join(" · ");
     this.waitButton.textContent = `Wait +${presentation.actionCosts[TimelineAction.Wait]}`;
     this.waitButton.disabled = presentation.readyActorId !== this.options.mageId;

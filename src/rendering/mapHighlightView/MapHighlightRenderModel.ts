@@ -3,13 +3,20 @@ import type { HexCoord } from "@/game/types";
 import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 
-export const tacticalHighlightKinds = [
-  "selected",
-  "move",
-  "attack",
-] as const;
+/** Semantic overlays shared by input feedback and the renderer. */
+export enum TacticalHighlightKind {
+  Selected = "selected",
+  Command = "command",
+  Move = "move",
+  Attack = "attack",
+}
 
-export type TacticalHighlightKind = (typeof tacticalHighlightKinds)[number];
+export const tacticalHighlightKinds: readonly TacticalHighlightKind[] = [
+  TacticalHighlightKind.Selected,
+  TacticalHighlightKind.Command,
+  TacticalHighlightKind.Move,
+  TacticalHighlightKind.Attack,
+];
 
 /** Renderer-neutral semantic feedback supplied by the application layer. */
 export interface TacticalHighlight {

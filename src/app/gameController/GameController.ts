@@ -6,10 +6,12 @@ import {
   type GameActionPreview,
 } from "@/game/gameSession/GameSession";
 import type { TimelinePresentation } from "@/game/eventTimeline/EventTimeline";
+import type { ServantCommandPresentation } from "@/game/gameSession/GameSession";
 import type { Unit } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
-import type {
-  TacticalHighlight,
+import {
+  TacticalHighlightKind,
+  type TacticalHighlight,
 } from "@/rendering/mapHighlightView/MapHighlightRenderModel";
 
 export interface UnitPresenter {
@@ -24,11 +26,19 @@ export interface TimelinePresenter {
   sync(presentation: TimelinePresentation): void;
 }
 
+export interface ServantCommandPresenter {
+  sync(presentation: ServantCommandPresentation): void;
+}
+
 const noopFeedbackPresenter: TacticalFeedbackPresenter = {
   sync: () => undefined,
 };
 
 const noopTimelinePresenter: TimelinePresenter = {
+  sync: () => undefined,
+};
+
+const noopServantCommandPresenter: ServantCommandPresenter = {
   sync: () => undefined,
 };
 
@@ -39,9 +49,11 @@ export class GameController {
     private readonly unitPresenter: UnitPresenter,
     private readonly tacticalFeedbackPresenter: TacticalFeedbackPresenter = noopFeedbackPresenter,
     private readonly timelinePresenter: TimelinePresenter = noopTimelinePresenter,
+    private readonly servantCommandPresenter: ServantCommandPresenter = noopServantCommandPresenter,
   ) {
     this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
+    this.syncServantCommandPresentation();
   }
 
   clickHex(coord: HexCoord): GameAction {
@@ -58,6 +70,7 @@ export class GameController {
 
     this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
+    this.syncServantCommandPresentation();
 
     return action;
   }
@@ -66,6 +79,19 @@ export class GameController {
     const action = this.session.waitForMage();
     this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
+    this.syncServantCommandPresentation();
+    return action;
+  }
+
+  assignHoldStrategy(): GameAction {
+    const action = this.session.assignHoldStrategy();
+    this.resolveAutonomousActivationsAfterCommand(action);
+    return action;
+  }
+
+  clearServantStrategy(): GameAction {
+    const action = this.session.clearServantStrategy();
+    this.resolveAutonomousActivationsAfterCommand(action);
     return action;
   }
 
@@ -98,16 +124,46 @@ export class GameController {
       : undefined;
 
     if (selectedUnit?.isAlive) {
-      highlights.push({ kind: "selected", coord: selectedUnit.position });
+      highlights.push({
+        kind: TacticalHighlightKind.Selected,
+        coord: selectedUnit.position,
+      });
       for (const reachableHex of this.session.getReachableHexes()) {
-        highlights.push({ kind: "move", coord: reachableHex.coord });
+        highlights.push({
+          kind: TacticalHighlightKind.Move,
+          coord: reachableHex.coord,
+        });
       }
+    }
+
+    const commandTargetId = this.session.servantCommandPresentation.targetServantId;
+    const commandTarget = commandTargetId
+      ? this.session.getUnit(commandTargetId)
+      : undefined;
+    if (commandTarget?.isAlive) {
+      highlights.push({
+        kind: TacticalHighlightKind.Command,
+        coord: commandTarget.position,
+      });
     }
 
     if (preview?.type === GameActionPreviewType.ValidAttack) {
       const target = this.session.getUnit(preview.targetId);
       if (target?.isAlive) {
-        highlights.push({ kind: "attack", coord: target.position });
+        highlights.push({
+          kind: TacticalHighlightKind.Attack,
+          coord: target.position,
+        });
+      }
+    }
+
+    if (preview?.type === GameActionPreviewType.ServantCommandSelection) {
+      const target = this.session.getUnit(preview.servantId);
+      if (target?.isAlive) {
+        highlights.push({
+          kind: TacticalHighlightKind.Command,
+          coord: target.position,
+        });
       }
     }
 
@@ -116,5 +172,20 @@ export class GameController {
 
   private syncTimelinePresentation(): void {
     this.timelinePresenter.sync(this.session.timelinePresentation);
+  }
+
+  private syncServantCommandPresentation(): void {
+    this.servantCommandPresenter.sync(this.session.servantCommandPresentation);
+  }
+
+  private resolveAutonomousActivationsAfterCommand(action: GameAction): void {
+    if (action.type === GameActionType.StrategyAssigned
+      || action.type === GameActionType.StrategyCleared) {
+      this.session.resolveAutonomousActivations();
+    }
+
+    this.refreshTacticalFeedback();
+    this.syncTimelinePresentation();
+    this.syncServantCommandPresentation();
   }
 }

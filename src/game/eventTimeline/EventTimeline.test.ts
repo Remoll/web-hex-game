@@ -26,6 +26,7 @@ describe("EventTimeline", () => {
     expect(timelineActionCosts).toEqual({
       [TimelineAction.Move]: 100,
       [TimelineAction.Attack]: 140,
+      [TimelineAction.Command]: 100,
       [TimelineAction.Wait]: 100,
     });
     expect(timeline.readyActor).toEqual({ unitId: "beta", nextReadyAt: 0 });
@@ -43,18 +44,58 @@ describe("EventTimeline", () => {
     const mage = new Participant("mage");
     const timeline = new EventTimeline([enemy, mage]);
 
-    expect(timeline.advancePassiveUnitsToMageDecision(mage.id)).toEqual({
+    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
       unitId: mage.id,
       nextReadyAt: 0,
     });
     expect(timeline.getNextReadyAt(enemy.id)).toBe(100);
 
     timeline.consumeReadyAction(mage.id, TimelineAction.Move);
-    expect(timeline.advancePassiveUnitsToMageDecision(mage.id)).toEqual({
+    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
       unitId: mage.id,
       nextReadyAt: 100,
     });
     expect(timeline.getNextReadyAt(enemy.id)).toBe(200);
+  });
+
+  it("schedules the one autonomous action selected for each passive actor", () => {
+    const servant = new Participant("servant");
+    const mage = new Participant("mage");
+    const timeline = new EventTimeline([servant, mage]);
+    const resolvedActorIds: string[] = [];
+
+    expect(timeline.advanceAutonomousUnitsToMageDecision(
+      mage.id,
+      (participant) => {
+        resolvedActorIds.push(participant.id);
+        return TimelineAction.Attack;
+      },
+    )).toEqual({
+      unitId: mage.id,
+      nextReadyAt: 0,
+    });
+    expect(resolvedActorIds).toEqual([servant.id]);
+    expect(timeline.getNextReadyAt(servant.id)).toBe(
+      timelineActionCosts[TimelineAction.Attack],
+    );
+  });
+
+  it("ends autonomous resolution safely when an action defeats the Mage", () => {
+    const servant = new Participant("servant");
+    const mage = new Participant("mage");
+    const timeline = new EventTimeline([servant, mage]);
+
+    expect(timeline.advanceAutonomousUnitsToMageDecision(
+      mage.id,
+      () => {
+        mage.isAlive = false;
+        return TimelineAction.Attack;
+      },
+    )).toBeUndefined();
+    expect(timeline.readyActor).toEqual({
+      unitId: servant.id,
+      nextReadyAt: timelineActionCosts[TimelineAction.Attack],
+    });
   });
 
   it("uses a unit's tempo for the next recovery delay", () => {
@@ -73,7 +114,7 @@ describe("EventTimeline", () => {
     const neutral = new Participant("neutral");
     const timeline = new EventTimeline([mage, enemy, neutral]);
 
-    expect(timeline.advancePassiveUnitsToMageDecision(mage.id)).toEqual({
+    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
       unitId: mage.id,
       nextReadyAt: 0,
     });
@@ -81,7 +122,7 @@ describe("EventTimeline", () => {
     expect(timeline.getNextReadyAt(neutral.id)).toBe(0);
 
     timeline.consumeReadyAction(mage.id, TimelineAction.Move);
-    expect(timeline.advancePassiveUnitsToMageDecision(mage.id)).toEqual({
+    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
       unitId: mage.id,
       nextReadyAt: 100,
     });
@@ -89,7 +130,7 @@ describe("EventTimeline", () => {
     expect(timeline.getNextReadyAt(enemy.id)).toBe(100);
 
     timeline.consumeReadyAction(mage.id, TimelineAction.Attack);
-    expect(timeline.advancePassiveUnitsToMageDecision(mage.id)).toEqual({
+    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
       unitId: mage.id,
       nextReadyAt: 240,
     });
@@ -104,14 +145,14 @@ describe("EventTimeline", () => {
 
     defeated.isAlive = false;
     expect(timeline.getNextReadyAt(defeated.id)).toBeUndefined();
-    expect(timeline.advancePassiveUnitsToMageDecision(mage.id)).toEqual({
+    expect(advanceToMageDecision(timeline, mage.id)).toEqual({
       unitId: mage.id,
       nextReadyAt: 0,
     });
 
     timeline.invalidateUnit(mage.id);
     expect(timeline.readyActor).toBeUndefined();
-    expect(timeline.advancePassiveUnitsToMageDecision(mage.id)).toBeUndefined();
+    expect(advanceToMageDecision(timeline, mage.id)).toBeUndefined();
     expect(timeline.presentation).toEqual({
       currentTime: 0,
       readyActorId: undefined,
@@ -119,3 +160,13 @@ describe("EventTimeline", () => {
     });
   });
 });
+
+function advanceToMageDecision(
+  timeline: EventTimeline,
+  mageId: string,
+) {
+  return timeline.advanceAutonomousUnitsToMageDecision(
+    mageId,
+    () => TimelineAction.Wait,
+  );
+}

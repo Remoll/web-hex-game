@@ -7,9 +7,13 @@ import {
   GameActionType,
   GameSession,
 } from "@/game/gameSession/GameSession";
-import { TimelineAction } from "@/game/eventTimeline/EventTimeline";
+import {
+  TimelineAction,
+  timelineActionCosts,
+} from "@/game/eventTimeline/EventTimeline";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
+import { ServantStrategyType } from "@/game/unit/servantStrategy/ServantStrategy";
 import { TacticalAttribute } from "@/game/unit/tacticalAttributes/TacticalAttributes";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 import { FieldVisibility } from "@/game/visibility/MageVisibility";
@@ -72,7 +76,7 @@ function createSession(): {
 }
 
 describe("GameSession", () => {
-  it("selects and deselects only the Mage before servant control is introduced", () => {
+  it("keeps direct control Mage-exclusive and selects a servant only as a command target", () => {
     const { session, playerAlly } = createSession();
 
     expect(session.clickHex({ q: 2, r: 0 })).toEqual({
@@ -93,6 +97,21 @@ describe("GameSession", () => {
     expect(session.clickHex({ q: 0, r: 0 })).toEqual({
       type: GameActionType.Selected,
       unitId: "player",
+    });
+    expect(session.previewHex(playerAlly.position)).toEqual({
+      type: GameActionPreviewType.ServantCommandSelection,
+      servantId: playerAlly.id,
+    });
+    expect(session.clickHex(playerAlly.position)).toEqual({
+      type: GameActionType.ServantCommandTargetSelected,
+      servantId: playerAlly.id,
+    });
+    expect(session.selectedUnitId).toBe("player");
+    expect(session.servantCommandPresentation).toEqual({
+      targetServantId: playerAlly.id,
+      targetStrategyType: undefined,
+      canAssignHold: true,
+      canClearStrategy: false,
     });
     expect(session.clickHex({ q: 0, r: 0 })).toEqual({
       type: GameActionType.Deselected,
@@ -127,8 +146,6 @@ describe("GameSession", () => {
       from: { q: 0, r: 0 },
       to: { q: 0, r: -1 },
     });
-    expect(player.remainingMovement).toBe(player.movementRange);
-    expect(player.remainingActions).toBe(1);
     expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(100);
     expect(session.timelinePresentation).toMatchObject({
       currentTime: 100,
@@ -141,7 +158,6 @@ describe("GameSession", () => {
 
     session.clickHex({ q: 0, r: -3 });
     expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(200);
-    expect(player.remainingActions).toBe(1);
     expect(session.timelinePresentation).toMatchObject({
       currentTime: 200,
       readyActorId: player.id,
@@ -156,9 +172,126 @@ describe("GameSession", () => {
       currentTime: 300,
       readyActorId: player.id,
     });
+  });
 
-    session.resetRoundBudgets();
-    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(300);
+  it("delays a Mage-issued Hold strategy until the servant's own activation", () => {
+    const { session, player, playerAlly } = createSession();
+    session.clickHex(player.position);
+    session.clickHex(playerAlly.position);
+    const servantNextReadyAt = session.eventTimeline.getNextReadyAt(playerAlly.id);
+
+    expect(session.assignHoldStrategy()).toEqual({
+      type: GameActionType.StrategyAssigned,
+      servantId: playerAlly.id,
+      strategyType: ServantStrategyType.Hold,
+    });
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(
+      timelineActionCosts[TimelineAction.Command],
+    );
+    expect(session.eventTimeline.getNextReadyAt(playerAlly.id)).toBe(servantNextReadyAt);
+    expect(session.selectedUnitId).toBe(player.id);
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 0,
+      readyActorId: playerAlly.id,
+    });
+
+    session.resolveAutonomousActivations();
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 100,
+      readyActorId: player.id,
+    });
+    expect(session.selectedUnitId).toBe(player.id);
+    expect(session.eventTimeline.getNextReadyAt(playerAlly.id)).toBe(100);
+  });
+
+  it("resolves an unordered servant as a single autonomous Hold activation", () => {
+    const { session, player, playerAlly } = createSession();
+
+    expect(session.waitForMage()).toEqual({
+      type: GameActionType.Waited,
+      unitId: player.id,
+    });
+    expect(session.eventTimeline.getNextReadyAt(playerAlly.id)).toBe(
+      timelineActionCosts[TimelineAction.Wait],
+    );
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: timelineActionCosts[TimelineAction.Wait],
+      readyActorId: player.id,
+    });
+  });
+
+  it("allows a visible strategy to be replaced or cleared only by a ready Mage", () => {
+    const { session, player, playerAlly } = createSession();
+    const initialMageNextReadyAt = session.eventTimeline.getNextReadyAt(player.id);
+
+    expect(session.clearServantStrategyFromServant(playerAlly.id)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NoActiveStrategy,
+    });
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(initialMageNextReadyAt);
+
+    expect(session.assignHoldStrategyToServant(playerAlly.id)).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      servantId: playerAlly.id,
+    });
+    expect(session.assignHoldStrategyToServant(playerAlly.id)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotReady,
+    });
+    session.resolveAutonomousActivations();
+
+    expect(session.assignHoldStrategyToServant(playerAlly.id)).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      servantId: playerAlly.id,
+    });
+    session.resolveAutonomousActivations();
+    expect(session.clearServantStrategyFromServant(playerAlly.id)).toEqual({
+      type: GameActionType.StrategyCleared,
+      servantId: playerAlly.id,
+    });
+  });
+
+  it("rejects hidden, defeated, and non-player servants without spending Mage Tempo", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+      viewRange: 1,
+    });
+    const servant = new Unit("servant", { q: -1, r: 0 }, UnitTexture.PlayerIdle, {
+      faction: Faction.Player,
+    });
+    const enemy = new Unit("enemy", { q: 2, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(new GameMap(mapData), [mage, servant, enemy]);
+
+    expect(session.assignHoldStrategyToServant(enemy.id)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotPlayerControlled,
+    });
+    expect(session.assignHoldStrategyToServant(servant.id)).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      servantId: servant.id,
+    });
+    session.resolveAutonomousActivations();
+    session.clickHex(mage.position);
+    session.clickHex({ q: 0, r: -2 });
+
+    expect(session.getFieldVisibility(servant.position)).toBe(FieldVisibility.Discovered);
+    const mageNextReadyAt = session.eventTimeline.getNextReadyAt(mage.id);
+    expect(session.previewHex(servant.position)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.NotVisible,
+    });
+    expect(session.assignHoldStrategyToServant(servant.id)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotVisible,
+    });
+    expect(session.eventTimeline.getNextReadyAt(mage.id)).toBe(mageNextReadyAt);
+
+    servant.receiveDamage(servant.maxHp);
+    expect(session.assignHoldStrategyToServant(servant.id)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotPlayerControlled,
+    });
   });
 
   it("rejects impassable Ground terrain and live-unit movement destinations", () => {

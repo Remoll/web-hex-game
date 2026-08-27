@@ -5,14 +5,15 @@ import {
   buildMapHighlightRenderStates,
   tacticalHighlightKinds,
   type TacticalHighlight,
-  type TacticalHighlightKind,
+  TacticalHighlightKind,
 } from "@/rendering/mapHighlightView/MapHighlightRenderModel";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 
 const highlightColors: Readonly<Record<TacticalHighlightKind, number>> = {
-  selected: 0x28c7fa,
-  move: 0x45df79,
-  attack: 0xf04f55,
+  [TacticalHighlightKind.Selected]: 0x28c7fa,
+  [TacticalHighlightKind.Command]: 0xe4bd49,
+  [TacticalHighlightKind.Move]: 0x45df79,
+  [TacticalHighlightKind.Attack]: 0xf04f55,
 };
 
 /** Efficient static preview overlay. It receives semantic state, never rules. */

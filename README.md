@@ -40,26 +40,36 @@ hidden unit remains unavailable and reveals no unit information.
 
 ### Event timeline
 
-The Mage acts on a discrete, integer event timeline rather than a wall-clock
-timer. The timeline HUD at the top of the screen shows the current simulation
-time, the ready actor, and the named cost of each Mage action. The Mage starts
-ready at time `0`.
+The Mage and autonomous units share a discrete, integer event timeline rather
+than a wall-clock timer. The timeline HUD at the top of the screen shows the
+current simulation time, the ready actor, and the named cost of each Mage
+action. The Mage starts ready at time `0`.
 
-- A Mage move has base cost `100` timeline time, an attack `140`, and **Wait**
-  `100`. Tempo adjusts those recovery delays; the HUD always displays the
-  resolved integer cost. A move may still traverse a legal Ground path of up
-  to three hexes; its path length does not change this temporary base cost.
-- After a Mage action, inactive units take deterministic no-op Wait events
-  until the next Mage decision. There is no timer, polling, or background AI
-  in this slice.
+- A Mage move and a servant-strategy command have base cost `100` timeline
+  time, an attack `140`, and **Wait** `100`. Tempo adjusts those recovery
+  delays; the HUD always displays the resolved integer cost. A move may still
+  traverse a legal Ground path of up to three hexes; its path length does not
+  change this temporary base cost.
+- A Mage command only schedules the Mage's next activation. It does not alter
+  the servant's scheduled activation or make the servant act immediately.
+- When a servant receives its own later activation, its autonomous resolver
+  performs at most one legal strategy action. The only currently supported
+  strategy is **Hold**, which resolves as a no-op Wait. Enemy and Neutral units
+  also Hold in this slice. There is no timer, polling, or background AI.
 - When two actors are ready at the same simulation time, their original level
   registration order is the stable tie-breaker. Dead units are removed from
   the event timeline before they can receive another activation.
-- Only the Mage is directly controllable in this Story. The additional
-  Player-faction unit is a passive timeline participant until direct servant
-  control is implemented in a later Story.
+- Only the Mage is directly controllable. A servant is never manually moved,
+  attacked with, or made to Wait by the player.
 
 - Hover the Mage to see the selection cursor, then click it to select it.
+- With a ready Mage selected, click a currently Visible Player-faction servant
+  to select it as the command target (amber highlight). Use **Assign Hold** or
+  **Clear strategy** in the command panel above the map. A hidden, defeated,
+  Enemy, or Neutral unit cannot receive a command and does not consume Mage
+  Tempo. The panel exposes only its currently Visible target, so an ordered
+  servant can continue its stored strategy beyond vision without leaking remote
+  information.
 - After selection, reachable Ground hexes are highlighted in green. Click one
   to move there along a valid path of up to three hexes. Every entered hex has
   a cost of one for pathfinding; living units block paths and destinations.
@@ -75,7 +85,8 @@ ready at time `0`.
 
 The canvas uses the unavailable cursor by default (including empty hexes before
 selection), then switches to temporary selection, move, or attack cursor art
-when that action is valid.
+when that action is valid. The selection cursor also identifies an eligible
+servant command target.
 They are placeholders under `public/cursors/` and will be replaced by final
 game assets later.
 
@@ -116,10 +127,11 @@ exactly one category for each acting faction.
 
 ### Deferred systems
 
-Turns/rounds beyond the current Mage event timeline, enemy AI, standing orders,
-counterattacks, player win/lose conditions, terrain cost multipliers, height-based line of
-sight, facing, stealth, animated movement/attacks, interactive remains, final
-cursor art, and final unit art are intentionally deferred.
+Turns/rounds beyond the current event timeline, enemy AI, pursue-designated-
+enemy and secure-designated-hex servant strategies, counterattacks, player
+win/lose conditions, terrain cost multipliers, height-based line of sight,
+facing, stealth, animated movement/attacks, interactive remains, final cursor
+art, and final unit art are intentionally deferred.
 
 ## Commands
 

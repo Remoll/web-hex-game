@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added Mage-issued, visibility-gated autonomous servant strategies with the
+  initial Hold order and Mage-only direct tactical control.
 - Added derived Might, Finesse, Vitality, and Insight attributes to tactical
   units, including level serialization and current combat, tempo, and vision
   effects.

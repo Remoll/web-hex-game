@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   GameController,
+  type ServantCommandPresenter,
+  type TacticalFeedbackPresenter,
   type TimelinePresenter,
   type UnitPresenter,
 } from "@/app/gameController/GameController";
@@ -10,8 +12,10 @@ import {
   TimelineAction,
   timelineActionCosts,
 } from "@/game/eventTimeline/EventTimeline";
-import { UnitTexture } from "@/game/unit/Unit";
+import { Faction } from "@/game/faction/Faction";
+import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
+import { TacticalHighlightKind } from "@/rendering/mapHighlightView/MapHighlightRenderModel";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 
 const mapData: MapArray = [
@@ -85,6 +89,60 @@ describe("GameController", () => {
       currentTime: timelineActionCosts[TimelineAction.Wait],
       readyActorId: player.id,
       actionCosts: timelineActionCosts,
+    });
+  });
+
+  it("presents a servant as a command target without granting direct control", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit("servant", { q: 1, r: 0 }, UnitTexture.PlayerIdle, {
+      faction: Faction.Player,
+    });
+    const session = new GameSession(new GameMap(mapData), [mage, servant]);
+    const unitPresenter: UnitPresenter = { sync: vi.fn() };
+    const commandPresenter: ServantCommandPresenter = { sync: vi.fn() };
+    const feedbackPresenter: TacticalFeedbackPresenter = { sync: vi.fn() };
+    const controller = new GameController(
+      session,
+      unitPresenter,
+      feedbackPresenter,
+      undefined,
+      commandPresenter,
+    );
+
+    controller.clickHex(mage.position);
+    expect(controller.clickHex(servant.position)).toEqual({
+      type: GameActionType.ServantCommandTargetSelected,
+      servantId: servant.id,
+    });
+    expect(commandPresenter.sync).toHaveBeenLastCalledWith({
+      targetServantId: servant.id,
+      targetStrategyType: undefined,
+      canAssignHold: true,
+      canClearStrategy: false,
+    });
+    controller.previewHex(servant.position);
+    expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: TacticalHighlightKind.Command,
+          coord: servant.position,
+        }),
+      ]),
+    );
+
+    expect(controller.assignHoldStrategy()).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      servantId: servant.id,
+    });
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: timelineActionCosts[TimelineAction.Command],
+      readyActorId: mage.id,
+    });
+    expect(commandPresenter.sync).toHaveBeenLastCalledWith({
+      targetServantId: undefined,
+      targetStrategyType: undefined,
+      canAssignHold: false,
+      canClearStrategy: false,
     });
   });
 });

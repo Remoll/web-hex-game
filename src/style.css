@@ -47,3 +47,41 @@ canvas {
   border-color: #514b43;
   cursor: not-allowed;
 }
+
+.servant-command-hud {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  color: #f2eee3;
+  font: 600 14px/1.2 system-ui, sans-serif;
+  background: rgb(18 18 18 / 88%);
+  border: 1px solid rgb(242 238 227 / 35%);
+  border-radius: 4px;
+  transform: translateX(-50%);
+}
+
+.servant-command-hud__status {
+  color: #c7c2b6;
+}
+
+.servant-command-hud__button {
+  padding: 4px 8px;
+  color: inherit;
+  font: inherit;
+  background: #4f3b2d;
+  border: 1px solid #b99769;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.servant-command-hud__button:disabled {
+  color: #90897d;
+  background: #2c2925;
+  border-color: #514b43;
+  cursor: not-allowed;
+}

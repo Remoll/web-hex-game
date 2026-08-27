@@ -1,5 +1,6 @@
 import { GameMap, type MovementPath } from "@/game/board/gameMap/GameMap";
 import {
+  Faction,
   FactionDisposition,
   getFactionDisposition,
 } from "@/game/faction/Faction";
@@ -10,6 +11,11 @@ import {
   type TimelinePresentation,
 } from "@/game/eventTimeline/EventTimeline";
 import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
+import {
+  holdServantStrategy,
+  ServantStrategyType,
+  type ServantStrategy,
+} from "@/game/unit/servantStrategy/ServantStrategy";
 import type { HexCoord } from "@/game/types";
 import {
   FieldVisibility,
@@ -20,14 +26,18 @@ import {
 export enum GameActionType {
   Selected = "selected",
   Deselected = "deselected",
+  ServantCommandTargetSelected = "servant-command-target-selected",
   Moved = "moved",
   Attacked = "attacked",
+  StrategyAssigned = "strategy-assigned",
+  StrategyCleared = "strategy-cleared",
   Waited = "waited",
   Ignored = "ignored",
 }
 
 export enum GameActionPreviewType {
   Selection = "selection",
+  ServantCommandSelection = "servant-command-selection",
   ValidMove = "valid-move",
   ValidAttack = "valid-attack",
   OutOfRange = "out-of-range",
@@ -40,13 +50,15 @@ export enum GameActionRejectionReason {
   NotHostile = "not-hostile",
   NotVisible = "not-visible",
   NotReady = "not-ready",
+  NoCommandTarget = "no-command-target",
+  NoActiveStrategy = "no-active-strategy",
   OutOfRange = "out-of-range",
-  RoundExhausted = "round-exhausted",
 }
 
 export type GameAction =
   | { type: GameActionType.Selected; unitId: string }
   | { type: GameActionType.Deselected; unitId: string }
+  | { type: GameActionType.ServantCommandTargetSelected; servantId: string }
   | { type: GameActionType.Moved; unitId: string; from: HexCoord; to: HexCoord }
   | {
     type: GameActionType.Attacked;
@@ -56,6 +68,12 @@ export type GameAction =
     targetCurrentHp: number;
     targetDefeated: boolean;
   }
+  | {
+    type: GameActionType.StrategyAssigned;
+    servantId: string;
+    strategyType: ServantStrategyType;
+  }
+  | { type: GameActionType.StrategyCleared; servantId: string }
   | { type: GameActionType.Waited; unitId: string }
   | {
     type: GameActionType.Ignored;
@@ -64,6 +82,7 @@ export type GameAction =
 
 export type GameActionPreview =
   | { type: GameActionPreviewType.Selection; unitId: string }
+  | { type: GameActionPreviewType.ServantCommandSelection; servantId: string }
   | {
     type: GameActionPreviewType.ValidMove;
     unitId: string;
@@ -85,6 +104,14 @@ export interface ReachableHex {
   readonly cost: number;
 }
 
+/** Safe UI state: it exposes only the currently visible command target. */
+export interface ServantCommandPresentation {
+  readonly targetServantId: string | undefined;
+  readonly targetStrategyType: ServantStrategyType | undefined;
+  readonly canAssignHold: boolean;
+  readonly canClearStrategy: boolean;
+}
+
 /** Owns mutable game state without depending on rendering or browser APIs. */
 export class GameSession {
   private readonly unitsById = new Map<string, Unit>();
@@ -92,7 +119,9 @@ export class GameSession {
   private readonly mageId: string;
   private readonly mageVisibility: MageVisibility;
   private readonly timeline: EventTimeline;
+  private readonly servantStrategiesByUnitId = new Map<string, ServantStrategy>();
   private _selectedUnitId: string | null = null;
+  private _selectedServantCommandId: string | null = null;
 
   constructor(
     public readonly gameMap: GameMap,
@@ -122,12 +151,26 @@ export class GameSession {
     this.mageId = mages[0].id;
     this.mageVisibility = new MageVisibility(this.gameMap);
     this.timeline = new EventTimeline(this.unitsById.values());
-    this.timeline.advancePassiveUnitsToMageDecision(this.mageId);
+    this.resolveAutonomousActivations();
     this.recalculateMageVisibility();
   }
 
   get selectedUnitId(): string | null {
     return this._selectedUnitId;
+  }
+
+  get servantCommandPresentation(): ServantCommandPresentation {
+    const target = this.getSelectedCommandServant();
+    const strategy = target
+      ? this.servantStrategiesByUnitId.get(target.id)
+      : undefined;
+
+    return {
+      targetServantId: target?.id,
+      targetStrategyType: strategy?.type,
+      canAssignHold: target !== undefined,
+      canClearStrategy: strategy !== undefined,
+    };
   }
 
   /** Includes defeated units so presentation can render their visual remains. */
@@ -201,12 +244,14 @@ export class GameSession {
     }
 
     if (!selectedUnit) {
-      return clickedUnit && this.isMage(clickedUnit)
+      return clickedUnit && this.isMage(clickedUnit) && this.isMageReady()
         ? { type: GameActionPreviewType.Selection, unitId: clickedUnit.id }
         : {
           type: GameActionPreviewType.OutOfRange,
           reason: clickedUnit
-            ? GameActionRejectionReason.NotPlayerControlled
+            ? this.isMage(clickedUnit)
+              ? GameActionRejectionReason.NotReady
+              : GameActionRejectionReason.NotPlayerControlled
             : GameActionRejectionReason.OutOfRange,
         };
     }
@@ -223,6 +268,19 @@ export class GameSession {
         type: GameActionPreviewType.Selection,
         unitId: clickedUnit.id,
       };
+    }
+
+    if (clickedUnit && this.isPlayerFactionServant(clickedUnit)) {
+      const rejection = this.getServantCommandRejectionReason(clickedUnit);
+      return rejection
+        ? {
+          type: GameActionPreviewType.OutOfRange,
+          reason: rejection,
+        }
+        : {
+          type: GameActionPreviewType.ServantCommandSelection,
+          servantId: clickedUnit.id,
+        };
     }
 
     if (clickedUnit) {
@@ -285,6 +343,7 @@ export class GameSession {
     const selectedUnit = this.getSelectedControllableUnit();
     if (selectedUnit && isSameHex(selectedUnit.position, coord)) {
       this._selectedUnitId = null;
+      this._selectedServantCommandId = null;
       return { type: GameActionType.Deselected, unitId: selectedUnit.id };
     }
 
@@ -292,7 +351,14 @@ export class GameSession {
     switch (preview.type) {
       case GameActionPreviewType.Selection:
         this._selectedUnitId = preview.unitId;
+        this._selectedServantCommandId = null;
         return { type: GameActionType.Selected, unitId: preview.unitId };
+      case GameActionPreviewType.ServantCommandSelection:
+        this._selectedServantCommandId = preview.servantId;
+        return {
+          type: GameActionType.ServantCommandTargetSelected,
+          servantId: preview.servantId,
+        };
       case GameActionPreviewType.ValidMove:
         return this.moveSelectedUnit(preview);
       case GameActionPreviewType.ValidAttack:
@@ -309,21 +375,105 @@ export class GameSession {
     }
   }
 
-  /**
-   * Retained for non-Mage Player-faction units until their own timeline work is
-   * introduced. Mage actions are gated exclusively by EventTimeline readiness.
-   */
-  resetRoundBudgets(): void {
-    for (const unit of this.unitsById.values()) {
-      if (!this.isMage(unit)) {
-        unit.resetRoundBudget();
-      }
+  /** Assigns the currently selected visible servant the safe default strategy. */
+  assignHoldStrategy(): GameAction {
+    const servant = this.getSelectedCommandServant();
+    return servant
+      ? this.assignHoldStrategyToServant(servant.id)
+      : {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoCommandTarget,
+      };
+  }
+
+  /** Clears the current strategy from the selected visible servant. */
+  clearServantStrategy(): GameAction {
+    const servant = this.getSelectedCommandServant();
+    return servant
+      ? this.clearServantStrategyFromServant(servant.id)
+      : {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoCommandTarget,
+      };
+  }
+
+  /** Domain command entry point used by UI adapters after their target selection. */
+  assignHoldStrategyToServant(servantId: string): GameAction {
+    const servant = this.unitsById.get(servantId);
+    if (!servant) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoCommandTarget,
+      };
     }
+
+    const rejection = this.getServantCommandRejectionReason(servant);
+    if (rejection) {
+      return {
+        type: GameActionType.Ignored,
+        reason: rejection,
+      };
+    }
+
+    this.servantStrategiesByUnitId.set(servant.id, holdServantStrategy);
+    return this.completeServantStrategyCommand(
+      servant.id,
+      GameActionType.StrategyAssigned,
+      holdServantStrategy.type,
+    );
+  }
+
+  /** Domain command entry point used by UI adapters after their target selection. */
+  clearServantStrategyFromServant(servantId: string): GameAction {
+    const servant = this.unitsById.get(servantId);
+    if (!servant) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoCommandTarget,
+      };
+    }
+
+    const rejection = this.getServantCommandRejectionReason(servant);
+    if (rejection) {
+      return {
+        type: GameActionType.Ignored,
+        reason: rejection,
+      };
+    }
+
+    if (!this.servantStrategiesByUnitId.has(servant.id)) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoActiveStrategy,
+      };
+    }
+
+    this.servantStrategiesByUnitId.delete(servant.id);
+    return this.completeServantStrategyCommand(
+      servant.id,
+      GameActionType.StrategyCleared,
+    );
   }
 
   /**
-   * Ends the Mage's current activation without changing board state. Passive
-   * units advance synchronously to their next deterministic Mage decision.
+   * Resolves all non-Mage activations up to the next Mage decision. Calling it
+   * repeatedly at a Mage decision is a no-op, preventing duplicate dispatch.
+   */
+  resolveAutonomousActivations(): void {
+    if (this.isMageReady()) {
+      return;
+    }
+
+    this.timeline.advanceAutonomousUnitsToMageDecision(
+      this.mageId,
+      (participant) => this.resolveAutonomousAction(participant.id),
+    );
+    this.clearStaleCommandTarget();
+  }
+
+  /**
+   * Ends the Mage's current activation without changing board state. Autonomous
+   * units resolve synchronously until the next deterministic Mage decision.
    */
   waitForMage(): GameAction {
     const mage = this.unitsById.get(this.mageId);
@@ -335,7 +485,8 @@ export class GameSession {
     }
 
     this.timeline.consumeReadyAction(mage.id, TimelineAction.Wait);
-    this.timeline.advancePassiveUnitsToMageDecision(this.mageId);
+    this.clearServantCommandTarget();
+    this.resolveAutonomousActivations();
     return { type: GameActionType.Waited, unitId: mage.id };
   }
 
@@ -350,17 +501,13 @@ export class GameSession {
       };
     }
 
-    if (this.isMage(unit)) {
-      if (!this.timeline.isReady(unit.id)) {
-        return {
-          type: GameActionType.Ignored,
-          reason: GameActionRejectionReason.NotReady,
-        };
-      }
-      this.timeline.consumeReadyAction(unit.id, TimelineAction.Move);
-    } else {
-      unit.spendMovement(preview.path.cost);
+    if (!this.isMageReady()) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NotReady,
+      };
     }
+    this.timeline.consumeReadyAction(unit.id, TimelineAction.Move);
 
     const from = unit.position;
     this.unregisterLivingUnit(unit);
@@ -368,7 +515,8 @@ export class GameSession {
     this.registerLivingUnit(unit);
     if (unit.id === this.mageId) {
       this.recalculateMageVisibility();
-      this.timeline.advancePassiveUnitsToMageDecision(this.mageId);
+      this.clearServantCommandTarget();
+      this.resolveAutonomousActivations();
     }
 
     return {
@@ -391,20 +539,16 @@ export class GameSession {
       };
     }
 
-    if (this.isMage(attacker)) {
-      if (!this.timeline.isReady(attacker.id)) {
-        return {
-          type: GameActionType.Ignored,
-          reason: GameActionRejectionReason.NotReady,
-        };
-      }
-      this.timeline.consumeReadyAction(attacker.id, TimelineAction.Attack);
+    if (!this.isMageReady()) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NotReady,
+      };
     }
+    this.timeline.consumeReadyAction(attacker.id, TimelineAction.Attack);
+    this.clearServantCommandTarget();
 
     target.receiveDamage(attacker.attackPower);
-    if (!this.isMage(attacker)) {
-      attacker.exhaustRoundBudget();
-    }
     if (!target.isAlive) {
       this.unregisterLivingUnit(target);
       this.timeline.invalidateUnit(target.id);
@@ -412,9 +556,7 @@ export class GameSession {
         this.recalculateMageVisibility();
       }
     }
-    if (this.isMage(attacker)) {
-      this.timeline.advancePassiveUnitsToMageDecision(this.mageId);
-    }
+    this.resolveAutonomousActivations();
 
     return {
       type: GameActionType.Attacked,
@@ -437,10 +579,11 @@ export class GameSession {
       || !this.isMage(selectedUnit)
       || !this.isUnitVisible(selectedUnit)) {
       this._selectedUnitId = null;
+      this._selectedServantCommandId = null;
       return undefined;
     }
 
-    return selectedUnit;
+    return this.isMageReady() ? selectedUnit : undefined;
   }
 
   private getReachablePaths(unit: Unit): ReadonlyMap<string, MovementPath> {
@@ -453,19 +596,15 @@ export class GameSession {
   }
 
   private hasMovementAvailability(unit: Unit): boolean {
-    return this.isMage(unit)
-      ? this.timeline.isReady(unit.id)
-      : unit.remainingMovement > 0;
+    return this.isMage(unit) && this.isMageReady();
   }
 
   private hasActionAvailability(unit: Unit): boolean {
-    return this.isMage(unit)
-      ? this.timeline.isReady(unit.id)
-      : unit.remainingActions > 0;
+    return this.isMage(unit) && this.isMageReady();
   }
 
   private getMovementRangeForCurrentAction(unit: Unit): number {
-    return this.isMage(unit) ? unit.movementRange : unit.remainingMovement;
+    return unit.movementRange;
   }
 
   private getAvailabilityRejectionReason(
@@ -473,11 +612,110 @@ export class GameSession {
   ): Exclude<GameActionRejectionReason, GameActionRejectionReason.NoSelectedUnit> {
     return this.isMage(unit)
       ? GameActionRejectionReason.NotReady
-      : GameActionRejectionReason.RoundExhausted;
+      : GameActionRejectionReason.NotPlayerControlled;
   }
 
   private isMage(unit: Unit): boolean {
     return unit.id === this.mageId;
+  }
+
+  private isMageReady(): boolean {
+    return this.timeline.isReady(this.mageId);
+  }
+
+  private isPlayerFactionServant(unit: Unit): boolean {
+    return unit.isAlive && unit.faction === Faction.Player && !this.isMage(unit);
+  }
+
+  private getSelectedCommandServant(): Unit | undefined {
+    if (!this._selectedServantCommandId || !this.getSelectedControllableUnit()) {
+      this._selectedServantCommandId = null;
+      return undefined;
+    }
+
+    const servant = this.unitsById.get(this._selectedServantCommandId);
+    const rejection = servant
+      ? this.getServantCommandRejectionReason(servant)
+      : GameActionRejectionReason.NoCommandTarget;
+    if (rejection) {
+      this._selectedServantCommandId = null;
+      return undefined;
+    }
+
+    return servant;
+  }
+
+  private getServantCommandRejectionReason(
+    unit: Unit,
+  ): Exclude<
+    GameActionRejectionReason,
+    | GameActionRejectionReason.NoSelectedUnit
+    | GameActionRejectionReason.NoCommandTarget
+    | GameActionRejectionReason.NoActiveStrategy
+  > | undefined {
+    if (!this.isMageReady()) {
+      return GameActionRejectionReason.NotReady;
+    }
+
+    if (!this.isPlayerFactionServant(unit)) {
+      return GameActionRejectionReason.NotPlayerControlled;
+    }
+
+    if (!this.isUnitVisible(unit)) {
+      return GameActionRejectionReason.NotVisible;
+    }
+
+    return undefined;
+  }
+
+  private completeServantStrategyCommand(
+    servantId: string,
+    actionType: GameActionType.StrategyAssigned | GameActionType.StrategyCleared,
+    strategyType?: ServantStrategyType,
+  ): GameAction {
+    this.timeline.consumeReadyAction(this.mageId, TimelineAction.Command);
+    this.clearServantCommandTarget();
+
+    if (actionType === GameActionType.StrategyAssigned) {
+      if (!strategyType) {
+        throw new Error("Assigned servant strategies require a strategy type");
+      }
+
+      return {
+        type: actionType,
+        servantId,
+        strategyType,
+      };
+    }
+
+    return { type: actionType, servantId };
+  }
+
+  private resolveAutonomousAction(unitId: string): TimelineAction {
+    const unit = this.unitsById.get(unitId);
+    if (!unit || !this.isPlayerFactionServant(unit)) {
+      return TimelineAction.Wait;
+    }
+
+    const strategy = this.servantStrategiesByUnitId.get(unit.id);
+    if (!strategy) {
+      return TimelineAction.Wait;
+    }
+
+    switch (strategy.type) {
+      case ServantStrategyType.Hold:
+        return TimelineAction.Wait;
+    }
+
+    return TimelineAction.Wait;
+  }
+
+  private clearStaleCommandTarget(): void {
+    this.getSelectedCommandServant();
+  }
+
+  private clearServantCommandTarget(): void {
+    this._selectedServantCommandId = null;
   }
 
   private registerLivingUnit(unit: Unit): void {

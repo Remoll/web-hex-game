@@ -3,6 +3,7 @@ import { GameMap } from "@/game/board/gameMap/GameMap";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 import {
   buildMapHighlightRenderStates,
+  TacticalHighlightKind,
   type TacticalHighlight,
 } from "@/rendering/mapHighlightView/MapHighlightRenderModel";
 import { defaultRenderConfig } from "@/rendering/RenderConfig";
@@ -26,9 +27,9 @@ const map: MapArray = [
 describe("buildMapHighlightRenderStates", () => {
   it("maps valid semantic highlights once and ignores invalid coordinates", () => {
     const highlights: TacticalHighlight[] = [
-      { kind: "move", coord: { q: 0, r: 0 } },
-      { kind: "move", coord: { q: 0, r: 0 } },
-      { kind: "attack", coord: { q: 4, r: 4 } },
+      { kind: TacticalHighlightKind.Move, coord: { q: 0, r: 0 } },
+      { kind: TacticalHighlightKind.Move, coord: { q: 0, r: 0 } },
+      { kind: TacticalHighlightKind.Attack, coord: { q: 4, r: 4 } },
     ];
 
     expect(
@@ -39,7 +40,7 @@ describe("buildMapHighlightRenderStates", () => {
       ),
     ).toEqual([
       expect.objectContaining({
-        kind: "move",
+        kind: TacticalHighlightKind.Move,
         coord: { q: 0, r: 0 },
         z:
           (2 + defaultRenderConfig.terrainBaseLevel)

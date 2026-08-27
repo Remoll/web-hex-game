@@ -61,8 +61,6 @@ export const defaultUnitConfig: UnitConfig = {
 export class Unit {
   private _position: HexCoord;
   private _currentHp: number;
-  private _remainingMovement: number;
-  private _remainingActions: number;
 
   constructor(
     public readonly id: string,
@@ -92,8 +90,6 @@ export class Unit {
     this.viewRange = resolvedConfig.viewRange === undefined
       ? undefined
       : deriveViewRange(resolvedConfig.viewRange, this.attributes);
-    this._remainingMovement = this.isAlive ? this.movementRange : 0;
-    this._remainingActions = this.isAlive ? 1 : 0;
   }
 
   public readonly faction: Faction;
@@ -112,14 +108,6 @@ export class Unit {
 
   get currentHp(): number {
     return this._currentHp;
-  }
-
-  get remainingMovement(): number {
-    return this._remainingMovement;
-  }
-
-  get remainingActions(): number {
-    return this._remainingActions;
   }
 
   get isAlive(): boolean {
@@ -141,37 +129,6 @@ export class Unit {
     }
 
     this._currentHp = Math.max(0, this._currentHp - damage);
-    if (!this.isAlive) {
-      this.exhaustRoundBudget();
-    }
-  }
-
-  /** Consumes movement points after a legal path has been resolved. */
-  public spendMovement(cost: number): void {
-    if (!this.isAlive) {
-      throw new Error(`Defeated unit ${this.id} cannot spend movement`);
-    }
-
-    if (!Number.isInteger(cost) || cost < 0 || cost > this._remainingMovement) {
-      throw new Error(`Unit ${this.id} cannot spend ${cost} movement`);
-    }
-
-    this._remainingMovement -= cost;
-  }
-
-  /**
-   * Ends the unit's current allowance. The combat system uses this after an
-   * attack; defeat also uses it to prevent further interaction.
-   */
-  public exhaustRoundBudget(): void {
-    this._remainingMovement = 0;
-    this._remainingActions = 0;
-  }
-
-  /** Future turn/round orchestration calls this to restore a living unit. */
-  public resetRoundBudget(): void {
-    this._remainingMovement = this.isAlive ? this.movementRange : 0;
-    this._remainingActions = this.isAlive ? 1 : 0;
   }
 }
 

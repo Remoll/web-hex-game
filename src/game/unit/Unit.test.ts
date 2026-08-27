@@ -22,7 +22,7 @@ describe("Unit", () => {
     expect(unit.position).toEqual({ q: 1, r: -2 });
   });
 
-  it("spends movement incrementally and restores the temporary round budget", () => {
+  it("retains its tactical configuration and becomes defeated at zero HP", () => {
     const unit = new Unit("player", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
       faction: Faction.Player,
       movementType: MovementType.Ground,
@@ -30,29 +30,12 @@ describe("Unit", () => {
       attackPower: 20,
     });
 
-    expect(unit.remainingMovement).toBe(3);
-    expect(unit.remainingActions).toBe(1);
-
-    unit.spendMovement(1);
-    expect(unit.remainingMovement).toBe(2);
-    expect(unit.remainingActions).toBe(1);
-    expect(() => unit.spendMovement(3)).toThrow("cannot spend 3 movement");
-
-    unit.exhaustRoundBudget();
-    expect(unit.remainingMovement).toBe(0);
-    expect(unit.remainingActions).toBe(0);
-
-    unit.resetRoundBudget();
-    expect(unit.remainingMovement).toBe(3);
-    expect(unit.remainingActions).toBe(1);
+    expect(unit.movementRange).toBe(3);
+    expect(unit.attackPower).toBe(20);
 
     unit.receiveDamage(100);
     expect(unit.isAlive).toBe(false);
     expect(unit.currentHp).toBe(0);
-
-    unit.resetRoundBudget();
-    expect(unit.remainingMovement).toBe(0);
-    expect(unit.remainingActions).toBe(0);
   });
 
   it("rejects invalid health configuration and damage", () => {

@@ -14,6 +14,7 @@ export interface TimelineParticipant {
 export enum TimelineAction {
   Move = "move",
   Attack = "attack",
+  Command = "command",
   Wait = "wait",
 }
 
@@ -21,6 +22,7 @@ export enum TimelineAction {
 export const timelineActionCosts: Readonly<Record<TimelineAction, number>> = {
   [TimelineAction.Move]: 100,
   [TimelineAction.Attack]: 140,
+  [TimelineAction.Command]: 100,
   [TimelineAction.Wait]: 100,
 };
 
@@ -59,6 +61,11 @@ export interface EventTimelineReader {
   getNextReadyAt(unitId: string): number | undefined;
   isReady(unitId: string): boolean;
 }
+
+/** Resolves exactly one autonomous action for a non-Mage timeline entry. */
+export type ResolveAutonomousTimelineAction = (
+  participant: TimelineParticipant,
+) => TimelineAction;
 
 interface TimelineEntry {
   readonly participant: TimelineParticipant;
@@ -151,11 +158,14 @@ export class EventTimeline implements EventTimelineReader {
   }
 
   /**
-   * Advances passive actors with deterministic Wait actions until the Mage is
-   * the next decision point. This is a synchronous simulation step; it never
-   * installs a timer, polls, or performs AI.
+   * Resolves one autonomous action for each non-Mage actor until the Mage is
+   * the next decision point. This is an event-driven synchronous simulation
+   * step; it never installs a timer or polls.
    */
-  advancePassiveUnitsToMageDecision(mageId: string): TimelineActor | undefined {
+  advanceAutonomousUnitsToMageDecision(
+    mageId: string,
+    resolveAutonomousAction: ResolveAutonomousTimelineAction,
+  ): TimelineActor | undefined {
     this.removeDefeatedParticipants();
     const mage = this.entriesByUnitId.get(mageId);
     if (!mage) {
@@ -168,8 +178,17 @@ export class EventTimeline implements EventTimelineReader {
     let nextEntry = this.getNextEntry();
     while (nextEntry && nextEntry.participant.id !== mageId) {
       this._currentTime = nextEntry.nextReadyAt;
-      nextEntry.nextReadyAt = this._currentTime
-        + getTimelineRecoveryDelay(TimelineAction.Wait, nextEntry.participant.tempo);
+      const action = resolveAutonomousAction(nextEntry.participant);
+      if (nextEntry.participant.isAlive) {
+        nextEntry.nextReadyAt = this._currentTime
+          + getTimelineRecoveryDelay(action, nextEntry.participant.tempo);
+      } else {
+        this.entriesByUnitId.delete(nextEntry.participant.id);
+      }
+      this.removeDefeatedParticipants();
+      if (!this.entriesByUnitId.has(mageId)) {
+        return undefined;
+      }
       nextEntry = this.getNextEntry();
     }
 
@@ -222,6 +241,7 @@ function getTimelineActionCosts(
   return {
     [TimelineAction.Move]: getTimelineRecoveryDelay(TimelineAction.Move, tempo),
     [TimelineAction.Attack]: getTimelineRecoveryDelay(TimelineAction.Attack, tempo),
+    [TimelineAction.Command]: getTimelineRecoveryDelay(TimelineAction.Command, tempo),
     [TimelineAction.Wait]: getTimelineRecoveryDelay(TimelineAction.Wait, tempo),
   };
 }
