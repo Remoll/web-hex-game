@@ -14,6 +14,7 @@ const highlightColors: Readonly<Record<TacticalHighlightKind, number>> = {
   [TacticalHighlightKind.Command]: 0xe4bd49,
   [TacticalHighlightKind.Move]: 0x45df79,
   [TacticalHighlightKind.Attack]: 0xf04f55,
+  [TacticalHighlightKind.Initiative]: 0xa46df4,
 };
 
 /** Efficient static preview overlay. It receives semantic state, never rules. */

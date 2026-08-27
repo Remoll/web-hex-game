@@ -85,3 +85,115 @@ canvas {
   border-color: #514b43;
   cursor: not-allowed;
 }
+
+.initiative-queue-hud {
+  position: fixed;
+  right: 0;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 0;
+  z-index: 1;
+  padding: 0 12px;
+  pointer-events: none;
+}
+
+.initiative-queue-hud__cards {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  pointer-events: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-color: #b99769 rgb(18 18 18 / 88%);
+}
+
+.initiative-queue-hud__card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  flex: 0 0 104px;
+  min-height: 52px;
+  padding: 6px;
+  color: #f2eee3;
+  font: 600 12px/1.1 system-ui, sans-serif;
+  text-align: left;
+  background: rgb(18 18 18 / 92%);
+  border: 1px solid rgb(242 238 227 / 35%);
+  border-radius: 4px;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.initiative-queue-hud__card--current {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  border-color: #e4bd49;
+  box-shadow: 0 0 0 1px rgb(228 189 73 / 30%);
+}
+
+.initiative-queue-hud__card--unknown {
+  border-style: dashed;
+}
+
+.initiative-queue-hud__card:focus-visible {
+  outline: 2px solid #a46df4;
+  outline-offset: 2px;
+}
+
+.initiative-queue-hud__card:disabled {
+  color: #c7c2b6;
+  cursor: default;
+  opacity: 0.78;
+}
+
+.initiative-queue-hud__glyph {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #201d19;
+  font-size: 18px;
+  background: #c7c2b6;
+  border-radius: 50%;
+}
+
+.initiative-queue-hud__card--current .initiative-queue-hud__glyph {
+  background: #e4bd49;
+}
+
+.initiative-queue-hud__card--unknown .initiative-queue-hud__glyph {
+  color: #f2eee3;
+  background: #514b43;
+}
+
+.initiative-queue-hud__label {
+  align-self: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.initiative-queue-hud__current-marker {
+  color: #e4bd49;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+@media (max-width: 600px) {
+  .initiative-queue-hud {
+    padding: 0 8px;
+  }
+
+  .initiative-queue-hud__cards {
+    gap: 6px;
+  }
+
+  .initiative-queue-hud__card {
+    flex-basis: 96px;
+    min-height: 48px;
+  }
+}

@@ -73,6 +73,7 @@ export interface EventTimelineReader {
   readonly currentTime: number;
   readonly readyActor: TimelineActor | undefined;
   readonly presentation: TimelinePresentation;
+  getScheduledActors(): readonly TimelineActor[];
   getNextReadyAt(unitId: string): number | undefined;
   getRemainingActionPoints(unitId: string): number | undefined;
   hasWaitedDuringReadyActivation(unitId: string): boolean;
@@ -163,6 +164,21 @@ export class EventTimeline implements EventTimelineReader {
   getNextReadyAt(unitId: string): number | undefined {
     this.removeDefeatedParticipants();
     return this.entriesByUnitId.get(unitId)?.nextReadyAt;
+  }
+
+  /**
+   * Returns the current scheduling order without exposing mutable timeline
+   * entries. This query is intended for event-driven presentation syncs, never
+   * render-frame polling.
+   */
+  getScheduledActors(): readonly TimelineActor[] {
+    this.removeDefeatedParticipants();
+    return [...this.entriesByUnitId.values()]
+      .sort(compareTimelineEntries)
+      .map((entry) => ({
+        unitId: entry.participant.id,
+        nextReadyAt: entry.nextReadyAt,
+      }));
   }
 
   getRemainingActionPoints(unitId: string): number | undefined {
@@ -324,4 +340,12 @@ export class EventTimeline implements EventTimelineReader {
       }
     }
   }
+}
+
+function compareTimelineEntries(
+  first: TimelineEntry,
+  second: TimelineEntry,
+): number {
+  return first.nextReadyAt - second.nextReadyAt
+    || first.tieBreakOrder - second.tieBreakOrder;
 }

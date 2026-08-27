@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   GameController,
+  type InitiativeQueuePresenter,
   type ServantCommandPresenter,
   type TacticalFeedbackPresenter,
   type TimelinePresenter,
@@ -61,6 +62,53 @@ const pursuitMapData: MapArray = [
 ];
 
 describe("GameController", () => {
+  it("syncs and safely clears an initiative-queue map highlight", () => {
+    const player = new Player(
+      "player",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+    );
+    const session = new GameSession(new GameMap(mapData), [player]);
+    const feedbackPresenter: TacticalFeedbackPresenter = { sync: vi.fn() };
+    const queuePresenter: InitiativeQueuePresenter = { sync: vi.fn() };
+    const controller = new GameController(
+      session,
+      { sync: vi.fn() },
+      feedbackPresenter,
+      undefined,
+      undefined,
+      queuePresenter,
+    );
+
+    expect(queuePresenter.sync).toHaveBeenLastCalledWith(
+      session.initiativeQueuePresentation,
+    );
+
+    controller.highlightInitiativeQueueUnit(player.id);
+    expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: TacticalHighlightKind.Initiative,
+          coord: player.position,
+        }),
+      ]),
+    );
+
+    controller.clickHex(player.position);
+    expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
+      expect.not.arrayContaining([
+        expect.objectContaining({ kind: TacticalHighlightKind.Initiative }),
+      ]),
+    );
+
+    controller.clearInitiativeQueueHighlight();
+    expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
+      expect.not.arrayContaining([
+        expect.objectContaining({ kind: TacticalHighlightKind.Initiative }),
+      ]),
+    );
+  });
+
   it("updates the unit presenter only when a click results in movement", () => {
     const player = new Player(
       "player",

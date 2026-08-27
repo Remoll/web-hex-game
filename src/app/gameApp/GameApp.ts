@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GameController } from "@/app/gameController/GameController";
 import { InputController } from "@/app/inputController/InputController";
 import { TimelineHud } from "@/app/timelineHud/TimelineHud";
+import { InitiativeQueueHud } from "@/app/initiativeQueueHud/InitiativeQueueHud";
 import { ServantCommandHud } from "@/app/servantCommandHud/ServantCommandHud";
 import type { GameSession } from "@/game/gameSession/GameSession";
 import {
@@ -38,6 +39,7 @@ export class GameApp {
   private readonly unitHealthView: UnitHealthView;
   private readonly remainsView: RemainsView;
   private readonly timelineHud: TimelineHud;
+  private readonly initiativeQueueHud: InitiativeQueueHud;
   private readonly servantCommandHud: ServantCommandHud;
   private readonly input: InputController;
 
@@ -77,6 +79,11 @@ export class GameApp {
       mageId: player.id,
       onWait: () => gameController?.waitForMage(),
     });
+    this.initiativeQueueHud = new InitiativeQueueHud({
+      container,
+      onHighlightUnit: (unitId) => gameController?.highlightInitiativeQueueUnit(unitId),
+      onClearHighlight: () => gameController?.clearInitiativeQueueHighlight(),
+    });
     this.servantCommandHud = new ServantCommandHud({
       container,
       onAssignHold: () => gameController?.assignHoldStrategy(),
@@ -92,6 +99,7 @@ export class GameApp {
       this.mapHighlightView,
       this.timelineHud,
       this.servantCommandHud,
+      this.initiativeQueueHud,
     );
     this.input = new InputController(
       this.renderer.domElement,
@@ -120,6 +128,7 @@ export class GameApp {
     this.unitHealthView.dispose();
     this.remainsView.dispose();
     this.timelineHud.dispose();
+    this.initiativeQueueHud.dispose();
     this.servantCommandHud.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

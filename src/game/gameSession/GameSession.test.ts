@@ -6,6 +6,8 @@ import {
   GameActionRejectionReason,
   GameActionType,
   GameSession,
+  InitiativeQueueActorLabel,
+  InitiativeQueueCardState,
 } from "@/game/gameSession/GameSession";
 import {
   actionPointsPerActivation,
@@ -1186,6 +1188,90 @@ describe("GameSession", () => {
     expect(session.getFieldVisibility({ q: 2, r: 0 })).toBe(
       FieldVisibility.Visible,
     );
+  });
+
+  it("projects an undiscovered Enemy as an information-safe queue card", () => {
+    const mage = new Player(
+      "mage",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { viewRange: 1 },
+    );
+    const hiddenEnemy = new Unit(
+      "hidden-enemy",
+      { q: 2, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 2, r: 0 },
+      ])),
+      [mage, hiddenEnemy],
+    );
+
+    expect(session.initiativeQueuePresentation.entries).toEqual([
+      {
+        cardId: "unit-mage",
+        state: InitiativeQueueCardState.Identified,
+        label: InitiativeQueueActorLabel.Mage,
+        unitId: mage.id,
+        isCurrent: true,
+        canHighlight: true,
+      },
+      {
+        cardId: "unknown-1",
+        state: InitiativeQueueCardState.Unknown,
+        label: undefined,
+        unitId: undefined,
+        isCurrent: false,
+        canHighlight: false,
+      },
+    ]);
+    expect(session.getInitiativeQueueHighlightUnitId(hiddenEnemy.id)).toBeUndefined();
+  });
+
+  it("keeps a discovered but hidden Enemy identified without permitting a map highlight", () => {
+    const mage = new Player(
+      "mage",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { viewRange: 1 },
+    );
+    const enemy = new Unit(
+      "enemy",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: -1, r: 0 },
+        mage.position,
+        enemy.position,
+      ])),
+      [mage, enemy],
+    );
+
+    expect(session.getInitiativeQueueHighlightUnitId(enemy.id)).toBe(enemy.id);
+    session.clickHex(mage.position);
+    session.clickHex({ q: -1, r: 0 });
+
+    const enemyCard = session.initiativeQueuePresentation.entries.find(
+      (entry) => entry.unitId === enemy.id,
+    );
+    expect(session.getFieldVisibility(enemy.position)).toBe(FieldVisibility.Discovered);
+    expect(enemyCard).toEqual({
+      cardId: "unit-enemy",
+      state: InitiativeQueueCardState.Identified,
+      label: InitiativeQueueActorLabel.Enemy,
+      unitId: enemy.id,
+      isCurrent: false,
+      canHighlight: false,
+    });
+    expect(session.getInitiativeQueueHighlightUnitId(enemy.id)).toBeUndefined();
   });
 
   it("requires exactly one living Mage", () => {

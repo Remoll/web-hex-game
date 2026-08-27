@@ -9,6 +9,7 @@ export enum TacticalHighlightKind {
   Command = "command",
   Move = "move",
   Attack = "attack",
+  Initiative = "initiative",
 }
 
 export const tacticalHighlightKinds: readonly TacticalHighlightKind[] = [
@@ -16,6 +17,7 @@ export const tacticalHighlightKinds: readonly TacticalHighlightKind[] = [
   TacticalHighlightKind.Command,
   TacticalHighlightKind.Move,
   TacticalHighlightKind.Attack,
+  TacticalHighlightKind.Initiative,
 ];
 
 /** Renderer-neutral semantic feedback supplied by the application layer. */

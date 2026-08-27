@@ -4,9 +4,10 @@ import {
   GameActionType,
   type GameAction,
   type GameActionPreview,
+  type InitiativeQueuePresentation,
+  type ServantCommandPresentation,
 } from "@/game/gameSession/GameSession";
 import type { TimelinePresentation } from "@/game/eventTimeline/EventTimeline";
-import type { ServantCommandPresentation } from "@/game/gameSession/GameSession";
 import type { Unit } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
 import {
@@ -30,6 +31,10 @@ export interface ServantCommandPresenter {
   sync(presentation: ServantCommandPresentation): void;
 }
 
+export interface InitiativeQueuePresenter {
+  sync(presentation: InitiativeQueuePresentation): void;
+}
+
 const noopFeedbackPresenter: TacticalFeedbackPresenter = {
   sync: () => undefined,
 };
@@ -42,18 +47,26 @@ const noopServantCommandPresenter: ServantCommandPresenter = {
   sync: () => undefined,
 };
 
+const noopInitiativeQueuePresenter: InitiativeQueuePresenter = {
+  sync: () => undefined,
+};
+
 /** Connects domain actions to the presentation layer without exposing Three.js to the game. */
 export class GameController {
+  private initiativeQueueHighlightedUnitId: string | undefined;
+
   constructor(
     private readonly session: GameSession,
     private readonly unitPresenter: UnitPresenter,
     private readonly tacticalFeedbackPresenter: TacticalFeedbackPresenter = noopFeedbackPresenter,
     private readonly timelinePresenter: TimelinePresenter = noopTimelinePresenter,
     private readonly servantCommandPresenter: ServantCommandPresenter = noopServantCommandPresenter,
+    private readonly initiativeQueuePresenter: InitiativeQueuePresenter = noopInitiativeQueuePresenter,
   ) {
-    this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();
+    this.syncInitiativeQueuePresentation();
+    this.refreshTacticalFeedback();
   }
 
   clickHex(coord: HexCoord): GameAction {
@@ -74,9 +87,10 @@ export class GameController {
     }
     this.syncAutonomousUnitUpdates();
 
-    this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();
+    this.syncInitiativeQueuePresentation();
+    this.refreshTacticalFeedback();
 
     return action;
   }
@@ -84,9 +98,10 @@ export class GameController {
   waitForMage(): GameAction {
     const action = this.session.waitForMage();
     this.syncAutonomousUnitUpdates();
-    this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();
+    this.syncInitiativeQueuePresentation();
+    this.refreshTacticalFeedback();
     return action;
   }
 
@@ -121,6 +136,18 @@ export class GameController {
   }
 
   clearPreview(): void {
+    this.refreshTacticalFeedback();
+  }
+
+  /** Applies a temporary queue hover/focus/tap highlight only if still safe. */
+  highlightInitiativeQueueUnit(unitId: string): void {
+    this.initiativeQueueHighlightedUnitId = this.session
+      .getInitiativeQueueHighlightUnitId(unitId);
+    this.refreshTacticalFeedback();
+  }
+
+  clearInitiativeQueueHighlight(): void {
+    this.initiativeQueueHighlightedUnitId = undefined;
     this.refreshTacticalFeedback();
   }
 
@@ -159,6 +186,16 @@ export class GameController {
           coord: reachableHex.coord,
         });
       }
+    }
+
+    const initiativeQueueUnit = this.initiativeQueueHighlightedUnitId
+      ? this.session.getUnit(this.initiativeQueueHighlightedUnitId)
+      : undefined;
+    if (initiativeQueueUnit?.isAlive && this.session.isUnitVisible(initiativeQueueUnit)) {
+      highlights.push({
+        kind: TacticalHighlightKind.Initiative,
+        coord: initiativeQueueUnit.position,
+      });
     }
 
     const commandTargetId = this.session.servantCommandPresentation.targetServantId;
@@ -241,15 +278,21 @@ export class GameController {
     this.servantCommandPresenter.sync(this.session.servantCommandPresentation);
   }
 
+  private syncInitiativeQueuePresentation(): void {
+    this.initiativeQueueHighlightedUnitId = undefined;
+    this.initiativeQueuePresenter.sync(this.session.initiativeQueuePresentation);
+  }
+
   private resolveAutonomousActivationsAfterCommand(action: GameAction): void {
     if (action.type === GameActionType.StrategyAssigned
       || action.type === GameActionType.StrategyCleared) {
       this.session.resolveAutonomousActivations();
     }
 
-    this.syncAutonomousUnitUpdates();
-    this.refreshTacticalFeedback();
     this.syncTimelinePresentation();
     this.syncServantCommandPresentation();
+    this.syncAutonomousUnitUpdates();
+    this.syncInitiativeQueuePresentation();
+    this.refreshTacticalFeedback();
   }
 }

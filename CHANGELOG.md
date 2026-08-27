@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added a responsive, visibility-safe bottom initiative queue with deterministic
+  ordering, unknown Enemy cards, and temporary accessible map highlighting.
 - Added three-AP tactical activations: path-based movement costs one AP per
   hex, melee attacks cost two AP, and each completed activation receives one
   Finesse-adjusted recovery delay.

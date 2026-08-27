@@ -109,6 +109,32 @@ describe("EventTimeline", () => {
     expect(timeline.hasWaitedDuringReadyActivation(mage.id)).toBe(false);
   });
 
+  it("projects upcoming actors in deterministic scheduling order", () => {
+    const mage = new Participant("mage");
+    const enemy = new Participant("enemy");
+    const neutral = new Participant("neutral");
+    const timeline = new EventTimeline([mage, enemy, neutral]);
+
+    expect(timeline.getScheduledActors()).toEqual([
+      { unitId: mage.id, nextReadyAt: initialSimulationTime },
+      { unitId: enemy.id, nextReadyAt: initialSimulationTime },
+      { unitId: neutral.id, nextReadyAt: initialSimulationTime },
+    ]);
+
+    timeline.deferReadyActivation(mage.id);
+    expect(timeline.getScheduledActors()).toEqual([
+      { unitId: enemy.id, nextReadyAt: initialSimulationTime },
+      { unitId: neutral.id, nextReadyAt: initialSimulationTime },
+      { unitId: mage.id, nextReadyAt: initialSimulationTime },
+    ]);
+
+    enemy.isAlive = false;
+    expect(timeline.getScheduledActors()).toEqual([
+      { unitId: neutral.id, nextReadyAt: initialSimulationTime },
+      { unitId: mage.id, nextReadyAt: initialSimulationTime },
+    ]);
+  });
+
   it("keeps resolving autonomous actions until the AP pool is exhausted", () => {
     const servant = new Participant("servant");
     const mage = new Participant("mage");

@@ -151,6 +151,37 @@ export interface ReachableHex {
   readonly cost: number;
 }
 
+/** Information-safe visual states for initiative cards. */
+export enum InitiativeQueueCardState {
+  Unknown = "unknown",
+  Identified = "identified",
+}
+
+/** Display identity intentionally limited to tactical role or faction. */
+export enum InitiativeQueueActorLabel {
+  Mage = "Mage",
+  Servant = "Servant",
+  Enemy = "Enemy",
+  Neutral = "Neutral",
+}
+
+/**
+ * Renderer-neutral queue card data. No card contains a coordinate, and an
+ * undiscovered Enemy contains neither its identity nor an interaction target.
+ */
+export interface InitiativeQueueEntry {
+  readonly cardId: string;
+  readonly state: InitiativeQueueCardState;
+  readonly label: InitiativeQueueActorLabel | undefined;
+  readonly unitId: string | undefined;
+  readonly isCurrent: boolean;
+  readonly canHighlight: boolean;
+}
+
+export interface InitiativeQueuePresentation {
+  readonly entries: readonly InitiativeQueueEntry[];
+}
+
 /** Safe UI state: it exposes only the currently visible command target. */
 export interface ServantCommandPresentation {
   readonly targetServantId: string | undefined;
@@ -294,6 +325,64 @@ export class GameSession {
 
   get timelinePresentation(): TimelinePresentation {
     return this.timeline.presentation;
+  }
+
+  /**
+   * Projects EventTimeline order into cards that are safe under Mage fog.
+   * Callers receive no live coordinates and must use canHighlight before
+   * requesting a temporary map highlight.
+   */
+  get initiativeQueuePresentation(): InitiativeQueuePresentation {
+    const entries: InitiativeQueueEntry[] = [];
+    const scheduledActors = this.timeline.getScheduledActors();
+    const currentActorId = this.timeline.readyActor?.unitId;
+
+    for (const [index, actor] of scheduledActors.entries()) {
+      const unit = this.unitsById.get(actor.unitId);
+      if (!unit) {
+        continue;
+      }
+
+      const visibility = this.getFieldVisibility(unit.position);
+      const isUndiscoveredEnemy = unit.faction === Faction.Enemy
+        && visibility === FieldVisibility.Undiscovered;
+      if (isUndiscoveredEnemy) {
+        entries.push({
+          cardId: `${InitiativeQueueCardState.Unknown}-${index}`,
+          state: InitiativeQueueCardState.Unknown,
+          label: undefined,
+          unitId: undefined,
+          isCurrent: actor.unitId === currentActorId,
+          canHighlight: false,
+        });
+        continue;
+      }
+
+      entries.push({
+        cardId: `unit-${unit.id}`,
+        state: InitiativeQueueCardState.Identified,
+        label: getInitiativeQueueActorLabel(unit),
+        unitId: unit.id,
+        isCurrent: actor.unitId === currentActorId,
+        canHighlight: visibility === FieldVisibility.Visible,
+      });
+    }
+
+    return { entries };
+  }
+
+  /** Revalidates a queue interaction against current visibility and schedule. */
+  getInitiativeQueueHighlightUnitId(unitId: string): string | undefined {
+    const unit = this.unitsById.get(unitId);
+    if (!unit || !unit.isAlive || !this.isUnitVisible(unit)) {
+      return undefined;
+    }
+
+    return this.timeline.getScheduledActors().some(
+      (actor) => actor.unitId === unitId,
+    )
+      ? unit.id
+      : undefined;
   }
 
   getFieldVisibility(coord: HexCoord): FieldVisibility | undefined {
@@ -1499,6 +1588,21 @@ function isSameHex(first: HexCoord, second: HexCoord): boolean {
 
 function compareHexCoords(first: HexCoord, second: HexCoord): number {
   return first.q - second.q || first.r - second.r;
+}
+
+function getInitiativeQueueActorLabel(unit: Unit): InitiativeQueueActorLabel {
+  if (unit.tacticalRole === UnitTacticalRole.Mage) {
+    return InitiativeQueueActorLabel.Mage;
+  }
+
+  switch (unit.faction) {
+    case Faction.Player:
+      return InitiativeQueueActorLabel.Servant;
+    case Faction.Enemy:
+      return InitiativeQueueActorLabel.Enemy;
+    case Faction.Neutral:
+      return InitiativeQueueActorLabel.Neutral;
+  }
 }
 
 const adjacentHexDistance = 1;

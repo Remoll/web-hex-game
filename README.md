@@ -45,6 +45,13 @@ than a wall-clock timer. The timeline HUD shows the current simulation time,
 the ready actor, the current AP pool, and the Mage's available action costs.
 The Mage starts ready at time `0` with three Action Points (AP).
 
+The bottom initiative queue mirrors the deterministic upcoming timeline order.
+Its cards are horizontally scrollable on touch devices, while the current actor
+remains marked as **Now**. Hover, keyboard focus, or tap temporarily highlights
+an actor only when that unit is currently Visible. An undiscovered Enemy appears
+only as `?`; a discovered-but-hidden Enemy may be identified but cannot reveal
+its current map position.
+
 - A Mage move costs `1` AP for every hex in the chosen legal path. A melee
   attack costs `2` AP. The Mage remains the ready actor while it has AP, so it
   can move then attack, or attack then retreat. Reaching `0` AP immediately
