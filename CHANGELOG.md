@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added a deterministic discrete Event Timeline for Mage movement, attacks,
+  and waiting, with named integer action costs and a minimal timeline HUD.
 - Added a radius-6 tactical encounter with Mage-centred three-state fog of war:
   undiscovered, discovered terrain, and current visibility.
 - Fixed isometric camera clipping that could expose white gaps along the lower

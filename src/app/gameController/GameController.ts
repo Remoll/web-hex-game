@@ -5,6 +5,7 @@ import {
   type GameAction,
   type GameActionPreview,
 } from "@/game/gameSession/GameSession";
+import type { TimelinePresentation } from "@/game/eventTimeline/EventTimeline";
 import type { Unit } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
 import type {
@@ -19,7 +20,15 @@ export interface TacticalFeedbackPresenter {
   sync(highlights: readonly TacticalHighlight[]): void;
 }
 
+export interface TimelinePresenter {
+  sync(presentation: TimelinePresentation): void;
+}
+
 const noopFeedbackPresenter: TacticalFeedbackPresenter = {
+  sync: () => undefined,
+};
+
+const noopTimelinePresenter: TimelinePresenter = {
   sync: () => undefined,
 };
 
@@ -29,8 +38,10 @@ export class GameController {
     private readonly session: GameSession,
     private readonly unitPresenter: UnitPresenter,
     private readonly tacticalFeedbackPresenter: TacticalFeedbackPresenter = noopFeedbackPresenter,
+    private readonly timelinePresenter: TimelinePresenter = noopTimelinePresenter,
   ) {
     this.refreshTacticalFeedback();
+    this.syncTimelinePresentation();
   }
 
   clickHex(coord: HexCoord): GameAction {
@@ -46,7 +57,15 @@ export class GameController {
     }
 
     this.refreshTacticalFeedback();
+    this.syncTimelinePresentation();
 
+    return action;
+  }
+
+  waitForMage(): GameAction {
+    const action = this.session.waitForMage();
+    this.refreshTacticalFeedback();
+    this.syncTimelinePresentation();
     return action;
   }
 
@@ -93,5 +112,9 @@ export class GameController {
     }
 
     this.tacticalFeedbackPresenter.sync(highlights);
+  }
+
+  private syncTimelinePresentation(): void {
+    this.timelinePresenter.sync(this.session.timelinePresentation);
   }
 }

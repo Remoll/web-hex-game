@@ -1,9 +1,14 @@
 import { GameMap, type MovementPath } from "@/game/board/gameMap/GameMap";
 import {
-  Faction,
   FactionDisposition,
   getFactionDisposition,
 } from "@/game/faction/Faction";
+import {
+  EventTimeline,
+  TimelineAction,
+  type EventTimelineReader,
+  type TimelinePresentation,
+} from "@/game/eventTimeline/EventTimeline";
 import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
 import {
@@ -17,6 +22,7 @@ export enum GameActionType {
   Deselected = "deselected",
   Moved = "moved",
   Attacked = "attacked",
+  Waited = "waited",
   Ignored = "ignored",
 }
 
@@ -33,6 +39,7 @@ export enum GameActionRejectionReason {
   NotPlayerControlled = "not-player-controlled",
   NotHostile = "not-hostile",
   NotVisible = "not-visible",
+  NotReady = "not-ready",
   OutOfRange = "out-of-range",
   RoundExhausted = "round-exhausted",
 }
@@ -49,6 +56,7 @@ export type GameAction =
     targetCurrentHp: number;
     targetDefeated: boolean;
   }
+  | { type: GameActionType.Waited; unitId: string }
   | {
     type: GameActionType.Ignored;
     reason: GameActionRejectionReason;
@@ -83,6 +91,7 @@ export class GameSession {
   private readonly livingUnitIdsByHex = new Map<string, string>();
   private readonly mageId: string;
   private readonly mageVisibility: MageVisibility;
+  private readonly timeline: EventTimeline;
   private _selectedUnitId: string | null = null;
 
   constructor(
@@ -112,6 +121,8 @@ export class GameSession {
 
     this.mageId = mages[0].id;
     this.mageVisibility = new MageVisibility(this.gameMap);
+    this.timeline = new EventTimeline(this.unitsById.values());
+    this.timeline.advancePassiveUnitsToMageDecision(this.mageId);
     this.recalculateMageVisibility();
   }
 
@@ -133,6 +144,15 @@ export class GameSession {
     return this.mageVisibility;
   }
 
+  /** Read-only timeline state for HUDs and future turn orchestration. */
+  get eventTimeline(): EventTimelineReader {
+    return this.timeline;
+  }
+
+  get timelinePresentation(): TimelinePresentation {
+    return this.timeline.presentation;
+  }
+
   getFieldVisibility(coord: HexCoord): FieldVisibility | undefined {
     return this.mageVisibility.getFieldVisibility(coord);
   }
@@ -150,7 +170,7 @@ export class GameSession {
 
   /** Provides movement data for future highlighting without leaking map internals. */
   getReachableHexes(): readonly ReachableHex[] {
-    const selectedUnit = this.getSelectedPlayerUnit();
+    const selectedUnit = this.getSelectedControllableUnit();
     if (!selectedUnit || !this.hasMovementAvailability(selectedUnit)) {
       return [];
     }
@@ -170,7 +190,7 @@ export class GameSession {
       };
     }
 
-    const selectedUnit = this.getSelectedPlayerUnit();
+    const selectedUnit = this.getSelectedControllableUnit();
     const clickedUnit = this.getUnitAt(coord);
 
     if (clickedUnit && !this.isUnitVisible(clickedUnit)) {
@@ -181,7 +201,7 @@ export class GameSession {
     }
 
     if (!selectedUnit) {
-      return clickedUnit?.faction === Faction.Player
+      return clickedUnit && this.isMage(clickedUnit)
         ? { type: GameActionPreviewType.Selection, unitId: clickedUnit.id }
         : {
           type: GameActionPreviewType.OutOfRange,
@@ -198,9 +218,7 @@ export class GameSession {
       };
     }
 
-    // Switching between player-controlled units remains available even when
-    // the currently selected unit has exhausted its provisional round budget.
-    if (clickedUnit?.faction === Faction.Player) {
+    if (clickedUnit && this.isMage(clickedUnit)) {
       return {
         type: GameActionPreviewType.Selection,
         unitId: clickedUnit.id,
@@ -211,7 +229,7 @@ export class GameSession {
       if (!this.hasActionAvailability(selectedUnit)) {
         return {
           type: GameActionPreviewType.OutOfRange,
-          reason: GameActionRejectionReason.RoundExhausted,
+          reason: this.getAvailabilityRejectionReason(selectedUnit),
         };
       }
 
@@ -238,7 +256,7 @@ export class GameSession {
     if (!this.hasMovementAvailability(selectedUnit)) {
       return {
         type: GameActionPreviewType.OutOfRange,
-        reason: GameActionRejectionReason.RoundExhausted,
+        reason: this.getAvailabilityRejectionReason(selectedUnit),
       };
     }
 
@@ -264,7 +282,7 @@ export class GameSession {
       };
     }
 
-    const selectedUnit = this.getSelectedPlayerUnit();
+    const selectedUnit = this.getSelectedControllableUnit();
     if (selectedUnit && isSameHex(selectedUnit.position, coord)) {
       this._selectedUnitId = null;
       return { type: GameActionType.Deselected, unitId: selectedUnit.id };
@@ -291,11 +309,34 @@ export class GameSession {
     }
   }
 
-  /** Future turn orchestration restores the temporary per-round allowance. */
+  /**
+   * Retained for non-Mage Player-faction units until their own timeline work is
+   * introduced. Mage actions are gated exclusively by EventTimeline readiness.
+   */
   resetRoundBudgets(): void {
     for (const unit of this.unitsById.values()) {
-      unit.resetRoundBudget();
+      if (!this.isMage(unit)) {
+        unit.resetRoundBudget();
+      }
     }
+  }
+
+  /**
+   * Ends the Mage's current activation without changing board state. Passive
+   * units advance synchronously to their next deterministic Mage decision.
+   */
+  waitForMage(): GameAction {
+    const mage = this.unitsById.get(this.mageId);
+    if (!mage || !mage.isAlive || !this.timeline.isReady(mage.id)) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NotReady,
+      };
+    }
+
+    this.timeline.consumeReadyAction(mage.id, TimelineAction.Wait);
+    this.timeline.advancePassiveUnitsToMageDecision(this.mageId);
+    return { type: GameActionType.Waited, unitId: mage.id };
   }
 
   private moveSelectedUnit(
@@ -309,13 +350,25 @@ export class GameSession {
       };
     }
 
+    if (this.isMage(unit)) {
+      if (!this.timeline.isReady(unit.id)) {
+        return {
+          type: GameActionType.Ignored,
+          reason: GameActionRejectionReason.NotReady,
+        };
+      }
+      this.timeline.consumeReadyAction(unit.id, TimelineAction.Move);
+    } else {
+      unit.spendMovement(preview.path.cost);
+    }
+
     const from = unit.position;
-    unit.spendMovement(preview.path.cost);
     this.unregisterLivingUnit(unit);
     unit.moveTo(preview.destination);
     this.registerLivingUnit(unit);
     if (unit.id === this.mageId) {
       this.recalculateMageVisibility();
+      this.timeline.advancePassiveUnitsToMageDecision(this.mageId);
     }
 
     return {
@@ -338,13 +391,29 @@ export class GameSession {
       };
     }
 
+    if (this.isMage(attacker)) {
+      if (!this.timeline.isReady(attacker.id)) {
+        return {
+          type: GameActionType.Ignored,
+          reason: GameActionRejectionReason.NotReady,
+        };
+      }
+      this.timeline.consumeReadyAction(attacker.id, TimelineAction.Attack);
+    }
+
     target.receiveDamage(attacker.attackPower);
-    attacker.exhaustRoundBudget();
+    if (!this.isMage(attacker)) {
+      attacker.exhaustRoundBudget();
+    }
     if (!target.isAlive) {
       this.unregisterLivingUnit(target);
+      this.timeline.invalidateUnit(target.id);
       if (target.id === this.mageId) {
         this.recalculateMageVisibility();
       }
+    }
+    if (this.isMage(attacker)) {
+      this.timeline.advancePassiveUnitsToMageDecision(this.mageId);
     }
 
     return {
@@ -357,7 +426,7 @@ export class GameSession {
     };
   }
 
-  private getSelectedPlayerUnit(): Unit | undefined {
+  private getSelectedControllableUnit(): Unit | undefined {
     if (!this._selectedUnitId) {
       return undefined;
     }
@@ -365,7 +434,7 @@ export class GameSession {
     const selectedUnit = this.unitsById.get(this._selectedUnitId);
     if (!selectedUnit
       || !selectedUnit.isAlive
-      || selectedUnit.faction !== Faction.Player
+      || !this.isMage(selectedUnit)
       || !this.isUnitVisible(selectedUnit)) {
       this._selectedUnitId = null;
       return undefined;
@@ -378,17 +447,37 @@ export class GameSession {
     return this.gameMap.getReachablePaths(
       unit.position,
       unit.movementType,
-      unit.remainingMovement,
+      this.getMovementRangeForCurrentAction(unit),
       (coord) => this.getUnitAt(coord) !== undefined,
     );
   }
 
   private hasMovementAvailability(unit: Unit): boolean {
-    return unit.remainingMovement > 0;
+    return this.isMage(unit)
+      ? this.timeline.isReady(unit.id)
+      : unit.remainingMovement > 0;
   }
 
   private hasActionAvailability(unit: Unit): boolean {
-    return unit.remainingActions > 0;
+    return this.isMage(unit)
+      ? this.timeline.isReady(unit.id)
+      : unit.remainingActions > 0;
+  }
+
+  private getMovementRangeForCurrentAction(unit: Unit): number {
+    return this.isMage(unit) ? unit.movementRange : unit.remainingMovement;
+  }
+
+  private getAvailabilityRejectionReason(
+    unit: Unit,
+  ): Exclude<GameActionRejectionReason, GameActionRejectionReason.NoSelectedUnit> {
+    return this.isMage(unit)
+      ? GameActionRejectionReason.NotReady
+      : GameActionRejectionReason.RoundExhausted;
+  }
+
+  private isMage(unit: Unit): boolean {
+    return unit.id === this.mageId;
   }
 
   private registerLivingUnit(unit: Unit): void {

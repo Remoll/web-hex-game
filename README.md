@@ -34,22 +34,39 @@ of four hexes. Visibility is recalculated only when relevant game state changes
   and remains are hidden.
 - **Visible** hexes show terrain, living units, and remains normally.
 
-Player-faction units can be selected only while currently Visible to the Mage.
-Hovering or clicking a hidden unit remains unavailable and reveals no unit
-information.
+The Mage can be selected only while currently Visible. Hovering or clicking a
+hidden unit remains unavailable and reveals no unit information.
 
-- Hover a Player-faction unit to see the selection cursor, then click it to
-  select it. Only Player-faction units are controllable in this slice.
+### Event timeline
+
+The Mage acts on a discrete, integer event timeline rather than a wall-clock
+timer. The timeline HUD at the top of the screen shows the current simulation
+time, the ready actor, and the named cost of each Mage action. The Mage starts
+ready at time `0`.
+
+- A Mage move costs `100` timeline time, an attack costs `140`, and **Wait**
+  costs `100`. A move may still traverse a legal Ground path of up to three
+  hexes; its path length does not change this temporary tempo cost.
+- After a Mage action, inactive units take deterministic no-op Wait events
+  until the next Mage decision. There is no timer, polling, or background AI
+  in this slice.
+- When two actors are ready at the same simulation time, their original level
+  registration order is the stable tie-breaker. Dead units are removed from
+  the event timeline before they can receive another activation.
+- Only the Mage is directly controllable in this Story. The additional
+  Player-faction unit is a passive timeline participant until direct servant
+  control is implemented in a later Story.
+
+- Hover the Mage to see the selection cursor, then click it to select it.
 - After selection, reachable Ground hexes are highlighted in green. Click one
   to move there along a valid path of up to three hexes. Every entered hex has
-  a cost of one; unused movement remains available until the three-point pool
-  is exhausted. Living units block paths and destinations.
+  a cost of one for pathfinding; living units block paths and destinations.
 - Hover a living adjacent hostile unit to see a red attack cursor and target
   highlight. Click it to deal 20 damage. A unit may attack only factions in
   its `dispositionToFactions.enemy` category.
-- Movement does not consume the unit's attack action. An attack exhausts the
-  action and any remaining movement; a future round system will restore both
-  through the existing domain reset API. There is intentionally no turn UI yet.
+- Mage movement and attacks each schedule the next Mage activation on the
+  timeline. Use the **Wait** button in the timeline HUD to schedule a no-op
+  Mage activation instead.
 - Living units display a health bar. At zero HP, a unit becomes non-interactive
   and leaves a visual-only temporary remains marker. Remains do not block
   movement or receive input.
@@ -74,8 +91,8 @@ exactly one category for each acting faction.
 
 ### Deferred systems
 
-The Event Timeline, turns/rounds, enemy AI, standing orders, counterattacks,
-player win/lose conditions, terrain cost multipliers, height-based line of
+Turns/rounds beyond the current Mage event timeline, enemy AI, standing orders,
+counterattacks, player win/lose conditions, terrain cost multipliers, height-based line of
 sight, facing, stealth, animated movement/attacks, interactive remains, final
 cursor art, and final unit art are intentionally deferred.
 

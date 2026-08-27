@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GameController } from "@/app/gameController/GameController";
 import { InputController } from "@/app/inputController/InputController";
+import { TimelineHud } from "@/app/timelineHud/TimelineHud";
 import type { GameSession } from "@/game/gameSession/GameSession";
 import {
   createGameSession,
@@ -35,6 +36,7 @@ export class GameApp {
   private readonly unitView: UnitView;
   private readonly unitHealthView: UnitHealthView;
   private readonly remainsView: RemainsView;
+  private readonly timelineHud: TimelineHud;
   private readonly input: InputController;
 
   constructor({ level, container, renderConfig = defaultRenderConfig }: GameAppOptions) {
@@ -67,12 +69,19 @@ export class GameApp {
     this.unitView = new UnitView(scene, gameMap, renderConfig);
     this.unitHealthView = new UnitHealthView(scene, gameMap, renderConfig);
     this.remainsView = new RemainsView(scene, gameMap, renderConfig);
+    let gameController: GameController | undefined;
+    this.timelineHud = new TimelineHud({
+      container,
+      mageId: player.id,
+      onWait: () => gameController?.waitForMage(),
+    });
     this.syncTacticalPresentation();
 
-    const gameController = new GameController(
+    gameController = new GameController(
       this.session,
       { sync: () => this.syncTacticalPresentation() },
       this.mapHighlightView,
+      this.timelineHud,
     );
     this.input = new InputController(
       this.renderer.domElement,
@@ -100,6 +109,7 @@ export class GameApp {
     this.unitView.dispose();
     this.unitHealthView.dispose();
     this.remainsView.dispose();
+    this.timelineHud.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

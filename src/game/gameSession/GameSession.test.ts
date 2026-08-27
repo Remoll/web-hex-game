@@ -70,7 +70,7 @@ function createSession(): {
 }
 
 describe("GameSession", () => {
-  it("selects and deselects only Player-faction units", () => {
+  it("selects and deselects only the Mage before servant control is introduced", () => {
     const { session, playerAlly } = createSession();
 
     expect(session.clickHex({ q: 2, r: 0 })).toEqual({
@@ -79,19 +79,15 @@ describe("GameSession", () => {
     });
     expect(session.selectedUnitId).toBeNull();
 
+    expect(session.clickHex(playerAlly.position)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotPlayerControlled,
+    });
+
     expect(session.previewHex({ q: 0, r: 0 })).toEqual({
       type: GameActionPreviewType.Selection,
       unitId: "player",
     });
-    expect(session.clickHex({ q: 0, r: 0 })).toEqual({
-      type: GameActionType.Selected,
-      unitId: "player",
-    });
-    expect(session.clickHex(playerAlly.position)).toEqual({
-      type: GameActionType.Selected,
-      unitId: "player-ally",
-    });
-    expect(session.selectedUnitId).toBe("player-ally");
     expect(session.clickHex({ q: 0, r: 0 })).toEqual({
       type: GameActionType.Selected,
       unitId: "player",
@@ -102,8 +98,12 @@ describe("GameSession", () => {
     });
   });
 
-  it("spends Ground movement by path cost and restores it only through the round reset", () => {
+  it("schedules Mage movement and waiting on the discrete event timeline", () => {
     const { session, player } = createSession();
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 0,
+      readyActorId: player.id,
+    });
     session.clickHex({ q: 0, r: 0 });
 
     expect(session.previewHex({ q: 0, r: -1 })).toEqual({
@@ -125,24 +125,38 @@ describe("GameSession", () => {
       from: { q: 0, r: 0 },
       to: { q: 0, r: -1 },
     });
-    expect(player.remainingMovement).toBe(2);
+    expect(player.remainingMovement).toBe(player.movementRange);
     expect(player.remainingActions).toBe(1);
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(100);
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 100,
+      readyActorId: player.id,
+    });
     expect(session.previewHex({ q: 0, r: -2 })).toMatchObject({
       type: GameActionPreviewType.ValidMove,
       destination: { q: 0, r: -2 },
     });
 
     session.clickHex({ q: 0, r: -3 });
-    expect(player.remainingMovement).toBe(0);
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(200);
     expect(player.remainingActions).toBe(1);
-    expect(session.previewHex({ q: 0, r: -2 })).toEqual({
-      type: GameActionPreviewType.OutOfRange,
-      reason: GameActionRejectionReason.RoundExhausted,
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 200,
+      readyActorId: player.id,
+    });
+
+    expect(session.waitForMage()).toEqual({
+      type: GameActionType.Waited,
+      unitId: player.id,
+    });
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(300);
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 300,
+      readyActorId: player.id,
     });
 
     session.resetRoundBudgets();
-    expect(player.remainingMovement).toBe(3);
-    expect(player.remainingActions).toBe(1);
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(300);
   });
 
   it("rejects impassable Ground terrain and live-unit movement destinations", () => {
@@ -163,12 +177,14 @@ describe("GameSession", () => {
     });
   });
 
-  it("allows an adjacent attack after movement, then exhausts the round and leaves corpses non-blocking", () => {
+  it("allows adjacent Mage attacks after movement and invalidates defeated units", () => {
     const { session, player, enemy, neutral } = createSession();
     session.clickHex({ q: 0, r: 0 });
     session.clickHex({ q: 1, r: 0 });
-    expect(player.remainingMovement).toBe(2);
-    expect(player.remainingActions).toBe(1);
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 100,
+      readyActorId: player.id,
+    });
 
     expect(session.previewHex({ q: 2, r: 0 })).toEqual({
       type: GameActionPreviewType.ValidAttack,
@@ -183,11 +199,13 @@ describe("GameSession", () => {
       targetCurrentHp: 80,
       targetDefeated: false,
     });
-    expect(player.remainingMovement).toBe(0);
-    expect(player.remainingActions).toBe(0);
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(240);
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 240,
+      readyActorId: player.id,
+    });
 
     for (let health = 60; health >= 0; health -= 20) {
-      session.resetRoundBudgets();
       expect(session.clickHex({ q: 2, r: 0 })).toMatchObject({
         type: GameActionType.Attacked,
         targetCurrentHp: health,
@@ -199,8 +217,8 @@ describe("GameSession", () => {
     expect(session.getUnitAt({ q: 2, r: 0 })).toBeUndefined();
     expect(session.units).toContain(enemy);
     expect(neutral.isAlive).toBe(true);
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBeUndefined();
 
-    session.resetRoundBudgets();
     expect(session.previewHex({ q: 2, r: 0 })).toMatchObject({
       type: GameActionPreviewType.ValidMove,
       destination: { q: 2, r: 0 },
