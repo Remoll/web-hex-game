@@ -12,6 +12,7 @@ import {
   type TimelinePresentation,
 } from "@/game/eventTimeline/EventTimeline";
 import { EnemyTacticalMemory } from "@/game/enemyAi/EnemyTacticalMemory";
+import { ServantTacticalMemory } from "@/game/servantAi/ServantTacticalMemory";
 import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
 import {
   holdServantStrategy,
@@ -205,6 +206,7 @@ export class GameSession {
   private readonly mageVisibility: MageVisibility;
   private readonly timeline: EventTimeline;
   private readonly enemyTacticalMemory = new EnemyTacticalMemory();
+  private readonly servantTacticalMemory = new ServantTacticalMemory();
   private readonly servantStrategiesByUnitId = new Map<string, ServantStrategy>();
   private readonly autonomousUnitUpdates = new Set<string>();
   private _selectedUnitId: string | null = null;
@@ -1198,12 +1200,12 @@ export class GameSession {
 
     const strategy = this.servantStrategiesByUnitId.get(unit.id);
     if (!strategy) {
-      return TimelineAction.Wait;
+      return this.resolveDefaultServantEngagement(unit, remainingActionPoints);
     }
 
     switch (strategy.type) {
       case ServantStrategyType.Hold:
-        return TimelineAction.Wait;
+        return this.resolveHoldServantStrategy(unit, remainingActionPoints);
       case ServantStrategyType.PursueDesignatedEnemy:
         return this.resolvePursueDesignatedEnemy(
           unit,
@@ -1217,6 +1219,67 @@ export class GameSession {
           remainingActionPoints,
         );
     }
+  }
+
+  /**
+   * A servant without a standing command acquires the first hostile it can
+   * currently perceive. The target identity remains private to the domain and
+   * is cleared whenever it is no longer valid for autonomous engagement.
+   */
+  private resolveDefaultServantEngagement(
+    servant: Unit,
+    remainingActionPoints: number,
+  ): TimelineAction {
+    const target = this.getDefaultServantEngagementTarget(servant);
+    return target
+      ? this.resolveServantEngagementTarget(servant, target, remainingActionPoints)
+      : TimelineAction.Wait;
+  }
+
+  /** Hold prevents pursuit but still allows an adjacent defensive melee attack. */
+  private resolveHoldServantStrategy(
+    servant: Unit,
+    remainingActionPoints: number,
+  ): TimelineAction {
+    const adjacentHostile = this.findFirstPerceivedHostile(
+      servant,
+      adjacentHexDistance,
+    );
+    if (!adjacentHostile || !this.canAffordAutonomousAction(
+      remainingActionPoints,
+      TacticalActionPointCost.Attack,
+    )) {
+      return TimelineAction.Wait;
+    }
+
+    this.applyMeleeDamage(servant, adjacentHostile, true);
+    return TimelineAction.Attack;
+  }
+
+  private getDefaultServantEngagementTarget(servant: Unit): Unit | undefined {
+    const rememberedTargetId = this.servantTacticalMemory.getDefaultTargetId(servant.id);
+    const rememberedTarget = rememberedTargetId
+      ? this.unitsById.get(rememberedTargetId)
+      : undefined;
+    if (rememberedTarget && this.isPerceivedHostile(servant, rememberedTarget)) {
+      return rememberedTarget;
+    }
+
+    if (rememberedTargetId) {
+      this.servantTacticalMemory.clear(servant.id);
+    }
+
+    const firstPerceivedHostile = this.findFirstPerceivedHostile(
+      servant,
+      servant.viewRange,
+    );
+    if (firstPerceivedHostile) {
+      this.servantTacticalMemory.rememberDefaultTarget(
+        servant.id,
+        firstPerceivedHostile.id,
+      );
+    }
+    return firstPerceivedHostile;
   }
 
   /** A servant follows only the Mage-designated target identity. */
@@ -1238,6 +1301,15 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
+    return this.resolveServantEngagementTarget(servant, target, remainingActionPoints);
+  }
+
+  /** Resolves one AP-limited movement or attack against a valid hostile. */
+  private resolveServantEngagementTarget(
+    servant: Unit,
+    target: Unit,
+    remainingActionPoints: number,
+  ): TimelineAction {
     if (this.gameMap.getHexDistance(servant.position, target.position)
       === adjacentHexDistance) {
       if (!this.canAffordAutonomousAction(
@@ -1268,8 +1340,9 @@ export class GameSession {
   }
 
   /**
-   * A secure-hex order has no area ownership: it ends only after the servant
-   * physically reaches a vacant designated hex. An occupant is never entered.
+   * A secure-hex order holds the designated field after arrival. An occupant
+   * is never entered; once secured, the servant only defends against adjacent
+   * hostiles instead of switching to default pursuit.
    */
   private resolveSecureDesignatedHex(
     servant: Unit,
@@ -1289,8 +1362,7 @@ export class GameSession {
     }
 
     if (isSameHex(servant.position, strategy.targetHex)) {
-      this.servantStrategiesByUnitId.delete(servant.id);
-      return TimelineAction.Wait;
+      return this.resolveHoldServantStrategy(servant, remainingActionPoints);
     }
 
     const targetOccupant = this.getUnitAt(strategy.targetHex);
@@ -1341,9 +1413,6 @@ export class GameSession {
 
     const destination = path.steps[0];
     this.moveAutonomousUnit(servant, destination);
-    if (isSameHex(destination, strategy.targetHex)) {
-      this.servantStrategiesByUnitId.delete(servant.id);
-    }
     return TimelineAction.Move;
   }
 
@@ -1439,6 +1508,33 @@ export class GameSession {
   }
 
   /**
+   * Map insertion order is the stable tie-breaker when more than one hostile
+   * is perceived in the same autonomous resolution.
+   */
+  private findFirstPerceivedHostile(
+    observer: Unit,
+    maximumDistance: number,
+  ): Unit | undefined {
+    for (const candidate of this.unitsById.values()) {
+      if (this.isPerceivedHostile(observer, candidate)
+        && this.gameMap.getHexDistance(observer.position, candidate.position)
+          <= maximumDistance) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+
+  private isPerceivedHostile(observer: Unit, candidate: Unit): boolean {
+    return candidate.isAlive
+      && getFactionDisposition(observer.faction, candidate.faction)
+        === FactionDisposition.Enemy
+      && this.gameMap.getHexDistance(observer.position, candidate.position)
+        <= observer.viewRange;
+  }
+
+  /**
    * Makes one legal local step only. Equal candidates use ascending axial q,
    * then ascending r; this keeps paths deterministic without global search.
    */
@@ -1524,6 +1620,8 @@ export class GameSession {
       this.unregisterLivingUnit(target);
       this.timeline.invalidateUnit(target.id);
       this.servantStrategiesByUnitId.delete(target.id);
+      this.servantTacticalMemory.clear(target.id);
+      this.servantTacticalMemory.forgetTarget(target.id);
       this.clearStrategiesPursuingTarget(target.id);
       this.enemyTacticalMemory.clear(target.id);
       this.enemyTacticalMemory.forgetHostile(target.id);

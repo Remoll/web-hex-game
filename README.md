@@ -71,15 +71,21 @@ its current map position.
   the servant's scheduled activation or make the servant act immediately.
 - When a servant receives its own later activation, its autonomous resolver
   continues legal strategy actions while it can afford them. The only currently
-  supported strategies are **Hold**, which resolves as a no-op Wait, **Pursue
-  Designated Enemy**, and **Secure Designated Hex**. Pursuit stores one
+  supported strategies are **Hold**, which stays in place but defends itself
+  against an adjacent hostile, **Pursue Designated Enemy**, and **Secure
+  Designated Hex**. A servant with no Mage-issued strategy remembers the first
+  hostile it currently perceives and uses legal AP-limited paths to engage it.
+  An explicit strategy always takes precedence over this default behaviour.
+  Pursuit stores one
   explicit Enemy identity and, on the servant's later activation, attacks that
   Enemy if adjacent or takes deterministic legal Ground steps toward an empty
   hex beside it. Secure stores one tactical hex: the servant advances to an
-  empty target and completes the order on arrival; for an occupied target it
-  approaches the nearest legal adjacent hex and attacks only a hostile
-  occupant. Equal shortest paths use the GameMap's fixed axial-neighbour order.
-  A blocked strategy Holds without losing its order.
+  empty target and holds it on arrival; for an occupied target it approaches
+  the nearest legal adjacent hex and attacks only a hostile occupant. A servant
+  already holding a Secure hex attacks only adjacent hostiles and never switches
+  to default pursuit until the Mage changes or clears the order. Equal shortest
+  paths use the GameMap's fixed axial-neighbour order. A blocked strategy Holds
+  without losing its order.
 - On its activation, an Enemy evaluates only hostiles within its own derived
   view range. It remembers the nearest visible hostile's position, then spends
   its available AP on adjacent attacks or legal neighbouring steps that reduce

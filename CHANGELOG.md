@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added default autonomous servant engagement: unordered servants retain the
+  first perceived hostile, pursue it with legal AP-limited paths, and re-acquire
+  a target after it becomes invalid; Hold now permits adjacent self-defence.
 - Added a responsive, visibility-safe bottom initiative queue with deterministic
   ordering, unknown Enemy cards, and temporary accessible map highlighting.
 - Added three-AP tactical activations: path-based movement costs one AP per

@@ -340,7 +340,7 @@ describe("GameSession", () => {
     expect(session.eventTimeline.getNextReadyAt(mage.id)).toBe(mageReadyAt);
   });
 
-  it("completes a visible Secure order when its target fits in one activation", () => {
+  it("holds a visible Secure order when its target fits in one activation", () => {
     const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle, {
       viewRange: 3,
     });
@@ -409,12 +409,12 @@ describe("GameSession", () => {
       servantId: servant.id,
     });
     expect(session.servantCommandPresentation).toMatchObject({
-      targetStrategyType: undefined,
-      visibleSecureTargetHex: undefined,
+      targetStrategyType: ServantStrategyType.SecureDesignatedHex,
+      visibleSecureTargetHex: targetHex,
     });
   });
 
-  it("moves toward an empty Secure hex and clears the order on arrival", () => {
+  it("holds the assigned Secure hex instead of pursuing a distant hostile", () => {
     const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle);
     const servant = new Unit(
       "servant",
@@ -423,14 +423,23 @@ describe("GameSession", () => {
       { faction: Faction.Player },
     );
     const targetHex = { q: 2, r: 0 };
+    const distantEnemy = new Unit(
+      "distant-enemy",
+      { q: 5, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy, viewRange: 1 },
+    );
     const session = new GameSession(
       new GameMap(createGrassMap([
         mage.position,
         servant.position,
         { q: 1, r: 0 },
         targetHex,
+        { q: 3, r: 0 },
+        { q: 4, r: 0 },
+        distantEnemy.position,
       ])),
-      [mage, servant],
+      [mage, servant, distantEnemy],
     );
 
     expect(session.assignSecureDesignatedHexStrategyToServant(
@@ -443,6 +452,9 @@ describe("GameSession", () => {
     session.resolveAutonomousActivations();
     expect(servant.position).toEqual(targetHex);
 
+    session.waitForMage();
+    expect(servant.position).toEqual(targetHex);
+
     expect(session.clickHex(mage.position)).toEqual({
       type: GameActionType.Selected,
       unitId: mage.id,
@@ -452,8 +464,8 @@ describe("GameSession", () => {
       servantId: servant.id,
     });
     expect(session.servantCommandPresentation).toMatchObject({
-      targetStrategyType: undefined,
-      visibleSecureTargetHex: undefined,
+      targetStrategyType: ServantStrategyType.SecureDesignatedHex,
+      visibleSecureTargetHex: targetHex,
     });
   });
 
@@ -769,8 +781,18 @@ describe("GameSession", () => {
     });
   });
 
-  it("resolves an unordered servant as a single autonomous Hold activation", () => {
-    const { session, player, playerAlly } = createSession();
+  it("holds an unordered servant without spending AP when no hostile is perceived", () => {
+    const player = new Player("player", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const playerAlly = new Unit(
+      "player-ally",
+      { q: -1, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([player.position, playerAlly.position])),
+      [player, playerAlly],
+    );
 
     expect(session.waitForMage()).toEqual({
       type: GameActionType.Waited,
@@ -784,6 +806,110 @@ describe("GameSession", () => {
       readyActorId: player.id,
       readyActorHasWaited: true,
     });
+  });
+
+  it("has an unordered servant engage the first perceived hostile deterministically", () => {
+    const mage = new Player("mage", { q: -1, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const firstEnemy = new Unit(
+      "first-enemy",
+      { q: 2, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const secondEnemy = new Unit(
+      "second-enemy",
+      { q: 1, r: -1 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        mage.position,
+        servant.position,
+        { q: 1, r: 0 },
+        firstEnemy.position,
+        secondEnemy.position,
+      ])),
+      [mage, servant, firstEnemy, secondEnemy],
+    );
+
+    session.waitForMage();
+
+    expect(servant.position).toEqual({ q: 1, r: 0 });
+    expect(firstEnemy.currentHp).toBe(firstEnemy.maxHp - servant.attackPower);
+    expect(secondEnemy.currentHp).toBe(secondEnemy.maxHp);
+  });
+
+  it("clears a defeated default target before acquiring the next perceived hostile", () => {
+    const mage = new Player("mage", { q: -1, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const defeatedTarget = new Unit(
+      "defeated-target",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy, currentHp: 20 },
+    );
+    const replacementTarget = new Unit(
+      "replacement-target",
+      { q: 3, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        mage.position,
+        servant.position,
+        defeatedTarget.position,
+        { q: 2, r: 0 },
+        replacementTarget.position,
+      ])),
+      [mage, servant, defeatedTarget, replacementTarget],
+    );
+
+    session.waitForMage();
+
+    expect(defeatedTarget.isAlive).toBe(false);
+    expect(servant.position).toEqual({ q: 1, r: 0 });
+  });
+
+  it("keeps an explicit Hold order from pursuing while defending against an adjacent hostile", () => {
+    const mage = new Player("mage", { q: -1, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const enemy = new Unit(
+      "enemy",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([mage.position, servant.position, enemy.position])),
+      [mage, servant, enemy],
+    );
+
+    expect(session.assignHoldStrategyToServant(servant.id)).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      strategyType: ServantStrategyType.Hold,
+    });
+    session.resolveAutonomousActivations();
+
+    expect(servant.position).toEqual({ q: 0, r: 0 });
+    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
   });
 
   it("allows a visible strategy to be replaced or cleared only by a ready Mage", () => {
@@ -978,7 +1104,7 @@ describe("GameSession", () => {
       "servant",
       { q: 0, r: 1 },
       UnitTexture.PlayerIdle,
-      { faction: Faction.Player },
+      { faction: Faction.Player, viewRange: 1 },
     );
     const enemy = new Unit(
       "enemy",
