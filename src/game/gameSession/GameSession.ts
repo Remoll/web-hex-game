@@ -14,6 +14,7 @@ import { EnemyTacticalMemory } from "@/game/enemyAi/EnemyTacticalMemory";
 import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
 import {
   holdServantStrategy,
+  pursueDesignatedEnemyStrategy,
   ServantStrategyType,
   type ServantStrategy,
 } from "@/game/unit/servantStrategy/ServantStrategy";
@@ -28,6 +29,8 @@ export enum GameActionType {
   Selected = "selected",
   Deselected = "deselected",
   ServantCommandTargetSelected = "servant-command-target-selected",
+  PursuitTargetSelectionStarted = "pursuit-target-selection-started",
+  PursuitTargetSelectionCancelled = "pursuit-target-selection-cancelled",
   Moved = "moved",
   Attacked = "attacked",
   StrategyAssigned = "strategy-assigned",
@@ -39,6 +42,7 @@ export enum GameActionType {
 export enum GameActionPreviewType {
   Selection = "selection",
   ServantCommandSelection = "servant-command-selection",
+  PursuitTargetSelection = "pursuit-target-selection",
   ValidMove = "valid-move",
   ValidAttack = "valid-attack",
   OutOfRange = "out-of-range",
@@ -53,6 +57,8 @@ export enum GameActionRejectionReason {
   NotReady = "not-ready",
   NoCommandTarget = "no-command-target",
   NoActiveStrategy = "no-active-strategy",
+  InvalidEnemyTarget = "invalid-enemy-target",
+  StrategyUnchanged = "strategy-unchanged",
   OutOfRange = "out-of-range",
 }
 
@@ -60,6 +66,8 @@ export type GameAction =
   | { type: GameActionType.Selected; unitId: string }
   | { type: GameActionType.Deselected; unitId: string }
   | { type: GameActionType.ServantCommandTargetSelected; servantId: string }
+  | { type: GameActionType.PursuitTargetSelectionStarted; servantId: string }
+  | { type: GameActionType.PursuitTargetSelectionCancelled; servantId: string }
   | { type: GameActionType.Moved; unitId: string; from: HexCoord; to: HexCoord }
   | {
     type: GameActionType.Attacked;
@@ -72,7 +80,13 @@ export type GameAction =
   | {
     type: GameActionType.StrategyAssigned;
     servantId: string;
-    strategyType: ServantStrategyType;
+    strategyType: ServantStrategyType.Hold;
+  }
+  | {
+    type: GameActionType.StrategyAssigned;
+    servantId: string;
+    strategyType: ServantStrategyType.PursueDesignatedEnemy;
+    targetId: string;
   }
   | { type: GameActionType.StrategyCleared; servantId: string }
   | { type: GameActionType.Waited; unitId: string }
@@ -84,6 +98,11 @@ export type GameAction =
 export type GameActionPreview =
   | { type: GameActionPreviewType.Selection; unitId: string }
   | { type: GameActionPreviewType.ServantCommandSelection; servantId: string }
+  | {
+    type: GameActionPreviewType.PursuitTargetSelection;
+    servantId: string;
+    targetId: string;
+  }
   | {
     type: GameActionPreviewType.ValidMove;
     unitId: string;
@@ -109,8 +128,12 @@ export interface ReachableHex {
 export interface ServantCommandPresentation {
   readonly targetServantId: string | undefined;
   readonly targetStrategyType: ServantStrategyType | undefined;
+  /** Exposed only while the designated Enemy remains currently visible. */
+  readonly visiblePursuitTargetId: string | undefined;
   readonly canAssignHold: boolean;
+  readonly canAssignPursue: boolean;
   readonly canClearStrategy: boolean;
+  readonly isSelectingPursuitTarget: boolean;
 }
 
 /** Owns mutable game state without depending on rendering or browser APIs. */
@@ -125,6 +148,7 @@ export class GameSession {
   private readonly autonomousUnitUpdates = new Set<string>();
   private _selectedUnitId: string | null = null;
   private _selectedServantCommandId: string | null = null;
+  private _isSelectingPursuitTarget = false;
 
   constructor(
     public readonly gameMap: GameMap,
@@ -167,12 +191,23 @@ export class GameSession {
     const strategy = target
       ? this.servantStrategiesByUnitId.get(target.id)
       : undefined;
+    const pursuitTarget = strategy?.type === ServantStrategyType.PursueDesignatedEnemy
+      ? this.unitsById.get(strategy.targetEnemyId)
+      : undefined;
+    const isSelectingPursuitTarget = target !== undefined
+      && this._isSelectingPursuitTarget;
 
     return {
       targetServantId: target?.id,
       targetStrategyType: strategy?.type,
-      canAssignHold: target !== undefined,
-      canClearStrategy: strategy !== undefined,
+      visiblePursuitTargetId: pursuitTarget?.isAlive
+        && this.isUnitVisible(pursuitTarget)
+        ? pursuitTarget.id
+        : undefined,
+      canAssignHold: target !== undefined && !isSelectingPursuitTarget,
+      canAssignPursue: target !== undefined && !isSelectingPursuitTarget,
+      canClearStrategy: strategy !== undefined || isSelectingPursuitTarget,
+      isSelectingPursuitTarget,
     };
   }
 
@@ -268,6 +303,30 @@ export class GameSession {
         type: GameActionPreviewType.OutOfRange,
         reason: GameActionRejectionReason.NotVisible,
       };
+    }
+
+    if (this._isSelectingPursuitTarget) {
+      const servant = this.getSelectedCommandServant();
+      if (!servant) {
+        return {
+          type: GameActionPreviewType.OutOfRange,
+          reason: GameActionRejectionReason.NoCommandTarget,
+        };
+      }
+
+      const targetRejection = clickedUnit
+        ? this.getPursueTargetRejection(servant, clickedUnit)
+        : GameActionRejectionReason.InvalidEnemyTarget;
+      return targetRejection
+        ? {
+          type: GameActionPreviewType.OutOfRange,
+          reason: targetRejection,
+        }
+        : {
+          type: GameActionPreviewType.PursuitTargetSelection,
+          servantId: servant.id,
+          targetId: clickedUnit!.id,
+        };
     }
 
     if (!selectedUnit) {
@@ -370,7 +429,7 @@ export class GameSession {
     const selectedUnit = this.getSelectedControllableUnit();
     if (selectedUnit && isSameHex(selectedUnit.position, coord)) {
       this._selectedUnitId = null;
-      this._selectedServantCommandId = null;
+      this.clearServantCommandTarget();
       return { type: GameActionType.Deselected, unitId: selectedUnit.id };
     }
 
@@ -378,14 +437,20 @@ export class GameSession {
     switch (preview.type) {
       case GameActionPreviewType.Selection:
         this._selectedUnitId = preview.unitId;
-        this._selectedServantCommandId = null;
+        this.clearServantCommandTarget();
         return { type: GameActionType.Selected, unitId: preview.unitId };
       case GameActionPreviewType.ServantCommandSelection:
         this._selectedServantCommandId = preview.servantId;
+        this._isSelectingPursuitTarget = false;
         return {
           type: GameActionType.ServantCommandTargetSelected,
           servantId: preview.servantId,
         };
+      case GameActionPreviewType.PursuitTargetSelection:
+        return this.assignPursueDesignatedEnemyStrategyToServant(
+          preview.servantId,
+          preview.targetId,
+        );
       case GameActionPreviewType.ValidMove:
         return this.moveSelectedUnit(preview);
       case GameActionPreviewType.ValidAttack:
@@ -413,15 +478,42 @@ export class GameSession {
       };
   }
 
-  /** Clears the current strategy from the selected visible servant. */
-  clearServantStrategy(): GameAction {
+  /** Starts an explicit board-target selection without spending Mage Tempo. */
+  beginPursueDesignatedEnemySelection(): GameAction {
     const servant = this.getSelectedCommandServant();
-    return servant
-      ? this.clearServantStrategyFromServant(servant.id)
-      : {
+    if (!servant) {
+      return {
         type: GameActionType.Ignored,
         reason: GameActionRejectionReason.NoCommandTarget,
       };
+    }
+
+    this._isSelectingPursuitTarget = true;
+    return {
+      type: GameActionType.PursuitTargetSelectionStarted,
+      servantId: servant.id,
+    };
+  }
+
+  /** Clears the current strategy from the selected visible servant. */
+  clearServantStrategy(): GameAction {
+    const servant = this.getSelectedCommandServant();
+    if (!servant) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoCommandTarget,
+      };
+    }
+
+    if (this._isSelectingPursuitTarget) {
+      this._isSelectingPursuitTarget = false;
+      return {
+        type: GameActionType.PursuitTargetSelectionCancelled,
+        servantId: servant.id,
+      };
+    }
+
+    return this.clearServantStrategyFromServant(servant.id);
   }
 
   /** Domain command entry point used by UI adapters after their target selection. */
@@ -445,8 +537,65 @@ export class GameSession {
     this.servantStrategiesByUnitId.set(servant.id, holdServantStrategy);
     return this.completeServantStrategyCommand(
       servant.id,
-      GameActionType.StrategyAssigned,
       holdServantStrategy.type,
+    );
+  }
+
+  /** Assigns one visible Enemy identity to a visible servant for later action. */
+  assignPursueDesignatedEnemyStrategyToServant(
+    servantId: string,
+    targetEnemyId: string,
+  ): GameAction {
+    const servant = this.unitsById.get(servantId);
+    if (!servant) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoCommandTarget,
+      };
+    }
+
+    const servantRejection = this.getServantCommandRejectionReason(servant);
+    if (servantRejection) {
+      return {
+        type: GameActionType.Ignored,
+        reason: servantRejection,
+      };
+    }
+
+    const target = this.unitsById.get(targetEnemyId);
+    if (!target) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.InvalidEnemyTarget,
+      };
+    }
+
+    const targetRejection = this.getPursueTargetRejection(servant, target);
+    if (targetRejection) {
+      return {
+        type: GameActionType.Ignored,
+        reason: targetRejection,
+      };
+    }
+
+    const existingStrategy = this.servantStrategiesByUnitId.get(servant.id);
+    if (existingStrategy?.type === ServantStrategyType.PursueDesignatedEnemy
+      && existingStrategy.targetEnemyId === target.id) {
+      this._isSelectingPursuitTarget = false;
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.StrategyUnchanged,
+      };
+    }
+
+    this.servantStrategiesByUnitId.set(
+      servant.id,
+      pursueDesignatedEnemyStrategy(target.id),
+    );
+    return this.completeServantStrategyCommand(
+      servant.id,
+      ServantStrategyType.PursueDesignatedEnemy,
+      target.id,
     );
   }
 
@@ -476,10 +625,9 @@ export class GameSession {
     }
 
     this.servantStrategiesByUnitId.delete(servant.id);
-    return this.completeServantStrategyCommand(
-      servant.id,
-      GameActionType.StrategyCleared,
-    );
+    this.timeline.consumeReadyAction(this.mageId, TimelineAction.Command);
+    this.clearServantCommandTarget();
+    return { type: GameActionType.StrategyCleared, servantId: servant.id };
   }
 
   /**
@@ -597,7 +745,7 @@ export class GameSession {
       || !this.isMage(selectedUnit)
       || !this.isUnitVisible(selectedUnit)) {
       this._selectedUnitId = null;
-      this._selectedServantCommandId = null;
+      this.clearServantCommandTarget();
       return undefined;
     }
 
@@ -647,7 +795,7 @@ export class GameSession {
 
   private getSelectedCommandServant(): Unit | undefined {
     if (!this._selectedServantCommandId || !this.getSelectedControllableUnit()) {
-      this._selectedServantCommandId = null;
+      this.clearServantCommandTarget();
       return undefined;
     }
 
@@ -656,7 +804,7 @@ export class GameSession {
       ? this.getServantCommandRejectionReason(servant)
       : GameActionRejectionReason.NoCommandTarget;
     if (rejection) {
-      this._selectedServantCommandId = null;
+      this.clearServantCommandTarget();
       return undefined;
     }
 
@@ -686,27 +834,53 @@ export class GameSession {
     return undefined;
   }
 
+  private getPursueTargetRejection(
+    servant: Unit,
+    target: Unit,
+  ): Exclude<
+    GameActionRejectionReason,
+    GameActionRejectionReason.NoSelectedUnit
+  > | undefined {
+    if (!target.isAlive || target.faction !== Faction.Enemy) {
+      return GameActionRejectionReason.InvalidEnemyTarget;
+    }
+
+    if (!this.isUnitVisible(target)) {
+      return GameActionRejectionReason.NotVisible;
+    }
+
+    return getFactionDisposition(servant.faction, target.faction)
+      === FactionDisposition.Enemy
+      ? undefined
+      : GameActionRejectionReason.NotHostile;
+  }
+
   private completeServantStrategyCommand(
     servantId: string,
-    actionType: GameActionType.StrategyAssigned | GameActionType.StrategyCleared,
-    strategyType?: ServantStrategyType,
+    strategyType: ServantStrategyType,
+    targetId?: string,
   ): GameAction {
     this.timeline.consumeReadyAction(this.mageId, TimelineAction.Command);
     this.clearServantCommandTarget();
 
-    if (actionType === GameActionType.StrategyAssigned) {
-      if (!strategyType) {
-        throw new Error("Assigned servant strategies require a strategy type");
-      }
-
+    switch (strategyType) {
+      case ServantStrategyType.Hold:
       return {
-        type: actionType,
+        type: GameActionType.StrategyAssigned,
         servantId,
         strategyType,
       };
+      case ServantStrategyType.PursueDesignatedEnemy:
+        if (!targetId) {
+          throw new Error("Pursue strategy assignments require a target Enemy id");
+        }
+        return {
+          type: GameActionType.StrategyAssigned,
+          servantId,
+          strategyType,
+          targetId,
+        };
     }
-
-    return { type: actionType, servantId };
   }
 
   private resolveAutonomousAction(unitId: string): TimelineAction {
@@ -731,9 +905,42 @@ export class GameSession {
     switch (strategy.type) {
       case ServantStrategyType.Hold:
         return TimelineAction.Wait;
+      case ServantStrategyType.PursueDesignatedEnemy:
+        return this.resolvePursueDesignatedEnemy(unit, strategy);
+    }
+  }
+
+  /** A servant follows only the Mage-designated target identity. */
+  private resolvePursueDesignatedEnemy(
+    servant: Unit,
+    strategy: Extract<
+      ServantStrategy,
+      { type: ServantStrategyType.PursueDesignatedEnemy }
+    >,
+  ): TimelineAction {
+    const target = this.unitsById.get(strategy.targetEnemyId);
+    if (!target
+      || !target.isAlive
+      || target.faction !== Faction.Enemy
+      || getFactionDisposition(servant.faction, target.faction)
+        !== FactionDisposition.Enemy) {
+      this.servantStrategiesByUnitId.delete(servant.id);
+      return TimelineAction.Wait;
     }
 
-    return TimelineAction.Wait;
+    if (this.gameMap.getHexDistance(servant.position, target.position)
+      === adjacentHexDistance) {
+      this.applyMeleeDamage(servant, target, true);
+      return TimelineAction.Attack;
+    }
+
+    const path = this.findShortestPursuitPath(servant, target);
+    if (!path || path.steps.length === 0) {
+      return TimelineAction.Wait;
+    }
+
+    this.moveAutonomousUnit(servant, path.steps[0]);
+    return TimelineAction.Move;
   }
 
   /** Resolves exactly one non-omniscient Enemy action for its timeline event. */
@@ -811,9 +1018,32 @@ export class GameSession {
       return false;
     }
 
-    this.moveLivingUnit(enemy, candidate);
-    this.autonomousUnitUpdates.add(enemy.id);
+    this.moveAutonomousUnit(enemy, candidate);
     return true;
+  }
+
+  /** Finds a tactical shortest path to any empty, passable hex beside a target. */
+  private findShortestPursuitPath(
+    servant: Unit,
+    target: Unit,
+  ): MovementPath | undefined {
+    const approachHexKeys = new Set<string>();
+    for (const coord of this.gameMap.getNeighbours(target.position)) {
+      if (this.canUnitEnter(servant, coord)) {
+        approachHexKeys.add(getCoordKey(coord));
+      }
+    }
+
+    if (approachHexKeys.size === 0) {
+      return undefined;
+    }
+
+    return this.gameMap.findShortestPathToAny(
+      servant.position,
+      servant.movementType,
+      (coord) => approachHexKeys.has(getCoordKey(coord)),
+      (coord) => this.getUnitAt(coord) !== undefined,
+    );
   }
 
   private canUnitEnter(unit: Unit, coord: HexCoord): boolean {
@@ -827,6 +1057,11 @@ export class GameSession {
     this.unregisterLivingUnit(unit);
     unit.moveTo(destination);
     this.registerLivingUnit(unit);
+  }
+
+  private moveAutonomousUnit(unit: Unit, destination: HexCoord): void {
+    this.moveLivingUnit(unit, destination);
+    this.autonomousUnitUpdates.add(unit.id);
   }
 
   private applyMeleeDamage(
@@ -844,10 +1079,20 @@ export class GameSession {
       this.unregisterLivingUnit(target);
       this.timeline.invalidateUnit(target.id);
       this.servantStrategiesByUnitId.delete(target.id);
+      this.clearStrategiesPursuingTarget(target.id);
       this.enemyTacticalMemory.clear(target.id);
       this.enemyTacticalMemory.forgetHostile(target.id);
       if (target.id === this.mageId) {
         this.recalculateMageVisibility();
+      }
+    }
+  }
+
+  private clearStrategiesPursuingTarget(targetId: string): void {
+    for (const [servantId, strategy] of this.servantStrategiesByUnitId) {
+      if (strategy.type === ServantStrategyType.PursueDesignatedEnemy
+        && strategy.targetEnemyId === targetId) {
+        this.servantStrategiesByUnitId.delete(servantId);
       }
     }
   }
@@ -858,6 +1103,7 @@ export class GameSession {
 
   private clearServantCommandTarget(): void {
     this._selectedServantCommandId = null;
+    this._isSelectingPursuitTarget = false;
   }
 
   private registerLivingUnit(unit: Unit): void {

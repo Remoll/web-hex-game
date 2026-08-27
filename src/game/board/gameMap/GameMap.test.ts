@@ -118,4 +118,51 @@ describe("GameMap", () => {
       ),
     ).toBeUndefined();
   });
+
+  it("finds a shortest path to any eligible destination without per-node paths", () => {
+    const pathMap = new GameMap([
+      {
+        q: 0,
+        r: 0,
+        fieldAttrs: mapData[0].fieldAttrs,
+      },
+      {
+        q: 1,
+        r: 0,
+        fieldAttrs: mapData[0].fieldAttrs,
+      },
+      {
+        q: 2,
+        r: 0,
+        fieldAttrs: mapData[0].fieldAttrs,
+      },
+      {
+        q: 0,
+        r: 1,
+        fieldAttrs: mapData[0].fieldAttrs,
+      },
+      {
+        q: 1,
+        r: 1,
+        fieldAttrs: mapData[0].fieldAttrs,
+      },
+    ]);
+
+    expect(pathMap.findShortestPathToAny(
+      { q: 0, r: 0 },
+      MovementType.Ground,
+      (coord) => (coord.q === 2 && coord.r === 0)
+        || (coord.q === 1 && coord.r === 1),
+    )).toEqual({
+      cost: 2,
+      steps: [{ q: 1, r: 0 }, { q: 2, r: 0 }],
+    });
+    expect(pathMap.findShortestPathToAny(
+      { q: 0, r: 0 },
+      MovementType.Ground,
+      (coord) => coord.q === 2 && coord.r === 0,
+      (coord) => (coord.q === 1 && coord.r === 0)
+        || (coord.q === 1 && coord.r === 1),
+    )).toBeUndefined();
+  });
 });

@@ -17,6 +17,8 @@ const axialNeighbourOffsets: readonly HexCoord[] = [
   { q: 0, r: 1 },
 ];
 
+const originMovementPathCost = 0;
+
 export interface MovementPath {
   /** Destination-only steps: the origin is intentionally excluded. */
   readonly steps: readonly HexCoord[];
@@ -24,6 +26,7 @@ export interface MovementPath {
 }
 
 export type IsHexBlocked = (coord: HexCoord) => boolean;
+export type IsDestinationHex = (coord: HexCoord) => boolean;
 
 export class GameMap {
   private readonly fieldsMap: FieldsMap = new Map();
@@ -136,6 +139,56 @@ export class GameMap {
     ).get(getCoordKey(destination));
   }
 
+  /**
+   * Finds one deterministic shortest path without allocating a path array for
+   * every visited field. Equal paths use the fixed axial neighbour order.
+   * Autonomous strategies use it only on an activation, never from the render
+   * loop.
+   */
+  findShortestPathToAny(
+    origin: HexCoord,
+    movementType: MovementType,
+    isDestination: IsDestinationHex,
+    isBlocked: IsHexBlocked = () => false,
+  ): MovementPath | undefined {
+    if (!this.hasField(origin)) {
+      return undefined;
+    }
+
+    if (isDestination(origin)) {
+      return { steps: [], cost: originMovementPathCost };
+    }
+
+    const originKey = getCoordKey(origin);
+    const parentByKey = new Map<string, HexCoord | undefined>([
+      [originKey, undefined],
+    ]);
+    const queue: HexCoord[] = [{ ...origin }];
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const current = queue[index];
+      for (const neighbour of this.getNeighbours(current)) {
+        const key = getCoordKey(neighbour);
+        const field = this.getField(neighbour.q, neighbour.r);
+        if (!field
+          || parentByKey.has(key)
+          || isBlocked(neighbour)
+          || !field.getAllowedMovements()[movementType]) {
+          continue;
+        }
+
+        parentByKey.set(key, current);
+        if (isDestination(neighbour)) {
+          return buildPathFromParents(neighbour, origin, parentByKey);
+        }
+
+        queue.push(neighbour);
+      }
+    }
+
+    return undefined;
+  }
+
   get radiusInHex(): number {
     return this._radiusInHex;
   }
@@ -157,4 +210,25 @@ export class GameMap {
 
 function getCoordKey(coord: HexCoord): string {
   return `${coord.q},${coord.r}`;
+}
+
+function buildPathFromParents(
+  destination: HexCoord,
+  origin: HexCoord,
+  parentByKey: ReadonlyMap<string, HexCoord | undefined>,
+): MovementPath {
+  const reversedSteps: HexCoord[] = [];
+  let current = destination;
+
+  while (getCoordKey(current) !== getCoordKey(origin)) {
+    reversedSteps.push({ ...current });
+    const parent = parentByKey.get(getCoordKey(current));
+    if (!parent) {
+      throw new Error("Path destination is missing a parent coordinate");
+    }
+    current = parent;
+  }
+
+  const steps = reversedSteps.reverse();
+  return { steps, cost: steps.length };
 }

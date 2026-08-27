@@ -1,19 +1,36 @@
 /**
- * A Mage-owned standing instruction. Concrete target-bearing strategies are
- * deliberately added by later Stories; this union keeps their dispatch point
- * explicit without granting a servant manual player control.
+ * A Mage-owned standing instruction. The servant resolves it only during its
+ * own timeline activation; it never grants direct player control.
  */
 export enum ServantStrategyType {
   Hold = "hold",
+  PursueDesignatedEnemy = "pursue-designated-enemy",
 }
 
 export interface HoldServantStrategy {
   readonly type: ServantStrategyType.Hold;
 }
 
-export type ServantStrategy = HoldServantStrategy;
+export interface PursueDesignatedEnemyServantStrategy {
+  readonly type: ServantStrategyType.PursueDesignatedEnemy;
+  readonly targetEnemyId: string;
+}
+
+export type ServantStrategy =
+  | HoldServantStrategy
+  | PursueDesignatedEnemyServantStrategy;
 
 /** The default safe instruction: consume the servant activation without moving. */
 export const holdServantStrategy: HoldServantStrategy = {
   type: ServantStrategyType.Hold,
 };
+
+/** Stores identity only; current target position remains domain-private. */
+export function pursueDesignatedEnemyStrategy(
+  targetEnemyId: string,
+): PursueDesignatedEnemyServantStrategy {
+  return {
+    type: ServantStrategyType.PursueDesignatedEnemy,
+    targetEnemyId,
+  };
+}

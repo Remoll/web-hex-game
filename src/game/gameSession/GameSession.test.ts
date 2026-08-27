@@ -125,8 +125,11 @@ describe("GameSession", () => {
     expect(session.servantCommandPresentation).toEqual({
       targetServantId: playerAlly.id,
       targetStrategyType: undefined,
+      visiblePursuitTargetId: undefined,
       canAssignHold: true,
+      canAssignPursue: true,
       canClearStrategy: false,
+      isSelectingPursuitTarget: false,
     });
     expect(session.clickHex({ q: 0, r: 0 })).toEqual({
       type: GameActionType.Deselected,
@@ -217,6 +220,284 @@ describe("GameSession", () => {
     });
     expect(session.selectedUnitId).toBe(player.id);
     expect(session.eventTimeline.getNextReadyAt(playerAlly.id)).toBe(100);
+  });
+
+  it("assigns an explicit visible Enemy pursuit without charging an unchanged order", () => {
+    const { session, player, playerAlly, enemy } = createSession();
+    session.clickHex(player.position);
+    session.clickHex(playerAlly.position);
+    const initialMageReadyAt = session.eventTimeline.getNextReadyAt(player.id);
+
+    expect(session.beginPursueDesignatedEnemySelection()).toEqual({
+      type: GameActionType.PursuitTargetSelectionStarted,
+      servantId: playerAlly.id,
+    });
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(initialMageReadyAt);
+    expect(session.previewHex(enemy.position)).toEqual({
+      type: GameActionPreviewType.PursuitTargetSelection,
+      servantId: playerAlly.id,
+      targetId: enemy.id,
+    });
+    expect(session.clickHex(enemy.position)).toEqual({
+      type: GameActionType.StrategyAssigned,
+      servantId: playerAlly.id,
+      strategyType: ServantStrategyType.PursueDesignatedEnemy,
+      targetId: enemy.id,
+    });
+    expect(session.selectedUnitId).toBe(player.id);
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(
+      timelineActionCosts[TimelineAction.Command],
+    );
+
+    session.resolveAutonomousActivations();
+    const readyAtAfterAssignment = session.eventTimeline.getNextReadyAt(player.id);
+    expect(session.assignPursueDesignatedEnemyStrategyToServant(
+      playerAlly.id,
+      enemy.id,
+    )).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.StrategyUnchanged,
+    });
+    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(
+      readyAtAfterAssignment,
+    );
+  });
+
+  it("rejects a hidden or non-Enemy pursuit target without spending Mage Tempo", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+      viewRange: 1,
+    });
+    const servant = new Unit(
+      "servant",
+      { q: -1, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const neutral = new Unit(
+      "neutral",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Neutral },
+    );
+    const hiddenEnemy = new Unit(
+      "hidden-enemy",
+      { q: 2, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: -1, r: 0 },
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 2, r: 0 },
+      ])),
+      [mage, servant, neutral, hiddenEnemy],
+    );
+    session.clickHex(mage.position);
+    session.clickHex(servant.position);
+    session.beginPursueDesignatedEnemySelection();
+    const mageReadyAt = session.eventTimeline.getNextReadyAt(mage.id);
+
+    expect(session.previewHex(neutral.position)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.InvalidEnemyTarget,
+    });
+    expect(session.clickHex(neutral.position)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.InvalidEnemyTarget,
+    });
+    expect(session.previewHex(hiddenEnemy.position)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.NotVisible,
+    });
+    expect(session.clickHex(hiddenEnemy.position)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotVisible,
+    });
+    expect(session.clearServantStrategy()).toEqual({
+      type: GameActionType.PursuitTargetSelectionCancelled,
+      servantId: servant.id,
+    });
+    expect(session.eventTimeline.getNextReadyAt(mage.id)).toBe(mageReadyAt);
+  });
+
+  it("replaces a pursuit strategy only when a different valid Enemy is designated", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: -1, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const firstEnemy = new Unit(
+      "enemy-a",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const replacementEnemy = new Unit(
+      "enemy-b",
+      { q: 0, r: 1 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: -1, r: 0 },
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 0, r: 1 },
+      ])),
+      [mage, servant, firstEnemy, replacementEnemy],
+    );
+
+    expect(session.assignPursueDesignatedEnemyStrategyToServant(
+      servant.id,
+      firstEnemy.id,
+    )).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      targetId: firstEnemy.id,
+    });
+    session.resolveAutonomousActivations();
+    expect(session.assignPursueDesignatedEnemyStrategyToServant(
+      servant.id,
+      replacementEnemy.id,
+    )).toEqual({
+      type: GameActionType.StrategyAssigned,
+      servantId: servant.id,
+      strategyType: ServantStrategyType.PursueDesignatedEnemy,
+      targetId: replacementEnemy.id,
+    });
+  });
+
+  it("moves a pursuing servant once and attacks the designated Enemy on a later activation", () => {
+    const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const enemy = new Unit(
+      "enemy",
+      { q: 3, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: 0, r: -1 },
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 2, r: 0 },
+        { q: 3, r: 0 },
+      ])),
+      [mage, servant, enemy],
+    );
+
+    session.clickHex(mage.position);
+    session.clickHex(servant.position);
+    session.assignPursueDesignatedEnemyStrategyToServant(servant.id, enemy.id);
+    session.resolveAutonomousActivations();
+
+    expect(servant.position).toEqual({ q: 1, r: 0 });
+    expect(session.eventTimeline.getNextReadyAt(servant.id)).toBe(
+      timelineActionCosts[TimelineAction.Move],
+    );
+
+    session.waitForMage();
+
+    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
+    expect(session.eventTimeline.getNextReadyAt(servant.id)).toBe(
+      timelineActionCosts[TimelineAction.Move]
+        + timelineActionCosts[TimelineAction.Attack],
+    );
+  });
+
+  it("keeps pursuing a designated Enemy after the Enemy leaves Mage sight", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+      viewRange: 1,
+    });
+    const servant = new Unit(
+      "servant",
+      { q: -1, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const enemy = new Unit(
+      "enemy",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy, viewRange: 1 },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: -1, r: 0 },
+        { q: 0, r: -2 },
+        { q: 0, r: -1 },
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+      ])),
+      [mage, servant, enemy],
+    );
+    session.clickHex(mage.position);
+    session.clickHex(servant.position);
+    session.assignPursueDesignatedEnemyStrategyToServant(servant.id, enemy.id);
+    session.resolveAutonomousActivations();
+
+    session.clickHex({ q: 0, r: -2 });
+    expect(session.isUnitVisible(enemy)).toBe(false);
+    expect(session.servantCommandPresentation.visiblePursuitTargetId).toBeUndefined();
+
+    session.waitForMage();
+
+    expect(servant.position).toEqual({ q: 0, r: 0 });
+    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
+  });
+
+  it("clears every pursuit order when its designated Enemy dies", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: -1, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const enemy = new Unit(
+      "enemy",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy, currentHp: 20 },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: -1, r: 0 },
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+      ])),
+      [mage, servant, enemy],
+    );
+    session.clickHex(mage.position);
+    session.clickHex(servant.position);
+    session.assignPursueDesignatedEnemyStrategyToServant(servant.id, enemy.id);
+    session.resolveAutonomousActivations();
+
+    expect(session.clickHex(enemy.position)).toMatchObject({
+      type: GameActionType.Attacked,
+      targetId: enemy.id,
+      targetDefeated: true,
+    });
+    expect(enemy.isAlive).toBe(false);
+
+    expect(session.clickHex(servant.position)).toEqual({
+      type: GameActionType.ServantCommandTargetSelected,
+      servantId: servant.id,
+    });
+    expect(session.servantCommandPresentation).toMatchObject({
+      targetStrategyType: undefined,
+      visiblePursuitTargetId: undefined,
+    });
   });
 
   it("resolves an unordered servant as a single autonomous Hold activation", () => {

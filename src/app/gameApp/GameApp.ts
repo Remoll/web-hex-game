@@ -80,6 +80,7 @@ export class GameApp {
     this.servantCommandHud = new ServantCommandHud({
       container,
       onAssignHold: () => gameController?.assignHoldStrategy(),
+      onBeginPursue: () => gameController?.beginPursueDesignatedEnemySelection(),
       onClearStrategy: () => gameController?.clearServantStrategy(),
     });
     this.syncTacticalPresentation();

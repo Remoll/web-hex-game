@@ -15,6 +15,7 @@ import {
 import { Faction } from "@/game/faction/Faction";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
+import { ServantStrategyType } from "@/game/unit/servantStrategy/ServantStrategy";
 import { TacticalHighlightKind } from "@/rendering/mapHighlightView/MapHighlightRenderModel";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 
@@ -31,6 +32,20 @@ const mapData: MapArray = [
   },
   {
     q: 1,
+    r: 0,
+    fieldAttrs: {
+      terrainType: TerrainType.Grass,
+      allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
+      groundLevel: 0,
+      leavingCostMultiplier: 1,
+    },
+  },
+];
+
+const pursuitMapData: MapArray = [
+  ...mapData,
+  {
+    q: 2,
     r: 0,
     fieldAttrs: {
       terrainType: TerrainType.Grass,
@@ -133,8 +148,11 @@ describe("GameController", () => {
     expect(commandPresenter.sync).toHaveBeenLastCalledWith({
       targetServantId: servant.id,
       targetStrategyType: undefined,
+      visiblePursuitTargetId: undefined,
       canAssignHold: true,
+      canAssignPursue: true,
       canClearStrategy: false,
+      isSelectingPursuitTarget: false,
     });
     controller.previewHex(servant.position);
     expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
@@ -157,8 +175,81 @@ describe("GameController", () => {
     expect(commandPresenter.sync).toHaveBeenLastCalledWith({
       targetServantId: undefined,
       targetStrategyType: undefined,
+      visiblePursuitTargetId: undefined,
       canAssignHold: false,
+      canAssignPursue: false,
       canClearStrategy: false,
+      isSelectingPursuitTarget: false,
     });
+  });
+
+  it("guides an explicit Pursue target selection without revealing an unselected target", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit("servant", { q: 1, r: 0 }, UnitTexture.PlayerIdle, {
+      faction: Faction.Player,
+    });
+    const enemy = new Unit("enemy", { q: 2, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(
+      new GameMap(pursuitMapData),
+      [mage, servant, enemy],
+    );
+    const commandPresenter: ServantCommandPresenter = { sync: vi.fn() };
+    const feedbackPresenter: TacticalFeedbackPresenter = { sync: vi.fn() };
+    const controller = new GameController(
+      session,
+      { sync: vi.fn() },
+      feedbackPresenter,
+      undefined,
+      commandPresenter,
+    );
+
+    controller.clickHex(mage.position);
+    controller.clickHex(servant.position);
+    expect(controller.beginPursueDesignatedEnemySelection()).toEqual({
+      type: GameActionType.PursuitTargetSelectionStarted,
+      servantId: servant.id,
+    });
+    expect(commandPresenter.sync).toHaveBeenLastCalledWith({
+      targetServantId: servant.id,
+      targetStrategyType: undefined,
+      visiblePursuitTargetId: undefined,
+      canAssignHold: false,
+      canAssignPursue: false,
+      canClearStrategy: true,
+      isSelectingPursuitTarget: true,
+    });
+    expect(controller.previewHex(enemy.position)).toMatchObject({
+      targetId: enemy.id,
+    });
+
+    expect(controller.clickHex(enemy.position)).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      servantId: servant.id,
+      targetId: enemy.id,
+    });
+    controller.clickHex(servant.position);
+    expect(commandPresenter.sync).toHaveBeenLastCalledWith({
+      targetServantId: servant.id,
+      targetStrategyType: ServantStrategyType.PursueDesignatedEnemy,
+      visiblePursuitTargetId: enemy.id,
+      canAssignHold: true,
+      canAssignPursue: true,
+      canClearStrategy: true,
+      isSelectingPursuitTarget: false,
+    });
+    expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: TacticalHighlightKind.Command,
+          coord: servant.position,
+        }),
+        expect.objectContaining({
+          kind: TacticalHighlightKind.Command,
+          coord: enemy.position,
+        }),
+      ]),
+    );
   });
 });

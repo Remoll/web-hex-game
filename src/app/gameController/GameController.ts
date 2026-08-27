@@ -59,6 +59,11 @@ export class GameController {
   clickHex(coord: HexCoord): GameAction {
     const action = this.session.clickHex(coord);
 
+    if (action.type === GameActionType.StrategyAssigned
+      || action.type === GameActionType.StrategyCleared) {
+      this.session.resolveAutonomousActivations();
+    }
+
     if (action.type === GameActionType.Moved) {
       this.syncUnit(action.unitId);
     }
@@ -87,6 +92,12 @@ export class GameController {
 
   assignHoldStrategy(): GameAction {
     const action = this.session.assignHoldStrategy();
+    this.resolveAutonomousActivationsAfterCommand(action);
+    return action;
+  }
+
+  beginPursueDesignatedEnemySelection(): GameAction {
+    const action = this.session.beginPursueDesignatedEnemySelection();
     this.resolveAutonomousActivationsAfterCommand(action);
     return action;
   }
@@ -155,6 +166,18 @@ export class GameController {
       });
     }
 
+    const visiblePursuitTargetId = this.session.servantCommandPresentation
+      .visiblePursuitTargetId;
+    const visiblePursuitTarget = visiblePursuitTargetId
+      ? this.session.getUnit(visiblePursuitTargetId)
+      : undefined;
+    if (visiblePursuitTarget?.isAlive) {
+      highlights.push({
+        kind: TacticalHighlightKind.Command,
+        coord: visiblePursuitTarget.position,
+      });
+    }
+
     if (preview?.type === GameActionPreviewType.ValidAttack) {
       const target = this.session.getUnit(preview.targetId);
       if (target?.isAlive) {
@@ -167,6 +190,16 @@ export class GameController {
 
     if (preview?.type === GameActionPreviewType.ServantCommandSelection) {
       const target = this.session.getUnit(preview.servantId);
+      if (target?.isAlive) {
+        highlights.push({
+          kind: TacticalHighlightKind.Command,
+          coord: target.position,
+        });
+      }
+    }
+
+    if (preview?.type === GameActionPreviewType.PursuitTargetSelection) {
+      const target = this.session.getUnit(preview.targetId);
       if (target?.isAlive) {
         highlights.push({
           kind: TacticalHighlightKind.Command,

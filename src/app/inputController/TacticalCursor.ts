@@ -43,6 +43,7 @@ export function getTacticalCursor(
   switch (preview.type) {
     case GameActionPreviewType.Selection:
     case GameActionPreviewType.ServantCommandSelection:
+    case GameActionPreviewType.PursuitTargetSelection:
       return TacticalCursor.Select;
     case GameActionPreviewType.ValidMove:
       return TacticalCursor.Move;

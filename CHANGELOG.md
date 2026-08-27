@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added Mage-issued Pursue Designated Enemy orders, with delayed autonomous
+  servant pursuit, safe hidden-target handling, and target-death cleanup.
 - Added sight-limited Enemy pursuit with deterministic local movement,
   last-known-hostile memory, and autonomous melee attacks.
 - Added Mage-issued, visibility-gated autonomous servant strategies with the
