@@ -1,10 +1,14 @@
-import type { ServantCommandPresentation } from "@/game/gameSession/GameSession";
+import {
+  ServantStrategyTargetSelection,
+  type ServantCommandPresentation,
+} from "@/game/gameSession/GameSession";
 import { ServantStrategyType } from "@/game/unit/servantStrategy/ServantStrategy";
 
 export interface ServantCommandHudOptions {
   readonly container: HTMLElement;
   readonly onAssignHold: () => void;
   readonly onBeginPursue: () => void;
+  readonly onBeginSecure: () => void;
   readonly onClearStrategy: () => void;
 }
 
@@ -17,6 +21,7 @@ export class ServantCommandHud {
   private readonly status = document.createElement("span");
   private readonly assignHoldButton = document.createElement("button");
   private readonly assignPursueButton = document.createElement("button");
+  private readonly assignSecureButton = document.createElement("button");
   private readonly clearStrategyButton = document.createElement("button");
 
   constructor(private readonly options: ServantCommandHudOptions) {
@@ -35,6 +40,11 @@ export class ServantCommandHud {
     this.assignPursueButton.textContent = "Assign Pursue";
     this.assignPursueButton.addEventListener("click", this.handleBeginPursue);
 
+    this.assignSecureButton.type = "button";
+    this.assignSecureButton.className = "servant-command-hud__button";
+    this.assignSecureButton.textContent = "Assign Secure";
+    this.assignSecureButton.addEventListener("click", this.handleBeginSecure);
+
     this.clearStrategyButton.type = "button";
     this.clearStrategyButton.className = "servant-command-hud__button";
     this.clearStrategyButton.textContent = "Clear strategy";
@@ -44,6 +54,7 @@ export class ServantCommandHud {
       this.status,
       this.assignHoldButton,
       this.assignPursueButton,
+      this.assignSecureButton,
       this.clearStrategyButton,
     );
     options.container.appendChild(this.root);
@@ -53,8 +64,9 @@ export class ServantCommandHud {
     this.status.textContent = getCommandStatus(presentation);
     this.assignHoldButton.disabled = !presentation.canAssignHold;
     this.assignPursueButton.disabled = !presentation.canAssignPursue;
+    this.assignSecureButton.disabled = !presentation.canAssignSecure;
     this.clearStrategyButton.disabled = !presentation.canClearStrategy;
-    this.clearStrategyButton.textContent = presentation.isSelectingPursuitTarget
+    this.clearStrategyButton.textContent = presentation.targetSelection
       ? "Cancel target selection"
       : "Clear strategy";
   }
@@ -62,6 +74,7 @@ export class ServantCommandHud {
   dispose(): void {
     this.assignHoldButton.removeEventListener("click", this.handleAssignHold);
     this.assignPursueButton.removeEventListener("click", this.handleBeginPursue);
+    this.assignSecureButton.removeEventListener("click", this.handleBeginSecure);
     this.clearStrategyButton.removeEventListener("click", this.handleClearStrategy);
     this.root.remove();
   }
@@ -74,6 +87,10 @@ export class ServantCommandHud {
     this.options.onBeginPursue();
   };
 
+  private readonly handleBeginSecure = (): void => {
+    this.options.onBeginSecure();
+  };
+
   private readonly handleClearStrategy = (): void => {
     this.options.onClearStrategy();
   };
@@ -84,16 +101,24 @@ function getCommandStatus(presentation: ServantCommandPresentation): string {
     return "Command: select a visible servant";
   }
 
-  if (presentation.isSelectingPursuitTarget) {
-    return `Servant: ${presentation.targetServantId} · Select a visible Enemy`;
+  switch (presentation.targetSelection) {
+    case ServantStrategyTargetSelection.PursueEnemy:
+      return `Servant: ${presentation.targetServantId} · Select a visible Enemy`;
+    case ServantStrategyTargetSelection.SecureHex:
+      return `Servant: ${presentation.targetServantId} · Select a visible hex`;
+    case undefined:
+      break;
   }
 
-  const visibleTarget = presentation.visiblePursuitTargetId
+  const visiblePursuitTarget = presentation.visiblePursuitTargetId
     ? ` · Target: ${presentation.visiblePursuitTargetId}`
+    : "";
+  const visibleSecureTarget = presentation.visibleSecureTargetHex
+    ? ` · Target: ${presentation.visibleSecureTargetHex.q},${presentation.visibleSecureTargetHex.r}`
     : "";
   return `Servant: ${presentation.targetServantId} · ${getStrategyLabel(
     presentation.targetStrategyType,
-  )}${visibleTarget}`;
+  )}${visiblePursuitTarget}${visibleSecureTarget}`;
 }
 
 function getStrategyLabel(strategyType: ServantStrategyType | undefined): string {
@@ -102,6 +127,8 @@ function getStrategyLabel(strategyType: ServantStrategyType | undefined): string
       return "Strategy: Hold";
     case ServantStrategyType.PursueDesignatedEnemy:
       return "Strategy: Pursue designated Enemy";
+    case ServantStrategyType.SecureDesignatedHex:
+      return "Strategy: Secure designated hex";
     default:
       return "Strategy: None";
   }

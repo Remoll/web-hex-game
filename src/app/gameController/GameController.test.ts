@@ -7,7 +7,11 @@ import {
   type UnitPresenter,
 } from "@/app/gameController/GameController";
 import { GameMap } from "@/game/board/gameMap/GameMap";
-import { GameActionType, GameSession } from "@/game/gameSession/GameSession";
+import {
+  GameActionType,
+  GameSession,
+  ServantStrategyTargetSelection,
+} from "@/game/gameSession/GameSession";
 import {
   TimelineAction,
   timelineActionCosts,
@@ -149,10 +153,12 @@ describe("GameController", () => {
       targetServantId: servant.id,
       targetStrategyType: undefined,
       visiblePursuitTargetId: undefined,
+      visibleSecureTargetHex: undefined,
       canAssignHold: true,
       canAssignPursue: true,
+      canAssignSecure: true,
       canClearStrategy: false,
-      isSelectingPursuitTarget: false,
+      targetSelection: undefined,
     });
     controller.previewHex(servant.position);
     expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
@@ -176,10 +182,12 @@ describe("GameController", () => {
       targetServantId: undefined,
       targetStrategyType: undefined,
       visiblePursuitTargetId: undefined,
+      visibleSecureTargetHex: undefined,
       canAssignHold: false,
       canAssignPursue: false,
+      canAssignSecure: false,
       canClearStrategy: false,
-      isSelectingPursuitTarget: false,
+      targetSelection: undefined,
     });
   });
 
@@ -215,10 +223,12 @@ describe("GameController", () => {
       targetServantId: servant.id,
       targetStrategyType: undefined,
       visiblePursuitTargetId: undefined,
+      visibleSecureTargetHex: undefined,
       canAssignHold: false,
       canAssignPursue: false,
+      canAssignSecure: false,
       canClearStrategy: true,
-      isSelectingPursuitTarget: true,
+      targetSelection: ServantStrategyTargetSelection.PursueEnemy,
     });
     expect(controller.previewHex(enemy.position)).toMatchObject({
       targetId: enemy.id,
@@ -234,10 +244,12 @@ describe("GameController", () => {
       targetServantId: servant.id,
       targetStrategyType: ServantStrategyType.PursueDesignatedEnemy,
       visiblePursuitTargetId: enemy.id,
+      visibleSecureTargetHex: undefined,
       canAssignHold: true,
       canAssignPursue: true,
+      canAssignSecure: true,
       canClearStrategy: true,
-      isSelectingPursuitTarget: false,
+      targetSelection: undefined,
     });
     expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
       expect.arrayContaining([
@@ -251,5 +263,76 @@ describe("GameController", () => {
         }),
       ]),
     );
+  });
+
+  it("guides a visible Secure-hex selection and presents its safe marker", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit("servant", { q: 1, r: 0 }, UnitTexture.PlayerIdle, {
+      faction: Faction.Player,
+    });
+    const neutral = new Unit("neutral", { q: 2, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Neutral,
+    });
+    const session = new GameSession(
+      new GameMap(pursuitMapData),
+      [mage, servant, neutral],
+    );
+    const commandPresenter: ServantCommandPresenter = { sync: vi.fn() };
+    const feedbackPresenter: TacticalFeedbackPresenter = { sync: vi.fn() };
+    const controller = new GameController(
+      session,
+      { sync: vi.fn() },
+      feedbackPresenter,
+      undefined,
+      commandPresenter,
+    );
+
+    controller.clickHex(mage.position);
+    controller.clickHex(servant.position);
+    expect(controller.beginSecureDesignatedHexSelection()).toEqual({
+      type: GameActionType.SecureTargetSelectionStarted,
+      servantId: servant.id,
+    });
+    expect(commandPresenter.sync).toHaveBeenLastCalledWith({
+      targetServantId: servant.id,
+      targetStrategyType: undefined,
+      visiblePursuitTargetId: undefined,
+      visibleSecureTargetHex: undefined,
+      canAssignHold: false,
+      canAssignPursue: false,
+      canAssignSecure: false,
+      canClearStrategy: true,
+      targetSelection: ServantStrategyTargetSelection.SecureHex,
+    });
+    expect(controller.previewHex(neutral.position)).toMatchObject({
+      targetHex: neutral.position,
+    });
+    expect(feedbackPresenter.sync).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: TacticalHighlightKind.Command,
+          coord: neutral.position,
+        }),
+      ]),
+    );
+
+    expect(controller.clickHex(neutral.position)).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      servantId: servant.id,
+      strategyType: ServantStrategyType.SecureDesignatedHex,
+      targetHex: neutral.position,
+    });
+    controller.clickHex(servant.position);
+    expect(commandPresenter.sync).toHaveBeenLastCalledWith({
+      targetServantId: servant.id,
+      targetStrategyType: ServantStrategyType.SecureDesignatedHex,
+      visiblePursuitTargetId: undefined,
+      visibleSecureTargetHex: neutral.position,
+      canAssignHold: true,
+      canAssignPursue: true,
+      canAssignSecure: true,
+      canClearStrategy: true,
+      targetSelection: undefined,
+    });
   });
 });

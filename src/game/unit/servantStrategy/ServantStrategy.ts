@@ -1,3 +1,5 @@
+import type { HexCoord } from "@/game/types";
+
 /**
  * A Mage-owned standing instruction. The servant resolves it only during its
  * own timeline activation; it never grants direct player control.
@@ -5,6 +7,7 @@
 export enum ServantStrategyType {
   Hold = "hold",
   PursueDesignatedEnemy = "pursue-designated-enemy",
+  SecureDesignatedHex = "secure-designated-hex",
 }
 
 export interface HoldServantStrategy {
@@ -16,9 +19,16 @@ export interface PursueDesignatedEnemyServantStrategy {
   readonly targetEnemyId: string;
 }
 
+export interface SecureDesignatedHexServantStrategy {
+  readonly type: ServantStrategyType.SecureDesignatedHex;
+  /** A value copy prevents callers from mutating the standing order in-place. */
+  readonly targetHex: HexCoord;
+}
+
 export type ServantStrategy =
   | HoldServantStrategy
-  | PursueDesignatedEnemyServantStrategy;
+  | PursueDesignatedEnemyServantStrategy
+  | SecureDesignatedHexServantStrategy;
 
 /** The default safe instruction: consume the servant activation without moving. */
 export const holdServantStrategy: HoldServantStrategy = {
@@ -32,5 +42,15 @@ export function pursueDesignatedEnemyStrategy(
   return {
     type: ServantStrategyType.PursueDesignatedEnemy,
     targetEnemyId,
+  };
+}
+
+/** Stores one tactical hex objective without introducing area ownership. */
+export function secureDesignatedHexStrategy(
+  targetHex: HexCoord,
+): SecureDesignatedHexServantStrategy {
+  return {
+    type: ServantStrategyType.SecureDesignatedHex,
+    targetHex: { ...targetHex },
   };
 }

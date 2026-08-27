@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-27
 
+- Added Mage-issued Secure Designated Hex orders, with autonomous legal-path
+  approach, hostile-only assault, and completion on reaching an empty target.
 - Added Mage-issued Pursue Designated Enemy orders, with delayed autonomous
   servant pursuit, safe hidden-target handling, and target-death cleanup.
 - Added sight-limited Enemy pursuit with deterministic local movement,

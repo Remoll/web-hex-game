@@ -126,10 +126,12 @@ describe("GameSession", () => {
       targetServantId: playerAlly.id,
       targetStrategyType: undefined,
       visiblePursuitTargetId: undefined,
+      visibleSecureTargetHex: undefined,
       canAssignHold: true,
       canAssignPursue: true,
+      canAssignSecure: true,
       canClearStrategy: false,
-      isSelectingPursuitTarget: false,
+      targetSelection: undefined,
     });
     expect(session.clickHex({ q: 0, r: 0 })).toEqual({
       type: GameActionType.Deselected,
@@ -320,6 +322,247 @@ describe("GameSession", () => {
       servantId: servant.id,
     });
     expect(session.eventTimeline.getNextReadyAt(mage.id)).toBe(mageReadyAt);
+  });
+
+  it("assigns a visible Secure hex without charging an unchanged order", () => {
+    const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle, {
+      viewRange: 3,
+    });
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const targetHex = { q: 2, r: 0 };
+    const hiddenHex = { q: 3, r: 0 };
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        mage.position,
+        servant.position,
+        { q: 1, r: 0 },
+        targetHex,
+        hiddenHex,
+      ])),
+      [mage, servant],
+    );
+    session.clickHex(mage.position);
+    session.clickHex(servant.position);
+    const mageReadyAt = session.eventTimeline.getNextReadyAt(mage.id);
+    if (mageReadyAt === undefined) {
+      throw new Error("Mage must have a scheduled timeline activation");
+    }
+
+    expect(session.beginSecureDesignatedHexSelection()).toEqual({
+      type: GameActionType.SecureTargetSelectionStarted,
+      servantId: servant.id,
+    });
+    expect(session.previewHex(targetHex)).toEqual({
+      type: GameActionPreviewType.SecureTargetSelection,
+      servantId: servant.id,
+      targetHex,
+    });
+    expect(session.previewHex(hiddenHex)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.NotVisible,
+    });
+    expect(session.clickHex(hiddenHex)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotVisible,
+    });
+    expect(session.eventTimeline.getNextReadyAt(mage.id)).toBe(mageReadyAt);
+    expect(session.previewHex({ q: 9, r: 9 })).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.MissingField,
+    });
+    expect(session.clickHex(targetHex)).toEqual({
+      type: GameActionType.StrategyAssigned,
+      servantId: servant.id,
+      strategyType: ServantStrategyType.SecureDesignatedHex,
+      targetHex,
+    });
+    expect(session.eventTimeline.getNextReadyAt(mage.id)).toBe(
+      mageReadyAt + timelineActionCosts[TimelineAction.Command],
+    );
+
+    session.resolveAutonomousActivations();
+    const readyAtAfterAssignment = session.eventTimeline.getNextReadyAt(mage.id);
+    expect(session.assignSecureDesignatedHexStrategyToServant(
+      servant.id,
+      targetHex,
+    )).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.StrategyUnchanged,
+    });
+    expect(session.eventTimeline.getNextReadyAt(mage.id)).toBe(
+      readyAtAfterAssignment,
+    );
+  });
+
+  it("moves toward an empty Secure hex and clears the order on arrival", () => {
+    const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const targetHex = { q: 2, r: 0 };
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        mage.position,
+        servant.position,
+        { q: 1, r: 0 },
+        targetHex,
+      ])),
+      [mage, servant],
+    );
+
+    expect(session.assignSecureDesignatedHexStrategyToServant(
+      servant.id,
+      targetHex,
+    )).toMatchObject({
+      type: GameActionType.StrategyAssigned,
+      strategyType: ServantStrategyType.SecureDesignatedHex,
+    });
+    session.resolveAutonomousActivations();
+    expect(servant.position).toEqual({ q: 1, r: 0 });
+
+    session.waitForMage();
+    expect(servant.position).toEqual(targetHex);
+
+    expect(session.clickHex(mage.position)).toEqual({
+      type: GameActionType.Selected,
+      unitId: mage.id,
+    });
+    expect(session.clickHex(servant.position)).toEqual({
+      type: GameActionType.ServantCommandTargetSelected,
+      servantId: servant.id,
+    });
+    expect(session.servantCommandPresentation).toMatchObject({
+      targetStrategyType: undefined,
+      visibleSecureTargetHex: undefined,
+    });
+  });
+
+  it("attacks only a hostile occupant while approaching a Secure hex", () => {
+    const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const hostile = new Unit(
+      "hostile",
+      { q: 2, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy, viewRange: 1 },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        mage.position,
+        servant.position,
+        { q: 1, r: 0 },
+        hostile.position,
+      ])),
+      [mage, servant, hostile],
+    );
+
+    session.assignSecureDesignatedHexStrategyToServant(
+      servant.id,
+      hostile.position,
+    );
+    session.resolveAutonomousActivations();
+    expect(servant.position).toEqual({ q: 1, r: 0 });
+
+    session.waitForMage();
+    expect(hostile.currentHp).toBe(hostile.maxHp - servant.attackPower);
+    expect(servant.position).toEqual({ q: 1, r: 0 });
+  });
+
+  it("approaches but does not attack a non-hostile Secure-hex occupant", () => {
+    const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const neutral = new Unit(
+      "neutral",
+      { q: 2, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Neutral },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        mage.position,
+        servant.position,
+        { q: 1, r: 0 },
+        neutral.position,
+      ])),
+      [mage, servant, neutral],
+    );
+
+    session.assignSecureDesignatedHexStrategyToServant(
+      servant.id,
+      neutral.position,
+    );
+    session.resolveAutonomousActivations();
+    expect(servant.position).toEqual({ q: 1, r: 0 });
+
+    session.waitForMage();
+    expect(neutral.currentHp).toBe(neutral.maxHp);
+    expect(servant.position).toEqual({ q: 1, r: 0 });
+  });
+
+  it("keeps a Secure order private when its target leaves Mage sight", () => {
+    const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle, {
+      viewRange: 3,
+    });
+    const servant = new Unit(
+      "servant",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const neutral = new Unit(
+      "neutral",
+      { q: 2, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Neutral },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: 0, r: -2 },
+        mage.position,
+        servant.position,
+        { q: 1, r: 0 },
+        neutral.position,
+      ])),
+      [mage, servant, neutral],
+    );
+
+    session.assignSecureDesignatedHexStrategyToServant(
+      servant.id,
+      neutral.position,
+    );
+    session.resolveAutonomousActivations();
+
+    session.clickHex(mage.position);
+    session.clickHex({ q: 0, r: -2 });
+    expect(session.getFieldVisibility(neutral.position)).toBe(
+      FieldVisibility.Discovered,
+    );
+    expect(session.clickHex(servant.position)).toEqual({
+      type: GameActionType.ServantCommandTargetSelected,
+      servantId: servant.id,
+    });
+    expect(session.servantCommandPresentation).toMatchObject({
+      targetStrategyType: ServantStrategyType.SecureDesignatedHex,
+      visibleSecureTargetHex: undefined,
+    });
   });
 
   it("replaces a pursuit strategy only when a different valid Enemy is designated", () => {

@@ -54,12 +54,15 @@ action. The Mage starts ready at time `0`.
   the servant's scheduled activation or make the servant act immediately.
 - When a servant receives its own later activation, its autonomous resolver
   performs at most one legal strategy action. The only currently supported
-  strategies are **Hold**, which resolves as a no-op Wait, and **Pursue
-  Designated Enemy**. Pursuit stores one explicit Enemy identity and, on the
-  servant's later activation, attacks that Enemy if adjacent or takes one step
-  on a deterministic shortest legal Ground path to an empty hex beside it.
-  Equal shortest paths use the GameMap's fixed axial-neighbour order. A blocked
-  pursuit Holds without losing its order.
+  strategies are **Hold**, which resolves as a no-op Wait, **Pursue Designated
+  Enemy**, and **Secure Designated Hex**. Pursuit stores one explicit Enemy
+  identity and, on the servant's later activation, attacks that Enemy if
+  adjacent or takes one step on a deterministic shortest legal Ground path to
+  an empty hex beside it. Secure stores one tactical hex: the servant advances
+  to an empty target and completes the order on arrival; for an occupied target
+  it approaches the nearest legal adjacent hex and attacks only a hostile
+  occupant. Equal shortest paths use the GameMap's fixed axial-neighbour order.
+  A blocked strategy Holds without losing its order.
 - On its activation, an Enemy evaluates only hostiles within its own derived
   view range. It remembers the nearest visible hostile's position, attacks an
   adjacent target once, or otherwise takes one legal neighbouring step that
@@ -78,18 +81,21 @@ action. The Mage starts ready at time `0`.
 
 - Hover the Mage to see the selection cursor, then click it to select it.
 - With a ready Mage selected, click a currently Visible Player-faction servant
-  to select it as the command target (amber highlight). Use **Assign Hold** or
-  **Assign Pursue** in the command panel above the map. **Assign Pursue**
-  enters target-selection mode: click one currently Visible living Enemy to
-  spend the Mage's Command cost and store that specific Enemy as the servant's
-  target. The servant acts only during its own later activation. Its order
-  persists until the Mage replaces or clears it, or that Enemy dies.
+  to select it as the command target (amber highlight). Use **Assign Hold**,
+  **Assign Pursue**, or **Assign Secure** in the command panel above the map.
+  **Assign Pursue** enters target-selection mode: click one currently Visible
+  living Enemy to spend the Mage's Command cost and store that specific Enemy
+  as the servant's target. **Assign Secure** similarly requires one currently
+  Visible map hex. The servant acts only during its own later activation. Its
+  order persists until the Mage replaces or clears it; a pursuit also ends when
+  its Enemy dies, while a secure order ends after the servant reaches an empty
+  designated hex.
 - A pursuit remains valid after the servant or target leave Mage sight, but the
-  command panel and amber marker expose the target only while it is currently
-  Visible. A hidden Enemy's live position and actions are never revealed.
-  **Clear strategy** also cancels a pending target selection without spending
-  Mage Tempo. A hidden, defeated, Enemy, or Neutral unit cannot receive a
-  command and does not consume Mage Tempo.
+  command panel and amber marker expose their targets only while they are
+  currently Visible. A hidden Enemy's live position and actions are never
+  revealed. **Clear strategy** also cancels a pending target selection without
+  spending Mage Tempo. A hidden, defeated, Enemy, or Neutral unit cannot
+  receive a command and does not consume Mage Tempo.
 - After selection, reachable Ground hexes are highlighted in green. Click one
   to move there along a valid path of up to three hexes. Every entered hex has
   a cost of one for pathfinding; living units block paths and destinations.
@@ -147,11 +153,11 @@ exactly one category for each acting faction.
 
 ### Deferred systems
 
-Turns/rounds beyond the current event timeline, advanced Enemy AI, Secure
-Designated Hex servant strategy, counterattacks, player win/lose conditions,
-terrain cost multipliers, height-based line of sight, facing, stealth,
-animated movement/attacks, interactive remains, final cursor art, and final
-unit art are intentionally deferred.
+Turns/rounds beyond the current event timeline, advanced Enemy AI,
+counterattacks, player win/lose conditions, terrain cost multipliers,
+height-based line of sight, facing, stealth, animated movement/attacks,
+interactive remains, final cursor art, and final unit art are intentionally
+deferred.
 
 ## Commands
 

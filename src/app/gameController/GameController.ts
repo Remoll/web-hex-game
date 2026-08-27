@@ -102,6 +102,12 @@ export class GameController {
     return action;
   }
 
+  beginSecureDesignatedHexSelection(): GameAction {
+    const action = this.session.beginSecureDesignatedHexSelection();
+    this.resolveAutonomousActivationsAfterCommand(action);
+    return action;
+  }
+
   clearServantStrategy(): GameAction {
     const action = this.session.clearServantStrategy();
     this.resolveAutonomousActivationsAfterCommand(action);
@@ -178,6 +184,15 @@ export class GameController {
       });
     }
 
+    const visibleSecureTargetHex = this.session.servantCommandPresentation
+      .visibleSecureTargetHex;
+    if (visibleSecureTargetHex) {
+      highlights.push({
+        kind: TacticalHighlightKind.Command,
+        coord: visibleSecureTargetHex,
+      });
+    }
+
     if (preview?.type === GameActionPreviewType.ValidAttack) {
       const target = this.session.getUnit(preview.targetId);
       if (target?.isAlive) {
@@ -206,6 +221,13 @@ export class GameController {
           coord: target.position,
         });
       }
+    }
+
+    if (preview?.type === GameActionPreviewType.SecureTargetSelection) {
+      highlights.push({
+        kind: TacticalHighlightKind.Command,
+        coord: preview.targetHex,
+      });
     }
 
     this.tacticalFeedbackPresenter.sync(highlights);

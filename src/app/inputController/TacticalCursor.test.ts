@@ -26,6 +26,11 @@ describe("getTacticalCursor", () => {
       servantId: "servant",
       targetId: "enemy",
     })).toBe(TacticalCursor.Select);
+    expect(getTacticalCursor({
+      type: GameActionPreviewType.SecureTargetSelection,
+      servantId: "servant",
+      targetHex: { q: 1, r: 0 },
+    })).toBe(TacticalCursor.Select);
     expect(
       getTacticalCursor(
         {

@@ -81,6 +81,7 @@ export class GameApp {
       container,
       onAssignHold: () => gameController?.assignHoldStrategy(),
       onBeginPursue: () => gameController?.beginPursueDesignatedEnemySelection(),
+      onBeginSecure: () => gameController?.beginSecureDesignatedHexSelection(),
       onClearStrategy: () => gameController?.clearServantStrategy(),
     });
     this.syncTacticalPresentation();
