@@ -59,7 +59,7 @@ export class GameApp {
       30,
       this.renderer.domElement,
       CameraMode.FOLLOW,
-      gameMap.radiusInHex,
+      gameMap,
       renderConfig,
     );
     this.mapView = new MapView(scene, gameMap, renderConfig);

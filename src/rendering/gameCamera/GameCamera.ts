@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { MapControls } from "three/addons/controls/MapControls.js";
+import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { PlaneCoord } from "@/game/types";
+import { buildIsometricCameraBounds } from "@/rendering/gameCamera/IsometricCameraBounds";
 import { CameraMode } from "@/rendering/gameCamera/CameraMode";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 
@@ -9,23 +11,26 @@ export class GameCamera {
   public controls: MapControls;
   public mode: CameraMode;
 
-  private frustumSize: number;
-  private mapMaxRadius: number;
-
-  // Offsets for the isometric camera.
-  private offsetY = -300;
-  private offsetZ = 300;
+  private readonly frustumSize: number;
+  private readonly targetXLimit: number;
+  private readonly targetYLimit: number;
+  private readonly offsetY: number;
+  private readonly offsetZ: number;
 
   constructor(
     frustumSize: number,
     domElement: HTMLElement,
     initialMode: CameraMode,
-    mapRadiusInHex: number,
+    gameMap: GameMap,
     config: RenderConfig,
   ) {
     this.frustumSize = frustumSize;
-    this.mapMaxRadius = config.hexSize * (3 / 2) * mapRadiusInHex;
     this.mode = initialMode;
+    const bounds = buildIsometricCameraBounds(gameMap, config);
+    this.targetXLimit = bounds.targetXLimit;
+    this.targetYLimit = bounds.targetYLimit;
+    this.offsetY = bounds.offsetY;
+    this.offsetZ = bounds.offsetZ;
 
     const aspect = window.innerWidth / window.innerHeight;
 
@@ -34,8 +39,8 @@ export class GameCamera {
       (this.frustumSize * aspect) / 2,
       this.frustumSize / 2,
       -this.frustumSize / 2,
-      0.1,
-      2000, // The far plane accommodates the angled camera.
+      bounds.nearPlane,
+      bounds.farPlane,
     );
 
     // Position the camera at an isometric angle.
@@ -85,16 +90,23 @@ export class GameCamera {
   }
 
   private clampTarget(): void {
-    this.controls.target.x = THREE.MathUtils.clamp(
+    const clampedX = THREE.MathUtils.clamp(
       this.controls.target.x,
-      -this.mapMaxRadius,
-      this.mapMaxRadius,
+      -this.targetXLimit,
+      this.targetXLimit,
     );
-    this.controls.target.y = THREE.MathUtils.clamp(
+    const clampedY = THREE.MathUtils.clamp(
       this.controls.target.y,
-      -this.mapMaxRadius,
-      this.mapMaxRadius,
+      -this.targetYLimit,
+      this.targetYLimit,
     );
+    const deltaX = clampedX - this.controls.target.x;
+    const deltaY = clampedY - this.controls.target.y;
+
+    this.controls.target.x = clampedX;
+    this.controls.target.y = clampedY;
+    this.camera.position.x += deltaX;
+    this.camera.position.y += deltaY;
   }
 
   private readonly handleResize = (): void => {

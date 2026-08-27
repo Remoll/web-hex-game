@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file.
 
 - Added a radius-6 tactical encounter with Mage-centred three-state fog of war:
   undiscovered, discovered terrain, and current visibility.
+- Fixed isometric camera clipping that could expose white gaps along the lower
+  extent of larger tactical maps.
 
 ## 2026-08-26
 
