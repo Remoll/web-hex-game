@@ -623,6 +623,8 @@ export class GameSession {
   }
 
   clickHex(coord: HexCoord): GameAction {
+    this.reconcileTacticalSelection();
+
     if (!this.gameMap.getField(coord.q, coord.r)) {
       return {
         type: GameActionType.Ignored,
@@ -680,6 +682,7 @@ export class GameSession {
 
   /** Assigns the currently selected visible servant the safe default strategy. */
   assignHoldStrategy(): GameAction {
+    this.reconcileTacticalSelection();
     const servant = this.getSelectedCommandServant();
     return servant
       ? this.assignHoldStrategyToServant(servant.id)
@@ -691,6 +694,7 @@ export class GameSession {
 
   /** Assigns the selected servant to defend the session-owned Mage. */
   assignProtectMageStrategy(): GameAction {
+    this.reconcileTacticalSelection();
     const servant = this.getSelectedCommandServant();
     return servant
       ? this.assignProtectMageStrategyToServant(servant.id)
@@ -702,6 +706,7 @@ export class GameSession {
 
   /** Starts an explicit board-target selection without spending Mage Tempo. */
   beginPursueDesignatedEnemySelection(): GameAction {
+    this.reconcileTacticalSelection();
     const servant = this.getSelectedCommandServant();
     if (!servant) {
       return {
@@ -719,6 +724,7 @@ export class GameSession {
 
   /** Starts an explicit visible-hex selection without spending Mage Tempo. */
   beginSecureDesignatedHexSelection(): GameAction {
+    this.reconcileTacticalSelection();
     const servant = this.getSelectedCommandServant();
     if (!servant) {
       return {
@@ -736,6 +742,7 @@ export class GameSession {
 
   /** Clears the current strategy from the selected visible servant. */
   clearServantStrategy(): GameAction {
+    this.reconcileTacticalSelection();
     const servant = this.getSelectedCommandServant();
     if (!servant) {
       return {
@@ -964,6 +971,7 @@ export class GameSession {
    */
   resolveAutonomousActivations(): void {
     if (this.isMageReady()) {
+      this.reconcileTacticalSelection();
       return;
     }
 
@@ -974,11 +982,12 @@ export class GameSession {
         remainingActionPoints,
       ),
     );
-    this.clearStaleCommandTarget();
+    this.reconcileTacticalSelection();
   }
 
   /** Defers once, then ends the deferred Mage activation on the next request. */
   waitForMage(): GameAction {
+    this.reconcileTacticalSelection();
     const mage = this.unitsById.get(this.mageId);
     if (!mage || !mage.isAlive || !this.timeline.isReady(mage.id)) {
       return {
@@ -1080,21 +1089,24 @@ export class GameSession {
   }
 
   private getSelectedControllableUnit(): Unit | undefined {
+    const selectedUnit = this.getSelectedMage();
+
+    return this.isMageReady() ? selectedUnit : undefined;
+  }
+
+  /** Pure selection validation used by input previews and presentation reads. */
+  private getSelectedMage(): Unit | undefined {
     if (!this._selectedUnitId) {
       return undefined;
     }
 
     const selectedUnit = this.unitsById.get(this._selectedUnitId);
-    if (!selectedUnit
-      || !selectedUnit.isAlive
-      || !this.isMage(selectedUnit)
-      || !this.isUnitVisible(selectedUnit)) {
-      this._selectedUnitId = null;
-      this.clearServantCommandTarget();
-      return undefined;
-    }
-
-    return this.isMageReady() ? selectedUnit : undefined;
+    return selectedUnit
+      && selectedUnit.isAlive
+      && this.isMage(selectedUnit)
+      && this.isUnitVisible(selectedUnit)
+      ? selectedUnit
+      : undefined;
   }
 
   private getReachablePaths(unit: Unit): ReadonlyMap<string, MovementPath> {
@@ -1158,7 +1170,6 @@ export class GameSession {
 
   private getSelectedCommandServant(): Unit | undefined {
     if (!this._selectedServantCommandId || !this.getSelectedControllableUnit()) {
-      this.clearServantCommandTarget();
       return undefined;
     }
 
@@ -1167,7 +1178,6 @@ export class GameSession {
       ? this.getServantCommandRejectionReason(servant)
       : GameActionRejectionReason.NoCommandTarget;
     if (rejection) {
-      this.clearServantCommandTarget();
       return undefined;
     }
 
@@ -1942,8 +1952,18 @@ export class GameSession {
     }
   }
 
-  private clearStaleCommandTarget(): void {
-    this.getSelectedCommandServant();
+  /** Reconciles invalid stored selection only during explicit game transitions. */
+  private reconcileTacticalSelection(): void {
+    const selectedMage = this.getSelectedMage();
+    if (!selectedMage) {
+      this._selectedUnitId = null;
+      this.clearServantCommandTarget();
+      return;
+    }
+
+    if (!this.isMageReady() || !this.getSelectedCommandServant()) {
+      this.clearServantCommandTarget();
+    }
   }
 
   private clearServantCommandTarget(): void {

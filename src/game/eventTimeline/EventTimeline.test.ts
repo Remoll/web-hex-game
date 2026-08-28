@@ -22,6 +22,29 @@ class Participant implements TimelineParticipant {
 }
 
 describe("EventTimeline", () => {
+  it("keeps read projections side-effect free for externally defeated participants", () => {
+    const participant = new Participant("participant");
+    const timeline = new EventTimeline([participant]);
+
+    participant.isAlive = false;
+
+    expect(timeline.readyActor).toBeUndefined();
+    expect(timeline.getScheduledActors()).toEqual([]);
+    expect(timeline.getNextReadyAt(participant.id)).toBeUndefined();
+    expect(timeline.getRemainingActionPoints(participant.id)).toBeUndefined();
+
+    participant.isAlive = true;
+
+    expect(timeline.readyActor).toEqual({
+      unitId: participant.id,
+      nextReadyAt: 0,
+    });
+    expect(timeline.getScheduledActors()).toEqual([{
+      unitId: participant.id,
+      nextReadyAt: 0,
+    }]);
+  });
+
   it("keeps a ready actor active while it spends only part of its AP pool", () => {
     const beta = new Participant("beta");
     const alpha = new Participant("alpha");

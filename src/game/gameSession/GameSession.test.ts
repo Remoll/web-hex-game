@@ -314,6 +314,54 @@ describe("GameSession", () => {
     });
   });
 
+  it("keeps presentation reads idempotent without changing tactical selection", () => {
+    const { session, player, playerAlly, enemy } = createSession();
+    session.clickHex(player.position);
+    session.clickHex(playerAlly.position);
+
+    const firstCommandPresentation = session.servantCommandPresentation;
+    const firstQueuePresentation = session.initiativeQueuePresentation;
+    const firstReachableHexes = session.getReachableHexes();
+    const firstPreview = session.previewHex(enemy.position);
+
+    expect(session.selectedUnitId).toBe(player.id);
+    expect(session.servantCommandPresentation).toEqual(firstCommandPresentation);
+    expect(session.initiativeQueuePresentation).toEqual(firstQueuePresentation);
+    expect(session.getReachableHexes()).toEqual(firstReachableHexes);
+    expect(session.previewHex(enemy.position)).toEqual(firstPreview);
+    expect(session.timelinePresentation).toMatchObject({
+      readyActorId: player.id,
+      readyActorActionPoints: actionPointsPerActivation,
+    });
+  });
+
+  it("reconciles a defeated selected Mage after the resolving state transition", () => {
+    const mage = new Player(
+      "mage",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { currentHp: 20 },
+    );
+    const enemy = new Unit(
+      "enemy",
+      { q: 1, r: 0 },
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([mage.position, enemy.position])),
+      [mage, enemy],
+    );
+
+    session.clickHex(mage.position);
+    session.waitForMage();
+
+    expect(mage.isAlive).toBe(false);
+    expect(session.selectedUnitId).toBeNull();
+    expect(session.servantCommandPresentation.targetServantId).toBeUndefined();
+    expect(session.getReachableHexes()).toEqual([]);
+  });
+
   it("spends one AP for Protect Mage without ending the Mage activation", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const servant = new Unit(

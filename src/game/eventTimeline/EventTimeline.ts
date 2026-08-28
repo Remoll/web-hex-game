@@ -144,7 +144,6 @@ export class EventTimeline implements EventTimelineReader {
   }
 
   get currentTime(): number {
-    this.removeDefeatedParticipants();
     return this._currentTime;
   }
 
@@ -174,8 +173,7 @@ export class EventTimeline implements EventTimelineReader {
   }
 
   getNextReadyAt(unitId: string): number | undefined {
-    this.removeDefeatedParticipants();
-    return this.entriesByUnitId.get(unitId)?.nextReadyAt;
+    return this.getLiveEntry(unitId)?.nextReadyAt;
   }
 
   /**
@@ -184,8 +182,8 @@ export class EventTimeline implements EventTimelineReader {
    * render-frame polling.
    */
   getScheduledActors(): readonly TimelineActor[] {
-    this.removeDefeatedParticipants();
     return [...this.entriesByUnitId.values()]
+      .filter((entry) => entry.participant.isAlive)
       .sort(compareTimelineEntries)
       .map((entry) => ({
         unitId: entry.participant.id,
@@ -194,13 +192,11 @@ export class EventTimeline implements EventTimelineReader {
   }
 
   getRemainingActionPoints(unitId: string): number | undefined {
-    this.removeDefeatedParticipants();
-    return this.entriesByUnitId.get(unitId)?.remainingActionPoints;
+    return this.getLiveEntry(unitId)?.remainingActionPoints;
   }
 
   hasWaitedDuringReadyActivation(unitId: string): boolean {
-    this.removeDefeatedParticipants();
-    return this.entriesByUnitId.get(unitId)?.hasWaited ?? false;
+    return this.getLiveEntry(unitId)?.hasWaited ?? false;
   }
 
   /** An actor is ready only when it is the deterministic next event. */
@@ -301,8 +297,7 @@ export class EventTimeline implements EventTimelineReader {
   }
 
   private requireReadyEntry(unitId: string): TimelineEntry {
-    this.removeDefeatedParticipants();
-    const entry = this.entriesByUnitId.get(unitId);
+    const entry = this.getLiveEntry(unitId);
     if (!entry || !this.isReady(unitId)) {
       throw new Error(`Timeline participant ${unitId} is not ready`);
     }
@@ -330,10 +325,12 @@ export class EventTimeline implements EventTimelineReader {
   }
 
   private getNextEntry(): TimelineEntry | undefined {
-    this.removeDefeatedParticipants();
-
     let next: TimelineEntry | undefined;
     for (const entry of this.entriesByUnitId.values()) {
+      if (!entry.participant.isAlive) {
+        continue;
+      }
+
       if (!next
         || entry.nextReadyAt < next.nextReadyAt
         || (entry.nextReadyAt === next.nextReadyAt
@@ -343,6 +340,12 @@ export class EventTimeline implements EventTimelineReader {
     }
 
     return next;
+  }
+
+  /** Keeps read APIs pure while treating externally defeated participants as absent. */
+  private getLiveEntry(unitId: string): TimelineEntry | undefined {
+    const entry = this.entriesByUnitId.get(unitId);
+    return entry?.participant.isAlive ? entry : undefined;
   }
 
   private removeDefeatedParticipants(): void {
