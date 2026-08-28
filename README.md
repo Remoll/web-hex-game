@@ -248,6 +248,8 @@ src/
 - Place domain-wide types in `game/types.ts`; keep types owned by a single module next to that module.
 - Use the `@/` import alias for modules under `src/`.
 - Add or update focused Vitest tests with every behavior change, then run `npm test` and `npm run build`.
+- HUD DOM contract tests use the development-only `jsdom` environment; they do
+  not require a browser session, WebGL, or GPU.
 
 ## Notes for coding agents
 
