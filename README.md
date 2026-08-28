@@ -30,6 +30,12 @@ The Mage is the only current source of player sight and has a base view range
 of four hexes. Visibility is recalculated only when relevant game state changes
 (currently session setup and Mage movement), never by the render loop.
 
+An intervening field at least two ground levels above the observer blocks
+fields beyond it only when every equally direct tactical sight line contains
+such a blocker. The elevated blocking field itself remains visible. Standing
+on high ground does not yet increase view range; elevated-observer bonuses,
+facing, and stealth remain deferred.
+
 - **Undiscovered** hexes are covered by black fog.
 - **Discovered** hexes retain visible terrain under translucent fog, but units
   and remains are hidden.
@@ -87,13 +93,14 @@ its current map position.
   paths use the GameMap's fixed axial-neighbour order. A blocked strategy Holds
   without losing its order.
 - On its activation, an Enemy evaluates only hostiles within its own derived
-  view range. It remembers the nearest visible hostile's position, then spends
-  its available AP on adjacent attacks or legal neighbouring steps that reduce
-  hex distance. If sight is lost, it continues toward that last-known position
-  and Holds there when it cannot reacquire a target. Target ties use level
-  registration order; equally valid local steps use axial `q`, then `r`. A
-  defeated target is forgotten. This private Enemy perception never changes
-  Mage fog or reveals hidden units.
+  view range and an unblocked elevation-aware tactical sight line. It remembers
+  the nearest visible hostile's position, then spends its available AP on
+  adjacent attacks or legal neighbouring steps that reduce hex distance. If
+  sight is lost, it continues toward that last-known position and Holds there
+  when it cannot reacquire a target. Target ties use level registration order;
+  equally valid local steps use axial `q`, then `r`. A defeated target is
+  forgotten. This private Enemy perception never changes Mage fog or reveals
+  hidden units.
 - Neutral units Hold in this slice. There is no timer, polling, or global
   pathfinding AI.
 - When two actors are ready at the same simulation time, their original level
@@ -192,8 +199,8 @@ exactly one category for each acting faction.
 
 Turns/rounds beyond the current event timeline, advanced Enemy AI,
 counterattacks, player win/lose conditions, terrain cost multipliers,
-height-based line of sight, facing, stealth, animated attacks, interactive
-remains, final cursor art, and final unit art are intentionally
+elevated-observer sight-range bonuses, facing, stealth, animated attacks,
+interactive remains, final cursor art, and final unit art are intentionally
 deferred.
 
 ## Commands

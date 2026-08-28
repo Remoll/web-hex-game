@@ -115,7 +115,7 @@ describe("example level", () => {
     });
     expect(level.units[2]).toMatchObject({
       id: "neutral-1",
-      position: { q: 2, r: -2 },
+      position: { q: 3, r: -3 },
       faction: Faction.Neutral,
       attributes: {
         [TacticalAttribute.Might]: 8,
@@ -125,6 +125,6 @@ describe("example level", () => {
       },
     });
     expect(hexDistance(level.player.position, level.units[1].position)).toBe(2);
-    expect(hexDistance(level.player.position, level.units[2].position)).toBe(2);
+    expect(hexDistance(level.player.position, level.units[2].position)).toBe(3);
   });
 });

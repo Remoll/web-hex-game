@@ -27,6 +27,7 @@ import {
   MageVisibility,
   type FieldVisibilityReader,
 } from "@/game/visibility/MageVisibility";
+import { hasElevationLineOfSight } from "@/game/visibility/ElevationLineOfSight";
 
 export enum GameActionType {
   Selected = "selected",
@@ -1482,14 +1483,9 @@ export class GameSession {
     let nearestDistance = Number.POSITIVE_INFINITY;
 
     for (const candidate of this.unitsById.values()) {
-      if (!candidate.isAlive
-        || getFactionDisposition(enemy.faction, candidate.faction)
-          !== FactionDisposition.Enemy) {
-        continue;
-      }
-
       const distance = this.gameMap.getHexDistance(enemy.position, candidate.position);
-      if (distance > enemy.viewRange || distance >= nearestDistance) {
+      if (!this.isPerceivedHostile(enemy, candidate)
+        || distance >= nearestDistance) {
         continue;
       }
 
@@ -1524,7 +1520,12 @@ export class GameSession {
       && getFactionDisposition(observer.faction, candidate.faction)
         === FactionDisposition.Enemy
       && this.gameMap.getHexDistance(observer.position, candidate.position)
-        <= observer.viewRange;
+        <= observer.viewRange
+      && hasElevationLineOfSight(
+        this.gameMap,
+        observer.position,
+        candidate.position,
+      );
   }
 
   /**

@@ -4,6 +4,7 @@ import {
   UnitTacticalRole,
 } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
+import { hasElevationLineOfSight } from "@/game/visibility/ElevationLineOfSight";
 
 /** Serializable tactical fog states, ordered from no knowledge to full sight. */
 export enum FieldVisibility {
@@ -44,7 +45,8 @@ export class MageVisibility implements FieldVisibilityReader {
       const key = getCoordKey(coord);
       const previous = this.visibilityByHex.get(key) ?? FieldVisibility.Undiscovered;
       const isVisible = hasMageVision
-        && this.gameMap.getHexDistance(magePosition, coord) <= mage.viewRange;
+        && this.gameMap.getHexDistance(magePosition, coord) <= mage.viewRange
+        && hasElevationLineOfSight(this.gameMap, magePosition, coord);
 
       this.visibilityByHex.set(
         key,

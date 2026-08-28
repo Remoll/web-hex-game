@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-28
 
+- Added deterministic elevation-blocked tactical sight: an intervening field
+  two or more levels above an observer hides fields beyond it while remaining
+  visible itself; Mage fog and private Enemy perception now share the rule.
 - Added Ground elevation traversal: adjacent level or downhill movement costs
   1 AP, a one-level climb costs 2 AP, and differences above one level are
   illegal for Mage and autonomous pathfinding.

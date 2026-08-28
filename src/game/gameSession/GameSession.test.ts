@@ -164,6 +164,52 @@ describe("GameSession", () => {
     );
   });
 
+  it("prevents an Enemy from acquiring a hostile beyond a steep elevation blocker", () => {
+    const enemy = new Unit("enemy", { q: 0, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+      viewRange: 3,
+    });
+    const mage = new Player("mage", { q: 2, r: 0 }, UnitTexture.PlayerIdle, {
+      viewRange: 3,
+    });
+    const session = new GameSession(
+      new GameMap([
+        { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+        { q: 1, r: 0, fieldAttrs: field(TerrainType.Grass, true, 2) },
+        { q: 2, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+      ]),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(enemy.position).toEqual({ q: 0, r: 0 });
+    expect(session.getEnemyLastKnownHostilePosition(enemy.id)).toBeUndefined();
+  });
+
+  it("does not expose an Enemy behind a steep blocker through Mage visibility", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+      viewRange: 3,
+    });
+    const enemy = new Unit("enemy", { q: 2, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+      viewRange: 3,
+    });
+    const session = new GameSession(
+      new GameMap([
+        { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+        { q: 1, r: 0, fieldAttrs: field(TerrainType.Grass, true, 2) },
+        { q: 2, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+      ]),
+      [mage, enemy],
+    );
+
+    expect(session.getFieldVisibility(enemy.position)).toBe(
+      FieldVisibility.Undiscovered,
+    );
+    expect(session.isUnitVisible(enemy)).toBe(false);
+  });
+
   it("publishes ordered immutable paths after authoritative player movement", () => {
     const { session, player } = createSession();
     session.clickHex(player.position);
