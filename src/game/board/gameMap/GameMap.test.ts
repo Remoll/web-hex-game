@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
+import {
+  baseMovementActionPointCost,
+  groundUphillMovementActionPointCost,
+} from "@/game/movement/GroundMovementRules";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 
 const mapData: MapArray = [
@@ -77,7 +81,7 @@ describe("GameMap", () => {
         fieldAttrs: {
           terrainType: TerrainType.Grass,
           allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
-          groundLevel: 10,
+          groundLevel: 0,
           leavingCostMultiplier: 50,
         },
       },
@@ -165,4 +169,82 @@ describe("GameMap", () => {
         || (coord.q === 1 && coord.r === 1),
     )).toBeUndefined();
   });
+
+  it("applies the shared Ground elevation edge rules and preserves Flying traversal", () => {
+    const elevationMap = new GameMap([
+      mapItem(0, 0, 0),
+      mapItem(1, 0, 0),
+      mapItem(2, 0, 1),
+      mapItem(3, 0, 2),
+      mapItem(0, 1, 2),
+    ]);
+
+    expect(elevationMap.getTraversalCost(
+      { q: 0, r: 0 },
+      { q: 1, r: 0 },
+      MovementType.Ground,
+    )).toBe(baseMovementActionPointCost);
+    expect(elevationMap.getTraversalCost(
+      { q: 1, r: 0 },
+      { q: 2, r: 0 },
+      MovementType.Ground,
+    )).toBe(groundUphillMovementActionPointCost);
+    expect(elevationMap.getTraversalCost(
+      { q: 2, r: 0 },
+      { q: 1, r: 0 },
+      MovementType.Ground,
+    )).toBe(baseMovementActionPointCost);
+    expect(elevationMap.getTraversalCost(
+      { q: 0, r: 0 },
+      { q: 0, r: 1 },
+      MovementType.Ground,
+    )).toBeUndefined();
+    expect(elevationMap.getTraversalCost(
+      { q: 0, r: 1 },
+      { q: 0, r: 0 },
+      MovementType.Ground,
+    )).toBeUndefined();
+    expect(elevationMap.getTraversalCost(
+      { q: 2, r: 0 },
+      { q: 3, r: 0 },
+      MovementType.Flying,
+    )).toBe(baseMovementActionPointCost);
+  });
+
+  it("chooses the lower-AP route and rejects paths over the available budget", () => {
+    const elevationMap = new GameMap([
+      mapItem(0, 0, 0),
+      mapItem(1, 0, 1),
+      mapItem(0, 1, 0),
+      mapItem(1, 1, 0),
+    ]);
+
+    expect(elevationMap.findShortestPath(
+      { q: 0, r: 0 },
+      { q: 1, r: 1 },
+      MovementType.Ground,
+      groundUphillMovementActionPointCost,
+    )).toEqual({
+      cost: baseMovementActionPointCost + baseMovementActionPointCost,
+      steps: [{ q: 0, r: 1 }, { q: 1, r: 1 }],
+    });
+    expect(elevationMap.getReachablePaths(
+      { q: 0, r: 0 },
+      MovementType.Ground,
+      groundUphillMovementActionPointCost - baseMovementActionPointCost,
+    ).has("1,1")).toBe(false);
+  });
 });
+
+function mapItem(q: number, r: number, groundLevel: number) {
+  return {
+    q,
+    r,
+    fieldAttrs: {
+      terrainType: TerrainType.Grass,
+      allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
+      groundLevel,
+      leavingCostMultiplier: 1,
+    },
+  };
+}

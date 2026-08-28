@@ -1712,8 +1712,8 @@
     {
       "id": "neutral-1",
       "position": {
-        "q": 2,
-        "r": -2
+        "q": 3,
+        "r": -3
       },
       "texture": "enemy-idle",
       "faction": "neutral",

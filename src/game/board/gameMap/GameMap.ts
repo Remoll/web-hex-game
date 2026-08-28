@@ -1,9 +1,15 @@
 import { Field } from "@/game/board/field/Field";
 import {
+  baseMovementActionPointCost,
+  groundUphillMovementActionPointCost,
+  maximumGroundElevationDifference,
+  singleGroundUphillElevationDifference,
+} from "@/game/movement/GroundMovementRules";
+import {
   type FieldsMap,
   type HexCoord,
   type MapArray,
-  type MovementType,
+  MovementType,
   type Q,
   type R,
 } from "@/game/types";
@@ -18,6 +24,10 @@ const axialNeighbourOffsets: readonly HexCoord[] = [
 ];
 
 const originMovementPathCost = 0;
+const originMovementPathSteps = 0;
+const adjacentHexDistance = 1;
+const firstArrayIndex = 0;
+const discoveryOrderIncrement = 1;
 
 export interface MovementPath {
   /** Destination-only steps: the origin is intentionally excluded. */
@@ -27,6 +37,20 @@ export interface MovementPath {
 
 export type IsHexBlocked = (coord: HexCoord) => boolean;
 export type IsDestinationHex = (coord: HexCoord) => boolean;
+
+interface WeightedPathNode {
+  readonly coord: HexCoord;
+  readonly cost: number;
+  readonly stepCount: number;
+  readonly parent: WeightedPathNode | undefined;
+  /** Fixed discovery order preserves the axial-neighbour tie-breaker. */
+  readonly discoveryOrder: number;
+}
+
+interface WeightedPathSearchResult {
+  readonly bestNodesByCoordKey: ReadonlyMap<string, WeightedPathNode>;
+  readonly destinationNode: WeightedPathNode | undefined;
+}
 
 export class GameMap {
   private readonly fieldsMap: FieldsMap = new Map();
@@ -76,51 +100,70 @@ export class GameMap {
   }
 
   /**
-   * Finds every shortest, passable path up to a movement budget. Each entered
-   * hex costs one; terrain cost and elevation are intentionally not considered.
+   * Returns the AP cost of traversing one adjacent edge, or undefined when the
+   * edge is illegal for the movement type or target field.
+   */
+  getTraversalCost(
+    origin: HexCoord,
+    destination: HexCoord,
+    movementType: MovementType,
+  ): number | undefined {
+    const originField = this.getField(origin.q, origin.r);
+    const destinationField = this.getField(destination.q, destination.r);
+    if (!originField
+      || !destinationField
+      || this.getHexDistance(origin, destination) !== adjacentHexDistance
+      || !destinationField.getAllowedMovements()[movementType]) {
+      return undefined;
+    }
+
+    if (movementType !== MovementType.Ground) {
+      return baseMovementActionPointCost;
+    }
+
+    const elevationDifference = destinationField.getGroundLevel()
+      - originField.getGroundLevel();
+    if (Math.abs(elevationDifference) > maximumGroundElevationDifference) {
+      return undefined;
+    }
+
+    return elevationDifference === singleGroundUphillElevationDifference
+      ? groundUphillMovementActionPointCost
+      : baseMovementActionPointCost;
+  }
+
+  /**
+   * Finds every cheapest legal path within AP and optional hex-step budgets.
+   * Equal-cost routes keep the fixed axial-neighbour discovery order.
    */
   getReachablePaths(
     origin: HexCoord,
     movementType: MovementType,
     maxCost: number,
     isBlocked: IsHexBlocked = () => false,
+    maxStepCount: number = maxCost,
   ): ReadonlyMap<string, MovementPath> {
-    if (!Number.isInteger(maxCost) || maxCost < 0 || !this.hasField(origin)) {
+    if (!Number.isInteger(maxCost)
+      || maxCost < originMovementPathCost
+      || !Number.isInteger(maxStepCount)
+      || maxStepCount < originMovementPathSteps
+      || !this.hasField(origin)) {
       return new Map();
     }
 
-    const originKey = getCoordKey(origin);
-    const paths = new Map<string, MovementPath>([
-      [originKey, { steps: [], cost: 0 }],
-    ]);
-    const queue: HexCoord[] = [{ ...origin }];
-
-    for (let index = 0; index < queue.length; index += 1) {
-      const current = queue[index];
-      const currentPath = paths.get(getCoordKey(current));
-      if (!currentPath || currentPath.cost >= maxCost) {
-        continue;
-      }
-
-      for (const neighbour of this.getNeighbours(current)) {
-        const key = getCoordKey(neighbour);
-        const field = this.getField(neighbour.q, neighbour.r);
-        if (!field
-          || paths.has(key)
-          || isBlocked(neighbour)
-          || !field.getAllowedMovements()[movementType]) {
-          continue;
-        }
-
-        paths.set(key, {
-          steps: [...currentPath.steps, { ...neighbour }],
-          cost: currentPath.cost + 1,
-        });
-        queue.push(neighbour);
+    const { bestNodesByCoordKey } = this.findWeightedPaths(
+      origin,
+      movementType,
+      isBlocked,
+      maxCost,
+      maxStepCount,
+    );
+    const paths = new Map<string, MovementPath>();
+    for (const [coordKey, node] of bestNodesByCoordKey) {
+      if (coordKey !== getCoordKey(origin)) {
+        paths.set(coordKey, buildMovementPath(node));
       }
     }
-
-    paths.delete(originKey);
     return paths;
   }
 
@@ -130,21 +173,18 @@ export class GameMap {
     movementType: MovementType,
     maxCost: number,
     isBlocked: IsHexBlocked = () => false,
+    maxStepCount: number = maxCost,
   ): MovementPath | undefined {
     return this.getReachablePaths(
       origin,
       movementType,
       maxCost,
       isBlocked,
+      maxStepCount,
     ).get(getCoordKey(destination));
   }
 
-  /**
-   * Finds one deterministic shortest path without allocating a path array for
-   * every visited field. Equal paths use the fixed axial neighbour order.
-   * Autonomous strategies use it only on an activation, never from the render
-   * loop.
-   */
+  /** Finds one cheapest deterministic path for autonomous resolution. */
   findShortestPathToAny(
     origin: HexCoord,
     movementType: MovementType,
@@ -155,38 +195,15 @@ export class GameMap {
       return undefined;
     }
 
-    if (isDestination(origin)) {
-      return { steps: [], cost: originMovementPathCost };
-    }
-
-    const originKey = getCoordKey(origin);
-    const parentByKey = new Map<string, HexCoord | undefined>([
-      [originKey, undefined],
-    ]);
-    const queue: HexCoord[] = [{ ...origin }];
-
-    for (let index = 0; index < queue.length; index += 1) {
-      const current = queue[index];
-      for (const neighbour of this.getNeighbours(current)) {
-        const key = getCoordKey(neighbour);
-        const field = this.getField(neighbour.q, neighbour.r);
-        if (!field
-          || parentByKey.has(key)
-          || isBlocked(neighbour)
-          || !field.getAllowedMovements()[movementType]) {
-          continue;
-        }
-
-        parentByKey.set(key, current);
-        if (isDestination(neighbour)) {
-          return buildPathFromParents(neighbour, origin, parentByKey);
-        }
-
-        queue.push(neighbour);
-      }
-    }
-
-    return undefined;
+    const { destinationNode } = this.findWeightedPaths(
+      origin,
+      movementType,
+      isBlocked,
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY,
+      isDestination,
+    );
+    return destinationNode ? buildMovementPath(destinationNode) : undefined;
   }
 
   get radiusInHex(): number {
@@ -206,29 +223,123 @@ export class GameMap {
   private hasField(coord: HexCoord): boolean {
     return this.getField(coord.q, coord.r) !== undefined;
   }
+
+  private findWeightedPaths(
+    origin: HexCoord,
+    movementType: MovementType,
+    isBlocked: IsHexBlocked,
+    maxCost: number,
+    maxStepCount: number,
+    isDestination?: IsDestinationHex,
+  ): WeightedPathSearchResult {
+    let nextDiscoveryOrder = originMovementPathSteps;
+    const originNode: WeightedPathNode = {
+      coord: { ...origin },
+      cost: originMovementPathCost,
+      stepCount: originMovementPathSteps,
+      parent: undefined,
+      discoveryOrder: nextDiscoveryOrder,
+    };
+    const bestNodesByCoordKey = new Map<string, WeightedPathNode>([
+      [getCoordKey(origin), originNode],
+    ]);
+    const pendingNodes: WeightedPathNode[] = [originNode];
+    nextDiscoveryOrder += discoveryOrderIncrement;
+
+    while (pendingNodes.length > 0) {
+      const current = takeLowestCostNode(pendingNodes);
+      if (bestNodesByCoordKey.get(getCoordKey(current.coord)) !== current) {
+        continue;
+      }
+
+      if (isDestination?.(current.coord)) {
+        return { bestNodesByCoordKey, destinationNode: current };
+      }
+
+      if (current.cost >= maxCost || current.stepCount >= maxStepCount) {
+        continue;
+      }
+
+      for (const neighbour of this.getNeighbours(current.coord)) {
+        if (isBlocked(neighbour)) {
+          continue;
+        }
+
+        const traversalCost = this.getTraversalCost(
+          current.coord,
+          neighbour,
+          movementType,
+        );
+        if (traversalCost === undefined) {
+          continue;
+        }
+
+        const cost = current.cost + traversalCost;
+        const stepCount = current.stepCount + discoveryOrderIncrement;
+        if (cost > maxCost || stepCount > maxStepCount) {
+          continue;
+        }
+
+        const coordKey = getCoordKey(neighbour);
+        const existingNode = bestNodesByCoordKey.get(coordKey);
+        if (existingNode
+          && (existingNode.cost < cost
+            || (existingNode.cost === cost
+              && existingNode.stepCount <= stepCount))) {
+          continue;
+        }
+
+        const node: WeightedPathNode = {
+          coord: { ...neighbour },
+          cost,
+          stepCount,
+          parent: current,
+          discoveryOrder: nextDiscoveryOrder,
+        };
+        nextDiscoveryOrder += discoveryOrderIncrement;
+        bestNodesByCoordKey.set(coordKey, node);
+        pendingNodes.push(node);
+      }
+    }
+
+    return { bestNodesByCoordKey, destinationNode: undefined };
+  }
 }
 
 function getCoordKey(coord: HexCoord): string {
   return `${coord.q},${coord.r}`;
 }
 
-function buildPathFromParents(
-  destination: HexCoord,
-  origin: HexCoord,
-  parentByKey: ReadonlyMap<string, HexCoord | undefined>,
-): MovementPath {
-  const reversedSteps: HexCoord[] = [];
-  let current = destination;
-
-  while (getCoordKey(current) !== getCoordKey(origin)) {
-    reversedSteps.push({ ...current });
-    const parent = parentByKey.get(getCoordKey(current));
-    if (!parent) {
-      throw new Error("Path destination is missing a parent coordinate");
+function takeLowestCostNode(nodes: WeightedPathNode[]): WeightedPathNode {
+  let lowestIndex = firstArrayIndex;
+  for (let index = discoveryOrderIncrement; index < nodes.length; index += 1) {
+    if (compareWeightedPathNodes(nodes[index], nodes[lowestIndex]) < 0) {
+      lowestIndex = index;
     }
-    current = parent;
+  }
+
+  const [lowest] = nodes.splice(lowestIndex, discoveryOrderIncrement);
+  return lowest;
+}
+
+function compareWeightedPathNodes(
+  first: WeightedPathNode,
+  second: WeightedPathNode,
+): number {
+  return first.cost - second.cost
+    || first.stepCount - second.stepCount
+    || first.discoveryOrder - second.discoveryOrder;
+}
+
+function buildMovementPath(destination: WeightedPathNode): MovementPath {
+  const reversedSteps: HexCoord[] = [];
+  let current: WeightedPathNode | undefined = destination;
+
+  while (current?.parent) {
+    reversedSteps.push({ ...current.coord });
+    current = current.parent;
   }
 
   const steps = reversedSteps.reverse();
-  return { steps, cost: steps.length };
+  return { steps, cost: destination.cost };
 }

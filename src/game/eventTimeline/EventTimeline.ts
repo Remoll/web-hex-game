@@ -1,4 +1,8 @@
 import { baseTacticalTempo } from "@/game/unit/tacticalAttributes/TacticalAttributes";
+import {
+  baseMovementActionPointCost,
+  groundUphillMovementActionPointCost,
+} from "@/game/movement/GroundMovementRules";
 
 /**
  * The only information the timeline needs from a scheduled unit. Keeping this
@@ -13,13 +17,15 @@ export interface TimelineParticipant {
 /** Stable action names shared by autonomous-resolution callers. */
 export enum TimelineAction {
   Move = "move",
+  MoveUphill = "move-uphill",
   Attack = "attack",
   Wait = "wait",
 }
 
 /** Current tactical actions use AP; they do not set separate Timeline delays. */
 export enum TacticalActionPointCost {
-  Move = 1,
+  Move = baseMovementActionPointCost,
+  MoveUphill = groundUphillMovementActionPointCost,
   Attack = 2,
   Wait = 0,
 }
@@ -33,6 +39,8 @@ export function getTacticalActionPointCost(action: TimelineAction): number {
   switch (action) {
     case TimelineAction.Move:
       return TacticalActionPointCost.Move;
+    case TimelineAction.MoveUphill:
+      return TacticalActionPointCost.MoveUphill;
     case TimelineAction.Attack:
       return TacticalActionPointCost.Attack;
     case TimelineAction.Wait:

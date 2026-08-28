@@ -936,7 +936,7 @@ export class GameSession {
     }
     const remainingActionPoints = this.timeline.spendReadyActionPoints(
       unit.id,
-      preview.path.cost * TacticalActionPointCost.Move,
+      preview.path.cost,
     );
 
     const from = unit.position;
@@ -1018,8 +1018,9 @@ export class GameSession {
     return this.gameMap.getReachablePaths(
       unit.position,
       unit.movementType,
-      this.getMovementRangeForCurrentAction(unit),
+      this.getRemainingMovementActionPoints(unit),
       (coord) => this.getUnitAt(coord) !== undefined,
+      unit.movementRange,
     );
   }
 
@@ -1031,13 +1032,8 @@ export class GameSession {
     return this.hasActionPointAvailability(unit, TacticalActionPointCost.Attack);
   }
 
-  private getMovementRangeForCurrentAction(unit: Unit): number {
-    const remainingActionPoints = this.timeline.getRemainingActionPoints(unit.id)
-      ?? noActionPoints;
-    return Math.min(
-      unit.movementRange,
-      Math.floor(remainingActionPoints / TacticalActionPointCost.Move),
-    );
+  private getRemainingMovementActionPoints(unit: Unit): number {
+    return this.timeline.getRemainingActionPoints(unit.id) ?? noActionPoints;
   }
 
   private getAvailabilityRejectionReason(
@@ -1349,15 +1345,11 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
-    if (!this.canAffordAutonomousAction(
+    return this.resolveAutonomousMovement(
+      servant,
+      path.steps[0],
       remainingActionPoints,
-      TacticalActionPointCost.Move,
-    )) {
-      return TimelineAction.Wait;
-    }
-
-    this.moveAutonomousUnit(servant, path.steps[0]);
-    return TimelineAction.Move;
+    );
   }
 
   /**
@@ -1403,16 +1395,11 @@ export class GameSession {
         return TimelineAction.Attack;
       }
 
-      if (!this.canAffordAutonomousAction(
+      return this.moveServantTowardHex(
+        servant,
+        strategy.targetHex,
         remainingActionPoints,
-        TacticalActionPointCost.Move,
-      )) {
-        return TimelineAction.Wait;
-      }
-
-      return this.moveServantTowardHex(servant, strategy.targetHex)
-        ? TimelineAction.Move
-        : TimelineAction.Wait;
+      );
     }
 
     const path = this.gameMap.findShortestPathToAny(
@@ -1425,16 +1412,11 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
-    if (!this.canAffordAutonomousAction(
+    return this.resolveAutonomousMovement(
+      servant,
+      path.steps[0],
       remainingActionPoints,
-      TacticalActionPointCost.Move,
-    )) {
-      return TimelineAction.Wait;
-    }
-
-    const destination = path.steps[0];
-    this.moveAutonomousUnit(servant, destination);
-    return TimelineAction.Move;
+    );
   }
 
   /** Resolves the next non-omniscient Enemy action in its current activation. */
@@ -1462,16 +1444,11 @@ export class GameSession {
         return TimelineAction.Attack;
       }
 
-      if (!this.canAffordAutonomousAction(
+      return this.moveEnemyToward(
+        enemy,
+        visibleHostile.position,
         remainingActionPoints,
-        TacticalActionPointCost.Move,
-      )) {
-        return TimelineAction.Wait;
-      }
-
-      return this.moveEnemyToward(enemy, visibleHostile.position)
-        ? TimelineAction.Move
-        : TimelineAction.Wait;
+      );
     }
 
     const lastKnownHostilePosition = this.enemyTacticalMemory
@@ -1485,21 +1462,16 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
-    if (!this.canAffordAutonomousAction(
+    return this.moveEnemyToward(
+      enemy,
+      lastKnownHostilePosition,
       remainingActionPoints,
-      TacticalActionPointCost.Move,
-    )) {
-      return TimelineAction.Wait;
-    }
-
-    return this.moveEnemyToward(enemy, lastKnownHostilePosition)
-      ? TimelineAction.Move
-      : TimelineAction.Wait;
+    );
   }
 
   private canAffordAutonomousAction(
     remainingActionPoints: number,
-    actionPointCost: TacticalActionPointCost,
+    actionPointCost: number,
   ): boolean {
     return remainingActionPoints >= actionPointCost;
   }
@@ -1559,19 +1531,41 @@ export class GameSession {
    * Makes one legal local step only. Equal candidates use ascending axial q,
    * then ascending r; this keeps paths deterministic without global search.
    */
-  private moveEnemyToward(enemy: Unit, destination: HexCoord): boolean {
+  private moveEnemyToward(
+    enemy: Unit,
+    destination: HexCoord,
+    remainingActionPoints: number,
+  ): TimelineAction {
     const currentDistance = this.gameMap.getHexDistance(enemy.position, destination);
     const candidate = this.gameMap.getNeighbours(enemy.position)
-      .filter((coord) => this.canUnitEnter(enemy, coord))
-      .filter((coord) => this.gameMap.getHexDistance(coord, destination) < currentDistance)
-      .sort(compareHexCoords)[0];
+      .map((coord) => ({
+        coord,
+        traversalCost: this.gameMap.getTraversalCost(
+          enemy.position,
+          coord,
+          enemy.movementType,
+        ),
+      }))
+      .filter((candidate) => candidate.traversalCost !== undefined)
+      .filter((candidate) => this.getUnitAt(candidate.coord) === undefined)
+      .filter((candidate) => this.gameMap.getHexDistance(candidate.coord, destination)
+        < currentDistance)
+      .filter((candidate) => this.canAffordAutonomousAction(
+        remainingActionPoints,
+        candidate.traversalCost!,
+      ))
+      .sort((first, second) => first.traversalCost! - second.traversalCost!
+        || compareHexCoords(first.coord, second.coord))[0];
 
     if (!candidate) {
-      return false;
+      return TimelineAction.Wait;
     }
 
-    this.moveAutonomousUnit(enemy, candidate);
-    return true;
+    return this.resolveAutonomousMovement(
+      enemy,
+      candidate.coord,
+      remainingActionPoints,
+    );
   }
 
   /** Finds a tactical shortest path to any empty, passable hex beside a target. */
@@ -1581,7 +1575,7 @@ export class GameSession {
   ): MovementPath | undefined {
     const approachHexKeys = new Set<string>();
     for (const coord of this.gameMap.getNeighbours(targetHex)) {
-      if (this.canUnitEnter(servant, coord)) {
+      if (this.canUnitOccupy(servant, coord)) {
         approachHexKeys.add(getCoordKey(coord));
       }
     }
@@ -1598,21 +1592,54 @@ export class GameSession {
     );
   }
 
-  private moveServantTowardHex(servant: Unit, targetHex: HexCoord): boolean {
+  private moveServantTowardHex(
+    servant: Unit,
+    targetHex: HexCoord,
+    remainingActionPoints: number,
+  ): TimelineAction {
     const path = this.findShortestApproachPath(servant, targetHex);
     if (!path || path.steps.length === 0) {
-      return false;
+      return TimelineAction.Wait;
     }
 
-    this.moveAutonomousUnit(servant, path.steps[0]);
-    return true;
+    return this.resolveAutonomousMovement(
+      servant,
+      path.steps[0],
+      remainingActionPoints,
+    );
   }
 
-  private canUnitEnter(unit: Unit, coord: HexCoord): boolean {
+  private canUnitOccupy(unit: Unit, coord: HexCoord): boolean {
     const field = this.gameMap.getField(coord.q, coord.r);
     return field !== undefined
       && field.getAllowedMovements()[unit.movementType]
       && this.getUnitAt(coord) === undefined;
+  }
+
+  private resolveAutonomousMovement(
+    unit: Unit,
+    destination: HexCoord,
+    remainingActionPoints: number,
+  ): TimelineAction {
+    const traversalCost = this.gameMap.getTraversalCost(
+      unit.position,
+      destination,
+      unit.movementType,
+    );
+    if (traversalCost === undefined
+      || !this.canAffordAutonomousAction(remainingActionPoints, traversalCost)) {
+      return TimelineAction.Wait;
+    }
+
+    this.moveAutonomousUnit(unit, destination);
+    switch (traversalCost) {
+      case TacticalActionPointCost.Move:
+        return TimelineAction.Move;
+      case TacticalActionPointCost.MoveUphill:
+        return TimelineAction.MoveUphill;
+      default:
+        throw new Error(`Unsupported autonomous movement cost: ${traversalCost}`);
+    }
   }
 
   private moveLivingUnit(unit: Unit, destination: HexCoord): void {

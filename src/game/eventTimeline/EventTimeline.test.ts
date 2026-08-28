@@ -162,6 +162,28 @@ describe("EventTimeline", () => {
     expect(timeline.getRemainingActionPoints(servant.id)).toBe(actionPointsPerActivation);
   });
 
+  it("charges an autonomous uphill movement at its explicit higher AP cost", () => {
+    const climber = new Participant("climber");
+    const mage = new Participant("mage");
+    const timeline = new EventTimeline([climber, mage]);
+    const actionPointSnapshots: number[] = [];
+
+    timeline.advanceAutonomousUnitsToMageDecision(
+      mage.id,
+      (_participant, remainingActionPoints) => {
+        actionPointSnapshots.push(remainingActionPoints);
+        return actionPointSnapshots.length === 1
+          ? TimelineAction.MoveUphill
+          : TimelineAction.Wait;
+      },
+    );
+
+    expect(actionPointSnapshots).toEqual([
+      actionPointsPerActivation,
+      actionPointsPerActivation - TacticalActionPointCost.MoveUphill,
+    ]);
+  });
+
   it("invalidates defeated participants before they can act", () => {
     const mage = new Participant("mage");
     const defeated = new Participant("defeated");

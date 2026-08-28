@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-28
+
+- Added Ground elevation traversal: adjacent level or downhill movement costs
+  1 AP, a one-level climb costs 2 AP, and differences above one level are
+  illegal for Mage and autonomous pathfinding.
+
 ## 2026-08-27
 
 - Added smooth, FIFO tactical movement presentation for Mage and autonomous

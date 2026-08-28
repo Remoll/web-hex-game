@@ -122,8 +122,12 @@ its current map position.
   receive a command and does not consume Mage Tempo.
 - After selection, reachable Ground hexes are highlighted in green. Click one
   to move there along a valid path that fits both the unit's current movement
-  range and remaining AP. Every entered hex currently costs one AP and one
-  pathfinding point; living units block paths and destinations.
+  range and remaining AP. Ground units may cross only an elevation difference
+  of one level per entered edge: level or downhill movement costs 1 AP, while
+  climbing exactly one level costs 2 AP. A difference greater than one in
+  either direction is impassable. Highlights, clicks, and autonomous paths use
+  the same deterministic lowest-AP legal path; living units block paths and
+  destinations. Terrain-type multipliers remain deferred.
 - Each resolved movement path is presented as a smooth, ordered walk through
   every entered hex. Simulation still resolves the legal destination, AP,
   occupancy, timeline, AI, and fog immediately; while its visual queue catches

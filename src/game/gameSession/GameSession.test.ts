@@ -14,6 +14,7 @@ import {
   baseTimelineRecoveryDelay,
   TacticalActionPointCost,
 } from "@/game/eventTimeline/EventTimeline";
+import { groundUphillMovementActionPointCost } from "@/game/movement/GroundMovementRules";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 import { ServantStrategyType } from "@/game/unit/servantStrategy/ServantStrategy";
@@ -38,14 +39,18 @@ const mapData: MapArray = [
   { q: 0, r: 1, fieldAttrs: field(TerrainType.Water, false) },
 ];
 
-function field(terrainType: TerrainType, ground = true) {
+function field(
+  terrainType: TerrainType,
+  ground = true,
+  groundLevel = 0,
+) {
   return {
     terrainType,
     allowedMovements: {
       [MovementType.Ground]: ground,
       [MovementType.Flying]: true,
     },
-    groundLevel: 0,
+    groundLevel,
     leavingCostMultiplier: 1,
   };
 }
@@ -94,6 +99,71 @@ function createSession(): {
 }
 
 describe("GameSession", () => {
+  it("uses weighted Ground elevation paths consistently for highlights and Mage AP", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const climbHex = { q: 1, r: 0 };
+    const plateauHex = { q: 2, r: 0 };
+    const steepHex = { q: -1, r: 0 };
+    const session = new GameSession(
+      new GameMap([
+        { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+        { ...climbHex, fieldAttrs: field(TerrainType.Grass, true, 1) },
+        { ...plateauHex, fieldAttrs: field(TerrainType.Grass, true, 1) },
+        { ...steepHex, fieldAttrs: field(TerrainType.Grass, true, 2) },
+      ]),
+      [mage],
+    );
+
+    session.clickHex(mage.position);
+    expect(session.getReachableHexes()).toEqual(expect.arrayContaining([
+      { coord: climbHex, cost: groundUphillMovementActionPointCost },
+      { coord: plateauHex, cost: actionPointsPerActivation },
+    ]));
+    expect(session.getReachableHexes()).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ coord: steepHex }),
+    ]));
+    expect(session.previewHex(climbHex)).toMatchObject({
+      type: GameActionPreviewType.ValidMove,
+      path: { cost: groundUphillMovementActionPointCost, steps: [climbHex] },
+    });
+    expect(session.previewHex(steepHex)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.OutOfRange,
+    });
+
+    session.clickHex(climbHex);
+    expect(session.timelinePresentation.readyActorActionPoints).toBe(
+      TacticalActionPointCost.Move,
+    );
+    expect(session.clickHex(plateauHex)).toMatchObject({
+      type: GameActionType.Moved,
+      to: plateauHex,
+    });
+  });
+
+  it("charges autonomous Ground units two AP for an uphill step", () => {
+    const enemy = new Unit("enemy", { q: 0, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const mage = new Player("mage", { q: 2, r: 0 }, UnitTexture.PlayerIdle);
+    const session = new GameSession(
+      new GameMap([
+        { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+        { q: 1, r: 0, fieldAttrs: field(TerrainType.Grass, true, 1) },
+        { q: 2, r: 0, fieldAttrs: field(TerrainType.Grass, true, 1) },
+      ]),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+    expect(mage.currentHp).toBe(mage.maxHp);
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
+      baseTimelineRecoveryDelay,
+    );
+  });
+
   it("publishes ordered immutable paths after authoritative player movement", () => {
     const { session, player } = createSession();
     session.clickHex(player.position);
