@@ -339,19 +339,13 @@ export class GameSession {
   }
 
   /**
-   * Returns the units changed by autonomous resolution since the last call.
-   * The application layer uses this to synchronize existing presentation only.
+   * Reports whether autonomous resolution changed any units since the last
+   * call, without exposing mutable domain units to application presentation.
    */
-  consumeAutonomousUnitUpdates(): readonly Unit[] {
-    const updatedUnits: Unit[] = [];
-    for (const unitId of this.autonomousUnitUpdates) {
-      const unit = this.unitsById.get(unitId);
-      if (unit) {
-        updatedUnits.push(unit);
-      }
-    }
+  consumeAutonomousUnitUpdateSignal(): boolean {
+    const hasAutonomousUnitUpdates = this.autonomousUnitUpdates.size > 0;
     this.autonomousUnitUpdates.clear();
-    return updatedUnits;
+    return hasAutonomousUnitUpdates;
   }
 
   /**

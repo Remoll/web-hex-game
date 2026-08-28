@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import type { UnitPresenter } from "@/app/gameController/GameController";
 import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { Unit } from "@/game/unit/Unit";
 import type { PlaneCoord } from "@/game/types";
@@ -13,7 +12,7 @@ import {
   type UnitRenderState,
 } from "@/rendering/unitView/UnitRenderModel";
 
-export class UnitView implements UnitPresenter {
+export class UnitView {
   private readonly mesh: AtlasInstancedMesh<UnitSprite>;
   private readonly unitIndices = new Map<string, number>();
   private readonly displayedPlanePositions = new Map<string, PlaneCoord>();

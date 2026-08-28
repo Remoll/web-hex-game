@@ -4,9 +4,8 @@ import {
   type InitiativeQueuePresenter,
   type ServantCommandPresenter,
   type TacticalFeedbackPresenter,
+  type TacticalPresentationPresenter,
   type TimelinePresenter,
-  type UnitMovementPresenter,
-  type UnitPresenter,
 } from "@/app/gameController/GameController";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import {
@@ -65,6 +64,13 @@ const pursuitMapData: MapArray = [
   },
 ];
 
+function createTacticalPresentationPresenter(): TacticalPresentationPresenter {
+  return {
+    isAnimating: false,
+    sync: vi.fn(),
+  };
+}
+
 describe("GameController", () => {
   it("syncs and safely clears an initiative-queue map highlight", () => {
     const player = new Player(
@@ -77,7 +83,7 @@ describe("GameController", () => {
     const queuePresenter: InitiativeQueuePresenter = { sync: vi.fn() };
     const controller = new GameController(
       session,
-      { sync: vi.fn() },
+      createTacticalPresentationPresenter(),
       feedbackPresenter,
       undefined,
       undefined,
@@ -113,14 +119,14 @@ describe("GameController", () => {
     );
   });
 
-  it("updates the unit presenter only when a click results in movement", () => {
+  it("synchronizes one tactical update only when a click changes board state", () => {
     const player = new Player(
       "player",
       { q: 0, r: 0 },
       UnitTexture.PlayerIdle,
     );
     const session = new GameSession(new GameMap(mapData), [player]);
-    const presenter: UnitPresenter = { sync: vi.fn() };
+    const presenter = createTacticalPresentationPresenter();
     const controller = new GameController(session, presenter);
 
     controller.clickHex({ q: 0, r: 0 });
@@ -128,19 +134,42 @@ describe("GameController", () => {
 
     controller.clickHex({ q: 1, r: 0 });
     expect(presenter.sync).toHaveBeenCalledTimes(1);
-    expect(presenter.sync).toHaveBeenCalledWith(player);
+    expect(presenter.sync).toHaveBeenCalledWith([{
+      unitId: player.id,
+      from: { q: 0, r: 0 },
+      steps: [{ q: 1, r: 0 }],
+    }]);
   });
 
-  it("queues movement presentation before the final unit sync and blocks conflicting input", () => {
+  it("synchronizes a direct attack once without inventing a movement event", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(new GameMap(mapData), [mage, enemy]);
+    const presenter = createTacticalPresentationPresenter();
+    const controller = new GameController(session, presenter);
+
+    controller.clickHex(mage.position);
+
+    expect(controller.clickHex(enemy.position)).toMatchObject({
+      type: GameActionType.Attacked,
+      attackerId: mage.id,
+      targetId: enemy.id,
+    });
+    expect(presenter.sync).toHaveBeenCalledTimes(1);
+    expect(presenter.sync).toHaveBeenCalledWith([]);
+  });
+
+  it("coalesces movement presentation and final state sync while blocking input", () => {
     const player = new Player(
       "player",
       { q: 0, r: 0 },
       UnitTexture.PlayerIdle,
     );
     const session = new GameSession(new GameMap(mapData), [player]);
-    const unitPresenter: UnitPresenter = { sync: vi.fn() };
     let isAnimating = false;
-    const movementPresenter: UnitMovementPresenter = {
+    const tacticalPresentationPresenter: TacticalPresentationPresenter = {
       get isAnimating(): boolean {
         return isAnimating;
       },
@@ -150,12 +179,7 @@ describe("GameController", () => {
     };
     const controller = new GameController(
       session,
-      unitPresenter,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      movementPresenter,
+      tacticalPresentationPresenter,
     );
 
     controller.clickHex(player.position);
@@ -163,14 +187,14 @@ describe("GameController", () => {
       type: GameActionType.Moved,
       unitId: player.id,
     });
-    expect(movementPresenter.sync).toHaveBeenLastCalledWith([
+    expect(tacticalPresentationPresenter.sync).toHaveBeenCalledTimes(1);
+    expect(tacticalPresentationPresenter.sync).toHaveBeenLastCalledWith([
       {
         unitId: player.id,
         from: { q: 0, r: 0 },
         steps: [{ q: 1, r: 0 }],
       },
     ]);
-    expect(unitPresenter.sync).toHaveBeenLastCalledWith(player);
     expect(controller.previewHex({ q: 0, r: 0 })).toEqual({
       type: GameActionPreviewType.OutOfRange,
       reason: GameActionRejectionReason.PresentationBusy,
@@ -188,7 +212,7 @@ describe("GameController", () => {
       UnitTexture.PlayerIdle,
     );
     const session = new GameSession(new GameMap(mapData), [player]);
-    const presenter: UnitPresenter = { sync: vi.fn() };
+    const presenter = createTacticalPresentationPresenter();
     const timelinePresenter: TimelinePresenter = { sync: vi.fn() };
     const controller = new GameController(
       session,
@@ -209,6 +233,7 @@ describe("GameController", () => {
       type: GameActionType.Waited,
       unitId: player.id,
     });
+    expect(presenter.sync).not.toHaveBeenCalled();
     expect(timelinePresenter.sync).toHaveBeenLastCalledWith({
       currentTime: 0,
       readyActorId: player.id,
@@ -219,19 +244,23 @@ describe("GameController", () => {
     });
   });
 
-  it("synchronizes units changed by an autonomous Enemy activation", () => {
+  it("coalesces autonomous Enemy movement and attack into one tactical update", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
-    const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
+    const enemy = new Unit("enemy", { q: 2, r: 0 }, UnitTexture.EnemyIdle, {
       faction: Faction.Enemy,
     });
-    const session = new GameSession(new GameMap(mapData), [mage, enemy]);
-    const presenter: UnitPresenter = { sync: vi.fn() };
+    const session = new GameSession(new GameMap(pursuitMapData), [mage, enemy]);
+    const presenter = createTacticalPresentationPresenter();
     const controller = new GameController(session, presenter);
 
     controller.waitForMage();
 
-    expect(presenter.sync).toHaveBeenCalledWith(mage);
-    expect(presenter.sync).toHaveBeenCalledWith(enemy);
+    expect(presenter.sync).toHaveBeenCalledTimes(1);
+    expect(presenter.sync).toHaveBeenCalledWith([{
+      unitId: enemy.id,
+      from: { q: 2, r: 0 },
+      steps: [{ q: 1, r: 0 }],
+    }]);
     expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
   });
 
@@ -241,12 +270,12 @@ describe("GameController", () => {
       faction: Faction.Player,
     });
     const session = new GameSession(new GameMap(mapData), [mage, servant]);
-    const unitPresenter: UnitPresenter = { sync: vi.fn() };
+    const tacticalPresentationPresenter = createTacticalPresentationPresenter();
     const commandPresenter: ServantCommandPresenter = { sync: vi.fn() };
     const feedbackPresenter: TacticalFeedbackPresenter = { sync: vi.fn() };
     const controller = new GameController(
       session,
-      unitPresenter,
+      tacticalPresentationPresenter,
       feedbackPresenter,
       undefined,
       commandPresenter,
@@ -289,6 +318,7 @@ describe("GameController", () => {
       readyActorActionPoints: actionPointsPerActivation
         - TacticalActionPointCost.ServantStrategyCommand,
     });
+    expect(tacticalPresentationPresenter.sync).not.toHaveBeenCalled();
     expect(commandPresenter.sync).toHaveBeenLastCalledWith({
       targetServantId: servant.id,
       targetStrategyType: ServantStrategyType.Hold,
@@ -312,7 +342,7 @@ describe("GameController", () => {
     const commandPresenter: ServantCommandPresenter = { sync: vi.fn() };
     const controller = new GameController(
       session,
-      { sync: vi.fn() },
+      createTacticalPresentationPresenter(),
       undefined,
       undefined,
       commandPresenter,
@@ -355,7 +385,7 @@ describe("GameController", () => {
     const feedbackPresenter: TacticalFeedbackPresenter = { sync: vi.fn() };
     const controller = new GameController(
       session,
-      { sync: vi.fn() },
+      createTacticalPresentationPresenter(),
       feedbackPresenter,
       undefined,
       commandPresenter,
@@ -431,7 +461,7 @@ describe("GameController", () => {
     const feedbackPresenter: TacticalFeedbackPresenter = { sync: vi.fn() };
     const controller = new GameController(
       session,
-      { sync: vi.fn() },
+      createTacticalPresentationPresenter(),
       feedbackPresenter,
       undefined,
       commandPresenter,

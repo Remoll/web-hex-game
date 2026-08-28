@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import {
   GameController,
-  type UnitMovementPresenter,
+  type TacticalPresentationPresenter,
 } from "@/app/gameController/GameController";
 import { InputController } from "@/app/inputController/InputController";
 import { TimelineHud } from "@/app/timelineHud/TimelineHud";
@@ -112,8 +112,11 @@ export class GameApp {
     this.syncTacticalPresentation();
 
     const unitMovementAnimationQueue = this.unitMovementAnimationQueue;
-    const unitMovementPresenter: UnitMovementPresenter = {
-      sync: (events) => this.enqueueUnitMovementAnimations(events),
+    const tacticalPresentationPresenter: TacticalPresentationPresenter = {
+      sync: (events) => {
+        this.enqueueUnitMovementAnimations(events);
+        this.syncTacticalPresentation();
+      },
       get isAnimating(): boolean {
         return unitMovementAnimationQueue.isAnimating;
       },
@@ -121,12 +124,11 @@ export class GameApp {
 
     gameController = new GameController(
       this.session,
-      { sync: () => this.syncTacticalPresentation() },
+      tacticalPresentationPresenter,
       this.mapHighlightView,
       this.timelineHud,
       this.servantCommandHud,
       this.initiativeQueueHud,
-      unitMovementPresenter,
     );
     this.input = new InputController(
       this.renderer.domElement,

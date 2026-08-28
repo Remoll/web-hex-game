@@ -10,16 +10,11 @@ import {
   type UnitMovementEvent,
 } from "@/game/gameSession/GameSession";
 import type { TimelinePresentation } from "@/game/eventTimeline/EventTimeline";
-import type { Unit } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
 import {
   TacticalHighlightKind,
   type TacticalHighlight,
 } from "@/rendering/mapHighlightView/MapHighlightRenderModel";
-
-export interface UnitPresenter {
-  sync(unit: Unit): void;
-}
 
 export interface TacticalFeedbackPresenter {
   sync(highlights: readonly TacticalHighlight[]): void;
@@ -37,11 +32,13 @@ export interface InitiativeQueuePresenter {
   sync(presentation: InitiativeQueuePresentation): void;
 }
 
-/** Presentation-only movement playback; it never changes the GameSession. */
-export interface UnitMovementPresenter {
+/** Synchronizes one resolved state without allowing presentation to change rules. */
+export interface TacticalPresentationPresenter {
   readonly isAnimating: boolean;
   sync(events: readonly UnitMovementEvent[]): void;
 }
+
+const noMovementEvents = 0;
 
 const noopFeedbackPresenter: TacticalFeedbackPresenter = {
   sync: () => undefined,
@@ -59,32 +56,23 @@ const noopInitiativeQueuePresenter: InitiativeQueuePresenter = {
   sync: () => undefined,
 };
 
-const noopUnitMovementPresenter: UnitMovementPresenter = {
-  isAnimating: false,
-  sync: () => undefined,
-};
-
 /** Connects domain actions to the presentation layer without exposing Three.js to the game. */
 export class GameController {
   private initiativeQueueHighlightedUnitId: string | undefined;
 
   constructor(
     private readonly session: GameSession,
-    private readonly unitPresenter: UnitPresenter,
+    private readonly tacticalPresentationPresenter: TacticalPresentationPresenter,
     private readonly tacticalFeedbackPresenter: TacticalFeedbackPresenter = noopFeedbackPresenter,
     private readonly timelinePresenter: TimelinePresenter = noopTimelinePresenter,
     private readonly servantCommandPresenter: ServantCommandPresenter = noopServantCommandPresenter,
     private readonly initiativeQueuePresenter: InitiativeQueuePresenter = noopInitiativeQueuePresenter,
-    private readonly unitMovementPresenter: UnitMovementPresenter = noopUnitMovementPresenter,
   ) {
-    this.syncTimelinePresentation();
-    this.syncServantCommandPresentation();
-    this.syncInitiativeQueuePresentation();
-    this.refreshTacticalFeedback();
+    this.syncTacticalInterface();
   }
 
   clickHex(coord: HexCoord): GameAction {
-    if (this.unitMovementPresenter.isAnimating) {
+    if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();
     }
 
@@ -95,43 +83,25 @@ export class GameController {
       this.session.resolveAutonomousActivations();
     }
 
-    this.syncMovementPresentation();
-
-    if (action.type === GameActionType.Moved) {
-      this.syncUnit(action.unitId);
-    }
-
-    if (action.type === GameActionType.Attacked) {
-      this.syncUnit(action.attackerId);
-      this.syncUnit(action.targetId);
-    }
-    this.syncAutonomousUnitUpdates();
-
-    this.syncTimelinePresentation();
-    this.syncServantCommandPresentation();
-    this.syncInitiativeQueuePresentation();
-    this.refreshTacticalFeedback();
+    this.syncResolvedTacticalPresentation(action);
+    this.syncTacticalInterface();
 
     return action;
   }
 
   waitForMage(): GameAction {
-    if (this.unitMovementPresenter.isAnimating) {
+    if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();
     }
 
     const action = this.session.waitForMage();
-    this.syncMovementPresentation();
-    this.syncAutonomousUnitUpdates();
-    this.syncTimelinePresentation();
-    this.syncServantCommandPresentation();
-    this.syncInitiativeQueuePresentation();
-    this.refreshTacticalFeedback();
+    this.syncResolvedTacticalPresentation(action);
+    this.syncTacticalInterface();
     return action;
   }
 
   assignHoldStrategy(): GameAction {
-    if (this.unitMovementPresenter.isAnimating) {
+    if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();
     }
 
@@ -141,7 +111,7 @@ export class GameController {
   }
 
   assignProtectMageStrategy(): GameAction {
-    if (this.unitMovementPresenter.isAnimating) {
+    if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();
     }
 
@@ -151,7 +121,7 @@ export class GameController {
   }
 
   beginPursueDesignatedEnemySelection(): GameAction {
-    if (this.unitMovementPresenter.isAnimating) {
+    if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();
     }
 
@@ -161,7 +131,7 @@ export class GameController {
   }
 
   beginSecureDesignatedHexSelection(): GameAction {
-    if (this.unitMovementPresenter.isAnimating) {
+    if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();
     }
 
@@ -171,7 +141,7 @@ export class GameController {
   }
 
   clearServantStrategy(): GameAction {
-    if (this.unitMovementPresenter.isAnimating) {
+    if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();
     }
 
@@ -181,7 +151,7 @@ export class GameController {
   }
 
   previewHex(coord: HexCoord): GameActionPreview {
-    if (this.unitMovementPresenter.isAnimating) {
+    if (this.tacticalPresentationPresenter.isAnimating) {
       const preview: GameActionPreview = {
         type: GameActionPreviewType.OutOfRange,
         reason: GameActionRejectionReason.PresentationBusy,
@@ -215,21 +185,20 @@ export class GameController {
     return this.session.selectedUnitId !== null;
   }
 
-  private syncUnit(unitId: string): void {
-    const unit = this.session.getUnit(unitId);
-    if (unit) {
-      this.unitPresenter.sync(unit);
-    }
-  }
+  /** Coalesces one resolved action into at most one full tactical refresh. */
+  private syncResolvedTacticalPresentation(action: GameAction): void {
+    const movementEvents = this.session.consumeMovementEvents();
+    const hasAutonomousUnitUpdates = this.session
+      .consumeAutonomousUnitUpdateSignal();
+    const hasMovementEvents = movementEvents.length > noMovementEvents;
+    const hasDirectUnitUpdate = action.type === GameActionType.Moved
+      || action.type === GameActionType.Attacked;
 
-  private syncAutonomousUnitUpdates(): void {
-    for (const unit of this.session.consumeAutonomousUnitUpdates()) {
-      this.unitPresenter.sync(unit);
+    if (!hasDirectUnitUpdate && !hasAutonomousUnitUpdates && !hasMovementEvents) {
+      return;
     }
-  }
 
-  private syncMovementPresentation(): void {
-    this.unitMovementPresenter.sync(this.session.consumeMovementEvents());
+    this.tacticalPresentationPresenter.sync(movementEvents);
   }
 
   private presentationBusyAction(): GameAction {
@@ -355,17 +324,21 @@ export class GameController {
     this.initiativeQueuePresenter.sync(this.session.initiativeQueuePresentation);
   }
 
+  /** Refreshes independent UI projections after every completed interaction. */
+  private syncTacticalInterface(): void {
+    this.syncTimelinePresentation();
+    this.syncServantCommandPresentation();
+    this.syncInitiativeQueuePresentation();
+    this.refreshTacticalFeedback();
+  }
+
   private resolveAutonomousActivationsAfterCommand(action: GameAction): void {
     if (action.type === GameActionType.StrategyAssigned
       || action.type === GameActionType.StrategyCleared) {
       this.session.resolveAutonomousActivations();
     }
 
-    this.syncMovementPresentation();
-    this.syncTimelinePresentation();
-    this.syncServantCommandPresentation();
-    this.syncAutonomousUnitUpdates();
-    this.syncInitiativeQueuePresentation();
-    this.refreshTacticalFeedback();
+    this.syncResolvedTacticalPresentation(action);
+    this.syncTacticalInterface();
   }
 }

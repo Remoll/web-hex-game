@@ -265,6 +265,23 @@ describe("GameSession", () => {
     expect(enemy.position).toEqual({ q: 1, r: 0 });
   });
 
+  it("publishes autonomous unit changes as a consumable boolean signal", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(
+      new GameMap(createGrassMap([mage.position, enemy.position])),
+      [mage, enemy],
+    );
+
+    expect(session.consumeAutonomousUnitUpdateSignal()).toBe(false);
+    session.waitForMage();
+
+    expect(session.consumeAutonomousUnitUpdateSignal()).toBe(true);
+    expect(session.consumeAutonomousUnitUpdateSignal()).toBe(false);
+  });
+
   it("keeps direct control Mage-exclusive and selects a servant only as a command target", () => {
     const { session, playerAlly } = createSession();
 
