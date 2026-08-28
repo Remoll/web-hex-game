@@ -1,4 +1,8 @@
 import type { GameMap } from "@/game/board/gameMap/GameMap";
+import {
+  getHexCoordKey,
+  isSameHexCoord,
+} from "@/game/board/hexCoord/HexCoord";
 import type { HexCoord } from "@/game/types";
 
 /** An intervening field this far above the observer blocks sight beyond it. */
@@ -47,12 +51,12 @@ function hasUnblockedShortestSightLine(
   observerGroundLevel: number,
   visibilityByCoordKey: Map<string, boolean>,
 ): boolean {
-  if (isSameHex(current, target)) {
+  if (isSameHexCoord(current, target)) {
     return true;
   }
 
   const currentDistance = gameMap.getHexDistance(current, target);
-  const currentKey = getCoordKey(current);
+  const currentKey = getHexCoordKey(current);
   const cachedVisibility = visibilityByCoordKey.get(currentKey);
   if (cachedVisibility !== undefined) {
     return cachedVisibility;
@@ -64,7 +68,7 @@ function hasUnblockedShortestSightLine(
       continue;
     }
 
-    if (isSameHex(next, target)) {
+    if (isSameHexCoord(next, target)) {
       visibilityByCoordKey.set(currentKey, true);
       return true;
     }
@@ -95,12 +99,4 @@ function isSteepVisionBlocker(
   observerGroundLevel: number,
 ): boolean {
   return groundLevel - observerGroundLevel >= steepElevationVisionBlockerDifference;
-}
-
-function isSameHex(first: HexCoord, second: HexCoord): boolean {
-  return first.q === second.q && first.r === second.r;
-}
-
-function getCoordKey(coord: HexCoord): string {
-  return `${coord.q},${coord.r}`;
 }

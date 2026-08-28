@@ -1,5 +1,10 @@
 import { GameMap, type MovementPath } from "@/game/board/gameMap/GameMap";
 import {
+  compareHexCoords,
+  getHexCoordKey,
+  isSameHexCoord,
+} from "@/game/board/hexCoord/HexCoord";
+import {
   Faction,
   FactionDisposition,
   getFactionDisposition,
@@ -440,7 +445,7 @@ export class GameSession {
 
   /** Returns only a living occupant; corpses never block or receive input. */
   getUnitAt(coord: HexCoord): Unit | undefined {
-    const unitId = this.livingUnitIdsByHex.get(getCoordKey(coord));
+    const unitId = this.livingUnitIdsByHex.get(getHexCoordKey(coord));
     return unitId ? this.unitsById.get(unitId) : undefined;
   }
 
@@ -535,7 +540,7 @@ export class GameSession {
         };
     }
 
-    if (isSameHex(selectedUnit.position, coord)) {
+    if (isSameHexCoord(selectedUnit.position, coord)) {
       return {
         type: GameActionPreviewType.Selection,
         unitId: selectedUnit.id,
@@ -603,7 +608,7 @@ export class GameSession {
       };
     }
 
-    const path = this.getReachablePaths(selectedUnit).get(getCoordKey(coord));
+    const path = this.getReachablePaths(selectedUnit).get(getHexCoordKey(coord));
     return path
       ? {
         type: GameActionPreviewType.ValidMove,
@@ -628,7 +633,7 @@ export class GameSession {
     const selectedUnit = this.getSelectedControllableUnit();
     if (selectedUnit
       && this._targetSelection === undefined
-      && isSameHex(selectedUnit.position, coord)) {
+      && isSameHexCoord(selectedUnit.position, coord)) {
       this._selectedUnitId = null;
       this.clearServantCommandTarget();
       return { type: GameActionType.Deselected, unitId: selectedUnit.id };
@@ -909,7 +914,7 @@ export class GameSession {
 
     const existingStrategy = this.servantStrategiesByUnitId.get(servant.id);
     if (existingStrategy?.type === ServantStrategyType.SecureDesignatedHex
-      && isSameHex(existingStrategy.targetHex, targetHex)) {
+      && isSameHexCoord(existingStrategy.targetHex, targetHex)) {
       this._targetSelection = undefined;
       return {
         type: GameActionType.Ignored,
@@ -1597,7 +1602,7 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
-    if (isSameHex(servant.position, strategy.targetHex)) {
+    if (isSameHexCoord(servant.position, strategy.targetHex)) {
       return this.resolveHoldServantStrategy(servant, remainingActionPoints);
     }
 
@@ -1628,7 +1633,7 @@ export class GameSession {
     const path = this.gameMap.findShortestPathToAny(
       servant.position,
       servant.movementType,
-      (coord) => isSameHex(coord, strategy.targetHex),
+      (coord) => isSameHexCoord(coord, strategy.targetHex),
       (coord) => this.getUnitAt(coord) !== undefined,
     );
     if (!path || path.steps.length === 0) {
@@ -1680,7 +1685,7 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
-    if (isSameHex(enemy.position, lastKnownHostilePosition)) {
+    if (isSameHexCoord(enemy.position, lastKnownHostilePosition)) {
       this.enemyTacticalMemory.clear(enemy.id);
       return TimelineAction.Wait;
     }
@@ -1799,7 +1804,7 @@ export class GameSession {
     const approachHexKeys = new Set<string>();
     for (const coord of this.gameMap.getNeighbours(targetHex)) {
       if (this.canUnitOccupy(servant, coord)) {
-        approachHexKeys.add(getCoordKey(coord));
+        approachHexKeys.add(getHexCoordKey(coord));
       }
     }
 
@@ -1810,7 +1815,7 @@ export class GameSession {
     return this.gameMap.findShortestPathToAny(
       servant.position,
       servant.movementType,
-      (coord) => approachHexKeys.has(getCoordKey(coord)),
+      (coord) => approachHexKeys.has(getHexCoordKey(coord)),
       (coord) => this.getUnitAt(coord) !== undefined,
     );
   }
@@ -1947,7 +1952,7 @@ export class GameSession {
   }
 
   private registerLivingUnit(unit: Unit): void {
-    const key = getCoordKey(unit.position);
+    const key = getHexCoordKey(unit.position);
     const existingUnitId = this.livingUnitIdsByHex.get(key);
     if (existingUnitId) {
       throw new Error(`Living units ${existingUnitId} and ${unit.id} cannot share a hex`);
@@ -1957,7 +1962,7 @@ export class GameSession {
   }
 
   private unregisterLivingUnit(unit: Unit): void {
-    const key = getCoordKey(unit.position);
+    const key = getHexCoordKey(unit.position);
     if (this.livingUnitIdsByHex.get(key) === unit.id) {
       this.livingUnitIdsByHex.delete(key);
     }
@@ -1971,18 +1976,6 @@ export class GameSession {
 
     this.mageVisibility.recalculate(mage);
   }
-}
-
-function getCoordKey(coord: HexCoord): string {
-  return `${coord.q},${coord.r}`;
-}
-
-function isSameHex(first: HexCoord, second: HexCoord): boolean {
-  return first.q === second.q && first.r === second.r;
-}
-
-function compareHexCoords(first: HexCoord, second: HexCoord): number {
-  return first.q - second.q || first.r - second.r;
 }
 
 function getInitiativeQueueActorLabel(unit: Unit): InitiativeQueueActorLabel {

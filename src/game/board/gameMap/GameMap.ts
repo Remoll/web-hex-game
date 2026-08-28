@@ -1,5 +1,9 @@
 import { Field } from "@/game/board/field/Field";
 import {
+  getHexCoordKey,
+  getHexDistance,
+} from "@/game/board/hexCoord/HexCoord";
+import {
   baseMovementActionPointCost,
   groundUphillMovementActionPointCost,
   maximumGroundElevationDifference,
@@ -92,11 +96,7 @@ export class GameMap {
   }
 
   getHexDistance(first: HexCoord, second: HexCoord): number {
-    return Math.max(
-      Math.abs(first.q - second.q),
-      Math.abs(first.r - second.r),
-      Math.abs(first.q + first.r - second.q - second.r),
-    );
+    return getHexDistance(first, second);
   }
 
   /**
@@ -160,7 +160,7 @@ export class GameMap {
     );
     const paths = new Map<string, MovementPath>();
     for (const [coordKey, node] of bestNodesByCoordKey) {
-      if (coordKey !== getCoordKey(origin)) {
+      if (coordKey !== getHexCoordKey(origin)) {
         paths.set(coordKey, buildMovementPath(node));
       }
     }
@@ -181,7 +181,7 @@ export class GameMap {
       maxCost,
       isBlocked,
       maxStepCount,
-    ).get(getCoordKey(destination));
+    ).get(getHexCoordKey(destination));
   }
 
   /** Finds one cheapest deterministic path for autonomous resolution. */
@@ -241,14 +241,14 @@ export class GameMap {
       discoveryOrder: nextDiscoveryOrder,
     };
     const bestNodesByCoordKey = new Map<string, WeightedPathNode>([
-      [getCoordKey(origin), originNode],
+      [getHexCoordKey(origin), originNode],
     ]);
     const pendingNodes: WeightedPathNode[] = [originNode];
     nextDiscoveryOrder += discoveryOrderIncrement;
 
     while (pendingNodes.length > 0) {
       const current = takeLowestCostNode(pendingNodes);
-      if (bestNodesByCoordKey.get(getCoordKey(current.coord)) !== current) {
+      if (bestNodesByCoordKey.get(getHexCoordKey(current.coord)) !== current) {
         continue;
       }
 
@@ -280,7 +280,7 @@ export class GameMap {
           continue;
         }
 
-        const coordKey = getCoordKey(neighbour);
+        const coordKey = getHexCoordKey(neighbour);
         const existingNode = bestNodesByCoordKey.get(coordKey);
         if (existingNode
           && (existingNode.cost < cost
@@ -304,10 +304,6 @@ export class GameMap {
 
     return { bestNodesByCoordKey, destinationNode: undefined };
   }
-}
-
-function getCoordKey(coord: HexCoord): string {
-  return `${coord.q},${coord.r}`;
 }
 
 function takeLowestCostNode(nodes: WeightedPathNode[]): WeightedPathNode {

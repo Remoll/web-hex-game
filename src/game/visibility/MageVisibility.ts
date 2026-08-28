@@ -1,4 +1,5 @@
 import type { GameMap } from "@/game/board/gameMap/GameMap";
+import { getHexCoordKey } from "@/game/board/hexCoord/HexCoord";
 import {
   Unit,
   UnitTacticalRole,
@@ -27,12 +28,15 @@ export class MageVisibility implements FieldVisibilityReader {
 
   constructor(private readonly gameMap: GameMap) {
     this.gameMap.forEachField((q, r) => {
-      this.visibilityByHex.set(getCoordKey({ q, r }), FieldVisibility.Undiscovered);
+      this.visibilityByHex.set(
+        getHexCoordKey({ q, r }),
+        FieldVisibility.Undiscovered,
+      );
     });
   }
 
   getFieldVisibility(coord: HexCoord): FieldVisibility | undefined {
-    return this.visibilityByHex.get(getCoordKey(coord));
+    return this.visibilityByHex.get(getHexCoordKey(coord));
   }
 
   recalculate(mage: Unit): void {
@@ -42,7 +46,7 @@ export class MageVisibility implements FieldVisibilityReader {
 
     this.gameMap.forEachField((q, r) => {
       const coord = { q, r };
-      const key = getCoordKey(coord);
+      const key = getHexCoordKey(coord);
       const previous = this.visibilityByHex.get(key) ?? FieldVisibility.Undiscovered;
       const isVisible = hasMageVision
         && this.gameMap.getHexDistance(magePosition, coord) <= mage.viewRange
@@ -58,8 +62,4 @@ export class MageVisibility implements FieldVisibilityReader {
       );
     });
   }
-}
-
-function getCoordKey(coord: HexCoord): string {
-  return `${coord.q},${coord.r}`;
 }
