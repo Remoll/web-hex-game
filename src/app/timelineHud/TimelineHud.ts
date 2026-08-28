@@ -50,6 +50,7 @@ export class TimelineHud {
         : presentation.readyActorActionPoints}/${presentation.actionPointsPerActivation}`,
       `Move ${TacticalActionPointCost.Move} AP (${TacticalActionPointCost.MoveUphill} uphill)`,
       `Attack ${TacticalActionPointCost.Attack} AP`,
+      `Command ${TacticalActionPointCost.ServantStrategyCommand} AP`,
     ].join(" · ");
     this.waitButton.textContent = presentation.readyActorHasWaited
       && presentation.readyActorRecoveryDelay !== undefined

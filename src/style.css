@@ -16,7 +16,10 @@ canvas {
   left: 50%;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
+  max-width: calc(100% - 24px);
   gap: 12px;
   padding: 8px 12px;
   color: #f2eee3;
@@ -54,6 +57,9 @@ canvas {
   left: 50%;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(100% - 24px);
   align-items: center;
   gap: 12px;
   padding: 8px 12px;

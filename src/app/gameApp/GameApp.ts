@@ -104,6 +104,7 @@ export class GameApp {
     this.servantCommandHud = new ServantCommandHud({
       container,
       onAssignHold: () => gameController?.assignHoldStrategy(),
+      onAssignProtect: () => gameController?.assignProtectMageStrategy(),
       onBeginPursue: () => gameController?.beginPursueDesignatedEnemySelection(),
       onBeginSecure: () => gameController?.beginSecureDesignatedHexSelection(),
       onClearStrategy: () => gameController?.clearServantStrategy(),

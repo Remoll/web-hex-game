@@ -70,18 +70,23 @@ its current map position.
   actors currently ready at that simulation time without spending AP. When the
   Mage becomes ready again, the control changes to **End Turn**; using it
   discards remaining AP and starts the normal recovery delay.
-- Existing servant-strategy commands still end the Mage's activation as a
-  whole-action decision. Their AP cost is intentionally deferred until the
-  command-economy story, rather than being inferred in this tactical slice.
+- Every completed servant command—**Hold**, **Protect Mage**, **Pursue
+  Designated Enemy**, **Secure Designated Hex**, or **Clear strategy**—costs
+  1 AP. The Mage remains ready while AP remain; at zero AP the activation ends
+  normally. Entering or cancelling target-selection mode is free because no
+  order has been issued yet. The selected servant remains the command target
+  while the Mage has AP, so the player can change or clear its order without
+  reselecting it.
 - A Mage command only schedules the Mage's next activation. It does not alter
   the servant's scheduled activation or make the servant act immediately.
 - When a servant receives its own later activation, its autonomous resolver
   continues legal strategy actions while it can afford them. The only currently
   supported strategies are **Hold**, which stays in place but defends itself
-  against an adjacent hostile, **Pursue Designated Enemy**, and **Secure
-  Designated Hex**. A servant with no Mage-issued strategy remembers the first
-  hostile it currently perceives and uses legal AP-limited paths to engage it.
-  An explicit strategy always takes precedence over this default behaviour.
+  against an adjacent hostile, **Protect Mage**, **Pursue Designated Enemy**,
+  and **Secure Designated Hex**. A servant with no Mage-issued strategy
+  remembers the first hostile it currently perceives and uses legal AP-limited
+  paths to engage it. An explicit strategy always takes precedence over this
+  default behaviour.
   Pursuit stores one
   explicit Enemy identity and, on the servant's later activation, attacks that
   Enemy if adjacent or takes deterministic legal Ground steps toward an empty
@@ -91,7 +96,11 @@ its current map position.
   already holding a Secure hex attacks only adjacent hostiles and never switches
   to default pursuit until the Mage changes or clears the order. Equal shortest
   paths use the GameMap's fixed axial-neighbour order. A blocked strategy Holds
-  without losing its order.
+  without losing its order. **Protect Mage** attacks perceived hostile threats
+  within two hexes of the Mage, moves toward the lowest-AP reachable adjacent
+  attack position when needed, and otherwise follows the Mage to the nearest
+  legal empty neighbouring hex. It retains the order when blocked; if the Mage
+  dies, the order clears and the servant returns to default autonomy.
 - On its activation, an Enemy evaluates only hostiles within its own derived
   view range and an unblocked elevation-aware tactical sight line. It remembers
   the nearest visible hostile's position, then spends its available AP on
@@ -113,20 +122,22 @@ its current map position.
 - Hover the Mage to see the selection cursor, then click it to select it.
 - With a ready Mage selected, click a currently Visible Player-faction servant
   to select it as the command target (amber highlight). Use **Assign Hold**,
-  **Assign Pursue**, or **Assign Secure** in the command panel above the map.
+  **Assign Protect Mage**, **Assign Pursue**, or **Assign Secure** in
+  the command panel above the map.
   **Assign Pursue** enters target-selection mode: click one currently Visible
   living Enemy and store that specific Enemy as the servant's target. **Assign
   Secure** similarly requires one currently
-  Visible map hex. The servant acts only during its own later activation. Its
+  Visible map hex. Each completed assignment costs 1 AP; the servant acts only
+  during its own later activation. Its
   order persists until the Mage replaces or clears it; a pursuit also ends when
   its Enemy dies, while a secure order ends after the servant reaches an empty
   designated hex.
 - A pursuit remains valid after the servant or target leave Mage sight, but the
   command panel and amber marker expose their targets only while they are
   currently Visible. A hidden Enemy's live position and actions are never
-  revealed. **Clear strategy** also cancels a pending target selection without
-  spending Mage Tempo. A hidden, defeated, Enemy, or Neutral unit cannot
-  receive a command and does not consume Mage Tempo.
+  revealed. **Clear strategy** costs 1 AP only when it removes an active order;
+  it cancels a pending target selection for free. A hidden, defeated, Enemy, or
+  Neutral unit cannot receive a command and does not consume Mage AP.
 - After selection, reachable Ground hexes are highlighted in green. Click one
   to move there along a valid path that fits both the unit's current movement
   range and remaining AP. Ground units may cross only an elevation difference

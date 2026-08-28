@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   holdServantStrategy,
+  protectMageServantStrategy,
+  protectMageThreatRange,
   pursueDesignatedEnemyStrategy,
   secureDesignatedHexStrategy,
   ServantStrategyType,
@@ -10,6 +12,13 @@ describe("ServantStrategy", () => {
   it("exposes the Hold strategy as a stable serialized value", () => {
     expect(holdServantStrategy).toEqual({
       type: ServantStrategyType.Hold,
+    });
+  });
+
+  it("stores Protect Mage without a Mage position or presentation reference", () => {
+    expect(protectMageThreatRange).toBe(2);
+    expect(protectMageServantStrategy).toEqual({
+      type: ServantStrategyType.ProtectMage,
     });
   });
 

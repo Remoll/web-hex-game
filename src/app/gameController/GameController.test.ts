@@ -19,6 +19,7 @@ import {
 import {
   actionPointsPerActivation,
   baseTimelineRecoveryDelay,
+  TacticalActionPointCost,
 } from "@/game/eventTimeline/EventTimeline";
 import { Faction } from "@/game/faction/Faction";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
@@ -264,6 +265,7 @@ describe("GameController", () => {
       canAssignHold: true,
       canAssignPursue: true,
       canAssignSecure: true,
+      canAssignProtect: true,
       canClearStrategy: false,
       targetSelection: undefined,
     });
@@ -282,20 +284,59 @@ describe("GameController", () => {
       servantId: servant.id,
     });
     expect(session.timelinePresentation).toMatchObject({
-      currentTime: baseTimelineRecoveryDelay,
+      currentTime: 0,
       readyActorId: mage.id,
+      readyActorActionPoints: actionPointsPerActivation
+        - TacticalActionPointCost.ServantStrategyCommand,
     });
     expect(commandPresenter.sync).toHaveBeenLastCalledWith({
-      targetServantId: undefined,
-      targetStrategyType: undefined,
+      targetServantId: servant.id,
+      targetStrategyType: ServantStrategyType.Hold,
       visiblePursuitTargetId: undefined,
       visibleSecureTargetHex: undefined,
       canAssignHold: false,
-      canAssignPursue: false,
-      canAssignSecure: false,
-      canClearStrategy: false,
+      canAssignPursue: true,
+      canAssignSecure: true,
+      canAssignProtect: true,
+      canClearStrategy: true,
       targetSelection: undefined,
     });
+  });
+
+  it("assigns Protect Mage through the controller and preserves the Mage turn", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit("servant", { q: 1, r: 0 }, UnitTexture.PlayerIdle, {
+      faction: Faction.Player,
+    });
+    const session = new GameSession(new GameMap(mapData), [mage, servant]);
+    const commandPresenter: ServantCommandPresenter = { sync: vi.fn() };
+    const controller = new GameController(
+      session,
+      { sync: vi.fn() },
+      undefined,
+      undefined,
+      commandPresenter,
+    );
+
+    controller.clickHex(mage.position);
+    controller.clickHex(servant.position);
+
+    expect(controller.assignProtectMageStrategy()).toEqual({
+      type: GameActionType.StrategyAssigned,
+      servantId: servant.id,
+      strategyType: ServantStrategyType.ProtectMage,
+    });
+    expect(session.timelinePresentation).toMatchObject({
+      readyActorId: mage.id,
+      readyActorActionPoints: actionPointsPerActivation
+        - TacticalActionPointCost.ServantStrategyCommand,
+    });
+    expect(commandPresenter.sync).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        targetServantId: servant.id,
+        canAssignProtect: false,
+      }),
+    );
   });
 
   it("guides an explicit Pursue target selection without revealing an unselected target", () => {
@@ -334,6 +375,7 @@ describe("GameController", () => {
       canAssignHold: false,
       canAssignPursue: false,
       canAssignSecure: false,
+      canAssignProtect: false,
       canClearStrategy: true,
       targetSelection: ServantStrategyTargetSelection.PursueEnemy,
     });
@@ -355,6 +397,7 @@ describe("GameController", () => {
       canAssignHold: true,
       canAssignPursue: true,
       canAssignSecure: true,
+      canAssignProtect: true,
       canClearStrategy: true,
       targetSelection: undefined,
     });
@@ -408,6 +451,7 @@ describe("GameController", () => {
       canAssignHold: false,
       canAssignPursue: false,
       canAssignSecure: false,
+      canAssignProtect: false,
       canClearStrategy: true,
       targetSelection: ServantStrategyTargetSelection.SecureHex,
     });
@@ -438,6 +482,7 @@ describe("GameController", () => {
       canAssignHold: true,
       canAssignPursue: true,
       canAssignSecure: true,
+      canAssignProtect: true,
       canClearStrategy: true,
       targetSelection: undefined,
     });

@@ -8,7 +8,11 @@ export enum ServantStrategyType {
   Hold = "hold",
   PursueDesignatedEnemy = "pursue-designated-enemy",
   SecureDesignatedHex = "secure-designated-hex",
+  ProtectMage = "protect-mage",
 }
+
+/** Hostiles inside this radius of the Mage are Protect Mage threats. */
+export const protectMageThreatRange = 2;
 
 export interface HoldServantStrategy {
   readonly type: ServantStrategyType.Hold;
@@ -25,14 +29,24 @@ export interface SecureDesignatedHexServantStrategy {
   readonly targetHex: HexCoord;
 }
 
+/** The Mage identity remains session-owned; the strategy stores no UI state. */
+export interface ProtectMageServantStrategy {
+  readonly type: ServantStrategyType.ProtectMage;
+}
+
 export type ServantStrategy =
   | HoldServantStrategy
   | PursueDesignatedEnemyServantStrategy
-  | SecureDesignatedHexServantStrategy;
+  | SecureDesignatedHexServantStrategy
+  | ProtectMageServantStrategy;
 
 /** The default safe instruction: consume the servant activation without moving. */
 export const holdServantStrategy: HoldServantStrategy = {
   type: ServantStrategyType.Hold,
+};
+
+export const protectMageServantStrategy: ProtectMageServantStrategy = {
+  type: ServantStrategyType.ProtectMage,
 };
 
 /** Stores identity only; current target position remains domain-private. */

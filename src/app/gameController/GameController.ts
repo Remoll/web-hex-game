@@ -140,6 +140,16 @@ export class GameController {
     return action;
   }
 
+  assignProtectMageStrategy(): GameAction {
+    if (this.unitMovementPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
+    const action = this.session.assignProtectMageStrategy();
+    this.resolveAutonomousActivationsAfterCommand(action);
+    return action;
+  }
+
   beginPursueDesignatedEnemySelection(): GameAction {
     if (this.unitMovementPresenter.isAnimating) {
       return this.presentationBusyAction();

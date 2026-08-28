@@ -16,6 +16,8 @@ import { ServantTacticalMemory } from "@/game/servantAi/ServantTacticalMemory";
 import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
 import {
   holdServantStrategy,
+  protectMageServantStrategy,
+  protectMageThreatRange,
   pursueDesignatedEnemyStrategy,
   secureDesignatedHexStrategy,
   ServantStrategyType,
@@ -112,6 +114,11 @@ export type GameAction =
     strategyType: ServantStrategyType.SecureDesignatedHex;
     targetHex: HexCoord;
   }
+  | {
+    type: GameActionType.StrategyAssigned;
+    servantId: string;
+    strategyType: ServantStrategyType.ProtectMage;
+  }
   | { type: GameActionType.StrategyCleared; servantId: string }
   | { type: GameActionType.Waited; unitId: string }
   | { type: GameActionType.TurnEnded; unitId: string }
@@ -206,6 +213,7 @@ export interface ServantCommandPresentation {
   readonly canAssignHold: boolean;
   readonly canAssignPursue: boolean;
   readonly canAssignSecure: boolean;
+  readonly canAssignProtect: boolean;
   readonly canClearStrategy: boolean;
   readonly targetSelection: ServantStrategyTargetSelection | undefined;
 }
@@ -275,6 +283,10 @@ export class GameSession {
       ? strategy.targetHex
       : undefined;
     const isSelectingStrategyTarget = targetSelection !== undefined;
+    const canSpendServantStrategyCommand = this.canMageAffordServantStrategyCommand();
+    const canAssignStrategy = target !== undefined
+      && !isSelectingStrategyTarget
+      && canSpendServantStrategyCommand;
 
     return {
       targetServantId: target?.id,
@@ -287,10 +299,14 @@ export class GameSession {
         && this.getFieldVisibility(secureTargetHex) === FieldVisibility.Visible
         ? { ...secureTargetHex }
         : undefined,
-      canAssignHold: target !== undefined && !isSelectingStrategyTarget,
-      canAssignPursue: target !== undefined && !isSelectingStrategyTarget,
-      canAssignSecure: target !== undefined && !isSelectingStrategyTarget,
-      canClearStrategy: strategy !== undefined || isSelectingStrategyTarget,
+      canAssignHold: canAssignStrategy
+        && strategy?.type !== ServantStrategyType.Hold,
+      canAssignPursue: canAssignStrategy,
+      canAssignSecure: canAssignStrategy,
+      canAssignProtect: canAssignStrategy
+        && strategy?.type !== ServantStrategyType.ProtectMage,
+      canClearStrategy: isSelectingStrategyTarget
+        || (strategy !== undefined && canSpendServantStrategyCommand),
       targetSelection,
     };
   }
@@ -302,6 +318,11 @@ export class GameSession {
 
   getUnit(id: string): Unit | undefined {
     return this.unitsById.get(id);
+  }
+
+  /** Exposes only a servant's active strategy kind, never private target data. */
+  getServantStrategyType(servantId: string): ServantStrategyType | undefined {
+    return this.servantStrategiesByUnitId.get(servantId)?.type;
   }
 
   /**
@@ -663,6 +684,17 @@ export class GameSession {
       };
   }
 
+  /** Assigns the selected servant to defend the session-owned Mage. */
+  assignProtectMageStrategy(): GameAction {
+    const servant = this.getSelectedCommandServant();
+    return servant
+      ? this.assignProtectMageStrategyToServant(servant.id)
+      : {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoCommandTarget,
+      };
+  }
+
   /** Starts an explicit board-target selection without spending Mage Tempo. */
   beginPursueDesignatedEnemySelection(): GameAction {
     const servant = this.getSelectedCommandServant();
@@ -737,7 +769,8 @@ export class GameSession {
       };
     }
 
-    const rejection = this.getServantCommandRejectionReason(servant);
+    const rejection = this.getServantCommandRejectionReason(servant)
+      ?? this.getServantStrategyCommandCostRejectionReason();
     if (rejection) {
       return {
         type: GameActionType.Ignored,
@@ -745,8 +778,50 @@ export class GameSession {
       };
     }
 
+    if (this.servantStrategiesByUnitId.get(servant.id)?.type
+      === ServantStrategyType.Hold) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.StrategyUnchanged,
+      };
+    }
+
     this.servantStrategiesByUnitId.set(servant.id, holdServantStrategy);
     return this.completeServantStrategyCommand(servant.id, holdServantStrategy);
+  }
+
+  /** Assigns a 1-AP standing order that follows and defends the Mage. */
+  assignProtectMageStrategyToServant(servantId: string): GameAction {
+    const servant = this.unitsById.get(servantId);
+    if (!servant) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NoCommandTarget,
+      };
+    }
+
+    const rejection = this.getServantCommandRejectionReason(servant)
+      ?? this.getServantStrategyCommandCostRejectionReason();
+    if (rejection) {
+      return {
+        type: GameActionType.Ignored,
+        reason: rejection,
+      };
+    }
+
+    if (this.servantStrategiesByUnitId.get(servant.id)?.type
+      === ServantStrategyType.ProtectMage) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.StrategyUnchanged,
+      };
+    }
+
+    this.servantStrategiesByUnitId.set(servant.id, protectMageServantStrategy);
+    return this.completeServantStrategyCommand(
+      servant.id,
+      protectMageServantStrategy,
+    );
   }
 
   /** Assigns one visible Enemy identity to a visible servant for later action. */
@@ -762,7 +837,8 @@ export class GameSession {
       };
     }
 
-    const servantRejection = this.getServantCommandRejectionReason(servant);
+    const servantRejection = this.getServantCommandRejectionReason(servant)
+      ?? this.getServantStrategyCommandCostRejectionReason();
     if (servantRejection) {
       return {
         type: GameActionType.Ignored,
@@ -814,7 +890,8 @@ export class GameSession {
       };
     }
 
-    const servantRejection = this.getServantCommandRejectionReason(servant);
+    const servantRejection = this.getServantCommandRejectionReason(servant)
+      ?? this.getServantStrategyCommandCostRejectionReason();
     if (servantRejection) {
       return {
         type: GameActionType.Ignored,
@@ -855,7 +932,8 @@ export class GameSession {
       };
     }
 
-    const rejection = this.getServantCommandRejectionReason(servant);
+    const rejection = this.getServantCommandRejectionReason(servant)
+      ?? this.getServantStrategyCommandCostRejectionReason();
     if (rejection) {
       return {
         type: GameActionType.Ignored,
@@ -871,8 +949,7 @@ export class GameSession {
     }
 
     this.servantStrategiesByUnitId.delete(servant.id);
-    this.endMageActivationAfterCommand();
-    this.clearServantCommandTarget();
+    this.spendServantStrategyCommandActionPoints();
     return { type: GameActionType.StrategyCleared, servantId: servant.id };
   }
 
@@ -1115,6 +1192,26 @@ export class GameSession {
     return undefined;
   }
 
+  private getServantStrategyCommandCostRejectionReason(): (
+    | GameActionRejectionReason.NotReady
+    | GameActionRejectionReason.InsufficientActionPoints
+    | undefined
+  ) {
+    return this.canMageAffordServantStrategyCommand()
+      ? undefined
+      : this.isMageReady()
+        ? GameActionRejectionReason.InsufficientActionPoints
+        : GameActionRejectionReason.NotReady;
+  }
+
+  private canMageAffordServantStrategyCommand(): boolean {
+    const mage = this.unitsById.get(this.mageId);
+    return mage !== undefined && this.hasActionPointAvailability(
+      mage,
+      TacticalActionPointCost.ServantStrategyCommand,
+    );
+  }
+
   private getPursueTargetRejection(
     servant: Unit,
     target: Unit,
@@ -1155,8 +1252,7 @@ export class GameSession {
     servantId: string,
     strategy: ServantStrategy,
   ): GameAction {
-    this.endMageActivationAfterCommand();
-    this.clearServantCommandTarget();
+    this.spendServantStrategyCommandActionPoints();
 
     switch (strategy.type) {
       case ServantStrategyType.Hold:
@@ -1179,12 +1275,29 @@ export class GameSession {
           strategyType: strategy.type,
           targetHex: { ...strategy.targetHex },
         };
+      case ServantStrategyType.ProtectMage:
+        return {
+          type: GameActionType.StrategyAssigned,
+          servantId,
+          strategyType: strategy.type,
+        };
     }
   }
 
-  /** Existing servant commands remain whole-activation decisions for now. */
-  private endMageActivationAfterCommand(): void {
-    this.timeline.endReadyActivation(this.mageId);
+  /** Spends a named order cost and resolves only if it exhausts the Mage. */
+  private spendServantStrategyCommandActionPoints(): void {
+    const remainingActionPoints = this.timeline.spendReadyActionPoints(
+      this.mageId,
+      TacticalActionPointCost.ServantStrategyCommand,
+    );
+    this._targetSelection = undefined;
+    if (remainingActionPoints === noActionPoints) {
+      this.clearServantCommandTarget();
+    }
+    this.resolveAutonomousActivationsIfActivationEnded(
+      this.mageId,
+      remainingActionPoints,
+    );
   }
 
   private resolveAutonomousActivationsIfActivationEnded(
@@ -1236,6 +1349,11 @@ export class GameSession {
           strategy,
           remainingActionPoints,
         );
+      case ServantStrategyType.ProtectMage:
+        return this.resolveProtectMage(
+          unit,
+          remainingActionPoints,
+        );
     }
   }
 
@@ -1272,6 +1390,110 @@ export class GameSession {
 
     this.applyMeleeDamage(servant, adjacentHostile, true);
     return TimelineAction.Attack;
+  }
+
+  /** Defends perceived threats near the Mage, otherwise keeps close to it. */
+  private resolveProtectMage(
+    servant: Unit,
+    remainingActionPoints: number,
+  ): TimelineAction {
+    const mage = this.unitsById.get(this.mageId);
+    if (!mage || !mage.isAlive || !this.isMage(mage)) {
+      this.servantStrategiesByUnitId.delete(servant.id);
+      return this.resolveDefaultServantEngagement(servant, remainingActionPoints);
+    }
+
+    const adjacentThreat = this.findNearestProtectMageThreat(
+      servant,
+      mage,
+      (threat) => this.gameMap.getHexDistance(servant.position, threat.position)
+        === adjacentHexDistance,
+    );
+    if (adjacentThreat) {
+      if (!this.canAffordAutonomousAction(
+        remainingActionPoints,
+        TacticalActionPointCost.Attack,
+      )) {
+        return TimelineAction.Wait;
+      }
+
+      this.applyMeleeDamage(servant, adjacentThreat, true);
+      return TimelineAction.Attack;
+    }
+
+    const perceivedThreat = this.findNearestProtectMageThreat(servant, mage);
+    if (perceivedThreat) {
+      const threatApproach = this.findProtectMageThreatApproach(servant, mage);
+      if (!threatApproach) {
+        return TimelineAction.Wait;
+      }
+
+      return this.resolveAutonomousMovement(
+        servant,
+        threatApproach.steps[0],
+        remainingActionPoints,
+      );
+    }
+
+    return this.moveServantTowardHex(
+      servant,
+      mage.position,
+      remainingActionPoints,
+    );
+  }
+
+  /** Finds the nearest perceived hostile within the Mage's threat radius. */
+  private findNearestProtectMageThreat(
+    servant: Unit,
+    mage: Unit,
+    predicate: (threat: Unit) => boolean = () => true,
+  ): Unit | undefined {
+    let nearestThreat: Unit | undefined;
+    let nearestMageDistance = Number.POSITIVE_INFINITY;
+
+    for (const candidate of this.unitsById.values()) {
+      const mageDistance = this.gameMap.getHexDistance(mage.position, candidate.position);
+      if (mageDistance > protectMageThreatRange
+        || mageDistance >= nearestMageDistance
+        || !predicate(candidate)
+        || !this.isPerceivedHostile(servant, candidate)) {
+        continue;
+      }
+
+      nearestThreat = candidate;
+      nearestMageDistance = mageDistance;
+    }
+
+    return nearestThreat;
+  }
+
+  /**
+   * Chooses the lowest-AP reachable attack position for any perceived Mage
+   * threat. Equal paths retain GameMap and unit-registration ordering.
+   */
+  private findProtectMageThreatApproach(
+    servant: Unit,
+    mage: Unit,
+  ): MovementPath | undefined {
+    let shortestPath: MovementPath | undefined;
+
+    for (const candidate of this.unitsById.values()) {
+      if (this.gameMap.getHexDistance(mage.position, candidate.position)
+        > protectMageThreatRange
+        || !this.isPerceivedHostile(servant, candidate)) {
+        continue;
+      }
+
+      const path = this.findShortestApproachPath(servant, candidate.position);
+      if (!path || path.steps.length === 0
+        || (shortestPath !== undefined && path.cost >= shortestPath.cost)) {
+        continue;
+      }
+
+      shortestPath = path;
+    }
+
+    return shortestPath;
   }
 
   private getDefaultServantEngagementTarget(servant: Unit): Unit | undefined {
@@ -1692,6 +1914,7 @@ export class GameSession {
       this.enemyTacticalMemory.clear(target.id);
       this.enemyTacticalMemory.forgetHostile(target.id);
       if (target.id === this.mageId) {
+        this.clearStrategiesProtectingMage();
         this.recalculateMageVisibility();
       }
     }
@@ -1701,6 +1924,14 @@ export class GameSession {
     for (const [servantId, strategy] of this.servantStrategiesByUnitId) {
       if (strategy.type === ServantStrategyType.PursueDesignatedEnemy
         && strategy.targetEnemyId === targetId) {
+        this.servantStrategiesByUnitId.delete(servantId);
+      }
+    }
+  }
+
+  private clearStrategiesProtectingMage(): void {
+    for (const [servantId, strategy] of this.servantStrategiesByUnitId) {
+      if (strategy.type === ServantStrategyType.ProtectMage) {
         this.servantStrategiesByUnitId.delete(servantId);
       }
     }

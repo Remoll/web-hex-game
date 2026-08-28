@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-28
 
+- Added 1-AP servant orders, including Protect Mage: servants defend perceived
+  hostile threats within two hexes of the Mage and otherwise keep to a legal
+  adjacent position, while retaining autonomous turns and fog-safe
+  presentation.
 - Added deterministic elevation-blocked tactical sight: an intervening field
   two or more levels above an observer hides fields beyond it while remaining
   visible itself; Mage fog and private Enemy perception now share the rule.
