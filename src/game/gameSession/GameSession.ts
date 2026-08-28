@@ -1,9 +1,15 @@
 import { GameMap, type MovementPath } from "@/game/board/gameMap/GameMap";
 import {
-  compareHexCoords,
   getHexCoordKey,
   isSameHexCoord,
 } from "@/game/board/hexCoord/HexCoord";
+import {
+  AutonomousMemoryDirectiveType,
+  resolveAutonomousTacticalDecision,
+  type AutonomousMemoryDirective,
+  type AutonomousTacticalDecision,
+  type AutonomousUnitSnapshot,
+} from "@/game/autonomousTacticalResolver/AutonomousTacticalResolver";
 import {
   Faction,
   FactionDisposition,
@@ -22,7 +28,6 @@ import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
 import {
   holdServantStrategy,
   protectMageServantStrategy,
-  protectMageThreatRange,
   pursueDesignatedEnemyStrategy,
   secureDesignatedHexStrategy,
   ServantStrategyType,
@@ -34,7 +39,6 @@ import {
   MageVisibility,
   type FieldVisibilityReader,
 } from "@/game/visibility/MageVisibility";
-import { hasElevationLineOfSight } from "@/game/visibility/ElevationLineOfSight";
 
 export enum GameActionType {
   Selected = "selected",
@@ -1330,547 +1334,156 @@ export class GameSession {
       return TimelineAction.Wait;
     }
 
-    if (unit.faction === Faction.Enemy) {
-      return this.resolveEnemyActivation(unit, remainingActionPoints);
-    }
-
-    if (!this.isPlayerFactionServant(unit)) {
-      return TimelineAction.Wait;
-    }
-
-    const strategy = this.servantStrategiesByUnitId.get(unit.id);
-    if (!strategy) {
-      return this.resolveDefaultServantEngagement(unit, remainingActionPoints);
-    }
-
-    switch (strategy.type) {
-      case ServantStrategyType.Hold:
-        return this.resolveHoldServantStrategy(unit, remainingActionPoints);
-      case ServantStrategyType.PursueDesignatedEnemy:
-        return this.resolvePursueDesignatedEnemy(
-          unit,
-          strategy,
-          remainingActionPoints,
-        );
-      case ServantStrategyType.SecureDesignatedHex:
-        return this.resolveSecureDesignatedHex(
-          unit,
-          strategy,
-          remainingActionPoints,
-        );
-      case ServantStrategyType.ProtectMage:
-        return this.resolveProtectMage(
-          unit,
-          remainingActionPoints,
-        );
-    }
-  }
-
-  /**
-   * A servant without a standing command acquires the first hostile it can
-   * currently perceive. The target identity remains private to the domain and
-   * is cleared whenever it is no longer valid for autonomous engagement.
-   */
-  private resolveDefaultServantEngagement(
-    servant: Unit,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    const target = this.getDefaultServantEngagementTarget(servant);
-    return target
-      ? this.resolveServantEngagementTarget(servant, target, remainingActionPoints)
-      : TimelineAction.Wait;
-  }
-
-  /** Hold prevents pursuit but still allows an adjacent defensive melee attack. */
-  private resolveHoldServantStrategy(
-    servant: Unit,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    const adjacentHostile = this.findFirstPerceivedHostile(
-      servant,
-      adjacentHexDistance,
-    );
-    if (!adjacentHostile || !this.canAffordAutonomousAction(
+    const snapshots = this.getAutonomousUnitSnapshots();
+    const decision = resolveAutonomousTacticalDecision({
+      gameMap: this.gameMap,
+      units: snapshots.units,
+      unitsById: snapshots.unitsById,
+      livingUnitIdByHex: this.livingUnitIdsByHex,
+      actorId: unit.id,
+      mageId: this.mageId,
       remainingActionPoints,
-      TacticalActionPointCost.Attack,
-    )) {
-      return TimelineAction.Wait;
-    }
+      enemyMemory: {
+        lastKnownHostilePosition: this.enemyTacticalMemory
+          .getLastKnownHostilePosition(unit.id),
+      },
+      servantMemory: {
+        defaultTargetId: this.servantTacticalMemory.getDefaultTargetId(unit.id),
+      },
+      servantStrategy: this.servantStrategiesByUnitId.get(unit.id),
+    });
 
-    this.applyMeleeDamage(servant, adjacentHostile, true);
-    return TimelineAction.Attack;
-  }
-
-  /** Defends perceived threats near the Mage, otherwise keeps close to it. */
-  private resolveProtectMage(
-    servant: Unit,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    const mage = this.unitsById.get(this.mageId);
-    if (!mage || !mage.isAlive || !this.isMage(mage)) {
-      this.servantStrategiesByUnitId.delete(servant.id);
-      return this.resolveDefaultServantEngagement(servant, remainingActionPoints);
-    }
-
-    const adjacentThreat = this.findNearestProtectMageThreat(
-      servant,
-      mage,
-      (threat) => this.gameMap.getHexDistance(servant.position, threat.position)
-        === adjacentHexDistance,
-    );
-    if (adjacentThreat) {
-      if (!this.canAffordAutonomousAction(
-        remainingActionPoints,
-        TacticalActionPointCost.Attack,
-      )) {
-        return TimelineAction.Wait;
-      }
-
-      this.applyMeleeDamage(servant, adjacentThreat, true);
-      return TimelineAction.Attack;
-    }
-
-    const perceivedThreat = this.findNearestProtectMageThreat(servant, mage);
-    if (perceivedThreat) {
-      const threatApproach = this.findProtectMageThreatApproach(servant, mage);
-      if (!threatApproach) {
-        return TimelineAction.Wait;
-      }
-
-      return this.resolveAutonomousMovement(
-        servant,
-        threatApproach.steps[0],
-        remainingActionPoints,
-      );
-    }
-
-    return this.moveServantTowardHex(
-      servant,
-      mage.position,
+    return this.applyAutonomousTacticalDecision(
+      unit,
       remainingActionPoints,
+      decision,
     );
   }
 
-  /** Finds the nearest perceived hostile within the Mage's threat radius. */
-  private findNearestProtectMageThreat(
-    servant: Unit,
-    mage: Unit,
-    predicate: (threat: Unit) => boolean = () => true,
-  ): Unit | undefined {
-    let nearestThreat: Unit | undefined;
-    let nearestMageDistance = Number.POSITIVE_INFINITY;
+  private getAutonomousUnitSnapshots(): AutonomousUnitSnapshots {
+    const units: AutonomousUnitSnapshot[] = [];
+    const unitsById = new Map<string, AutonomousUnitSnapshot>();
 
-    for (const candidate of this.unitsById.values()) {
-      const mageDistance = this.gameMap.getHexDistance(mage.position, candidate.position);
-      if (mageDistance > protectMageThreatRange
-        || mageDistance >= nearestMageDistance
-        || !predicate(candidate)
-        || !this.isPerceivedHostile(servant, candidate)) {
-        continue;
-      }
-
-      nearestThreat = candidate;
-      nearestMageDistance = mageDistance;
+    for (const unit of this.unitsById.values()) {
+      const snapshot: AutonomousUnitSnapshot = {
+        id: unit.id,
+        faction: unit.faction,
+        movementType: unit.movementType,
+        tacticalRole: unit.tacticalRole,
+        viewRange: unit.viewRange,
+        isAlive: unit.isAlive,
+        position: unit.position,
+      };
+      units.push(snapshot);
+      unitsById.set(snapshot.id, snapshot);
     }
 
-    return nearestThreat;
+    return { units, unitsById };
   }
 
-  /**
-   * Chooses the lowest-AP reachable attack position for any perceived Mage
-   * threat. Equal paths retain GameMap and unit-registration ordering.
-   */
-  private findProtectMageThreatApproach(
-    servant: Unit,
-    mage: Unit,
-  ): MovementPath | undefined {
-    let shortestPath: MovementPath | undefined;
-
-    for (const candidate of this.unitsById.values()) {
-      if (this.gameMap.getHexDistance(mage.position, candidate.position)
-        > protectMageThreatRange
-        || !this.isPerceivedHostile(servant, candidate)) {
-        continue;
-      }
-
-      const path = this.findShortestApproachPath(servant, candidate.position);
-      if (!path || path.steps.length === 0
-        || (shortestPath !== undefined && path.cost >= shortestPath.cost)) {
-        continue;
-      }
-
-      shortestPath = path;
-    }
-
-    return shortestPath;
-  }
-
-  private getDefaultServantEngagementTarget(servant: Unit): Unit | undefined {
-    const rememberedTargetId = this.servantTacticalMemory.getDefaultTargetId(servant.id);
-    const rememberedTarget = rememberedTargetId
-      ? this.unitsById.get(rememberedTargetId)
-      : undefined;
-    if (rememberedTarget && this.isPerceivedHostile(servant, rememberedTarget)) {
-      return rememberedTarget;
-    }
-
-    if (rememberedTargetId) {
-      this.servantTacticalMemory.clear(servant.id);
-    }
-
-    const firstPerceivedHostile = this.findFirstPerceivedHostile(
-      servant,
-      servant.viewRange,
-    );
-    if (firstPerceivedHostile) {
-      this.servantTacticalMemory.rememberDefaultTarget(
-        servant.id,
-        firstPerceivedHostile.id,
-      );
-    }
-    return firstPerceivedHostile;
-  }
-
-  /** A servant follows only the Mage-designated target identity. */
-  private resolvePursueDesignatedEnemy(
-    servant: Unit,
-    strategy: Extract<
-      ServantStrategy,
-      { type: ServantStrategyType.PursueDesignatedEnemy }
-    >,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    const target = this.unitsById.get(strategy.targetEnemyId);
-    if (!target
-      || !target.isAlive
-      || target.faction !== Faction.Enemy
-      || getFactionDisposition(servant.faction, target.faction)
-        !== FactionDisposition.Enemy) {
-      this.servantStrategiesByUnitId.delete(servant.id);
-      return TimelineAction.Wait;
-    }
-
-    return this.resolveServantEngagementTarget(servant, target, remainingActionPoints);
-  }
-
-  /** Resolves one AP-limited movement or attack against a valid hostile. */
-  private resolveServantEngagementTarget(
-    servant: Unit,
-    target: Unit,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    if (this.gameMap.getHexDistance(servant.position, target.position)
-      === adjacentHexDistance) {
-      if (!this.canAffordAutonomousAction(
-        remainingActionPoints,
-        TacticalActionPointCost.Attack,
-      )) {
-        return TimelineAction.Wait;
-      }
-
-      this.applyMeleeDamage(servant, target, true);
-      return TimelineAction.Attack;
-    }
-
-    const path = this.findShortestApproachPath(servant, target.position);
-    if (!path || path.steps.length === 0) {
-      return TimelineAction.Wait;
-    }
-
-    return this.resolveAutonomousMovement(
-      servant,
-      path.steps[0],
-      remainingActionPoints,
-    );
-  }
-
-  /**
-   * A secure-hex order holds the designated field after arrival. An occupant
-   * is never entered; once secured, the servant only defends against adjacent
-   * hostiles instead of switching to default pursuit.
-   */
-  private resolveSecureDesignatedHex(
-    servant: Unit,
-    strategy: Extract<
-      ServantStrategy,
-      { type: ServantStrategyType.SecureDesignatedHex }
-    >,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    const targetField = this.gameMap.getField(
-      strategy.targetHex.q,
-      strategy.targetHex.r,
-    );
-    if (!targetField) {
-      this.servantStrategiesByUnitId.delete(servant.id);
-      return TimelineAction.Wait;
-    }
-
-    if (isSameHexCoord(servant.position, strategy.targetHex)) {
-      return this.resolveHoldServantStrategy(servant, remainingActionPoints);
-    }
-
-    const targetOccupant = this.getUnitAt(strategy.targetHex);
-    if (targetOccupant) {
-      if (getFactionDisposition(servant.faction, targetOccupant.faction)
-        === FactionDisposition.Enemy
-        && this.gameMap.getHexDistance(servant.position, targetOccupant.position)
-          === adjacentHexDistance) {
-        if (!this.canAffordAutonomousAction(
-          remainingActionPoints,
-          TacticalActionPointCost.Attack,
-        )) {
-          return TimelineAction.Wait;
-        }
-
-        this.applyMeleeDamage(servant, targetOccupant, true);
-        return TimelineAction.Attack;
-      }
-
-      return this.moveServantTowardHex(
-        servant,
-        strategy.targetHex,
-        remainingActionPoints,
-      );
-    }
-
-    const path = this.gameMap.findShortestPathToAny(
-      servant.position,
-      servant.movementType,
-      (coord) => isSameHexCoord(coord, strategy.targetHex),
-      (coord) => this.getUnitAt(coord) !== undefined,
-    );
-    if (!path || path.steps.length === 0) {
-      return TimelineAction.Wait;
-    }
-
-    return this.resolveAutonomousMovement(
-      servant,
-      path.steps[0],
-      remainingActionPoints,
-    );
-  }
-
-  /** Resolves the next non-omniscient Enemy action in its current activation. */
-  private resolveEnemyActivation(
-    enemy: Unit,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    const visibleHostile = this.findNearestVisibleHostile(enemy);
-    if (visibleHostile) {
-      this.enemyTacticalMemory.rememberHostilePosition(
-        enemy.id,
-        visibleHostile.id,
-        visibleHostile.position,
-      );
-      if (this.gameMap.getHexDistance(enemy.position, visibleHostile.position)
-        === adjacentHexDistance) {
-        if (!this.canAffordAutonomousAction(
-          remainingActionPoints,
-          TacticalActionPointCost.Attack,
-        )) {
-          return TimelineAction.Wait;
-        }
-
-        this.applyMeleeDamage(enemy, visibleHostile, true);
-        return TimelineAction.Attack;
-      }
-
-      return this.moveEnemyToward(
-        enemy,
-        visibleHostile.position,
-        remainingActionPoints,
-      );
-    }
-
-    const lastKnownHostilePosition = this.enemyTacticalMemory
-      .getLastKnownHostilePosition(enemy.id);
-    if (!lastKnownHostilePosition) {
-      return TimelineAction.Wait;
-    }
-
-    if (isSameHexCoord(enemy.position, lastKnownHostilePosition)) {
-      this.enemyTacticalMemory.clear(enemy.id);
-      return TimelineAction.Wait;
-    }
-
-    return this.moveEnemyToward(
-      enemy,
-      lastKnownHostilePosition,
-      remainingActionPoints,
-    );
-  }
-
-  private canAffordAutonomousAction(
-    remainingActionPoints: number,
-    actionPointCost: number,
-  ): boolean {
-    return remainingActionPoints >= actionPointCost;
-  }
-
-  /** Ties use the original level registration order preserved by unitsById. */
-  private findNearestVisibleHostile(enemy: Unit): Unit | undefined {
-    let nearestHostile: Unit | undefined;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-
-    for (const candidate of this.unitsById.values()) {
-      const distance = this.gameMap.getHexDistance(enemy.position, candidate.position);
-      if (!this.isPerceivedHostile(enemy, candidate)
-        || distance >= nearestDistance) {
-        continue;
-      }
-
-      nearestHostile = candidate;
-      nearestDistance = distance;
-    }
-
-    return nearestHostile;
-  }
-
-  /**
-   * Map insertion order is the stable tie-breaker when more than one hostile
-   * is perceived in the same autonomous resolution.
-   */
-  private findFirstPerceivedHostile(
-    observer: Unit,
-    maximumDistance: number,
-  ): Unit | undefined {
-    for (const candidate of this.unitsById.values()) {
-      if (this.isPerceivedHostile(observer, candidate)
-        && this.gameMap.getHexDistance(observer.position, candidate.position)
-          <= maximumDistance) {
-        return candidate;
-      }
-    }
-
-    return undefined;
-  }
-
-  private isPerceivedHostile(observer: Unit, candidate: Unit): boolean {
-    return candidate.isAlive
-      && getFactionDisposition(observer.faction, candidate.faction)
-        === FactionDisposition.Enemy
-      && this.gameMap.getHexDistance(observer.position, candidate.position)
-        <= observer.viewRange
-      && hasElevationLineOfSight(
-        this.gameMap,
-        observer.position,
-        candidate.position,
-      );
-  }
-
-  /**
-   * Makes one legal local step only. Equal candidates use ascending axial q,
-   * then ascending r; this keeps paths deterministic without global search.
-   */
-  private moveEnemyToward(
-    enemy: Unit,
-    destination: HexCoord,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    const currentDistance = this.gameMap.getHexDistance(enemy.position, destination);
-    const candidate = this.gameMap.getNeighbours(enemy.position)
-      .map((coord) => ({
-        coord,
-        traversalCost: this.gameMap.getTraversalCost(
-          enemy.position,
-          coord,
-          enemy.movementType,
-        ),
-      }))
-      .filter((candidate) => candidate.traversalCost !== undefined)
-      .filter((candidate) => this.getUnitAt(candidate.coord) === undefined)
-      .filter((candidate) => this.gameMap.getHexDistance(candidate.coord, destination)
-        < currentDistance)
-      .filter((candidate) => this.canAffordAutonomousAction(
-        remainingActionPoints,
-        candidate.traversalCost!,
-      ))
-      .sort((first, second) => first.traversalCost! - second.traversalCost!
-        || compareHexCoords(first.coord, second.coord))[0];
-
-    if (!candidate) {
-      return TimelineAction.Wait;
-    }
-
-    return this.resolveAutonomousMovement(
-      enemy,
-      candidate.coord,
-      remainingActionPoints,
-    );
-  }
-
-  /** Finds a tactical shortest path to any empty, passable hex beside a target. */
-  private findShortestApproachPath(
-    servant: Unit,
-    targetHex: HexCoord,
-  ): MovementPath | undefined {
-    const approachHexKeys = new Set<string>();
-    for (const coord of this.gameMap.getNeighbours(targetHex)) {
-      if (this.canUnitOccupy(servant, coord)) {
-        approachHexKeys.add(getHexCoordKey(coord));
-      }
-    }
-
-    if (approachHexKeys.size === 0) {
-      return undefined;
-    }
-
-    return this.gameMap.findShortestPathToAny(
-      servant.position,
-      servant.movementType,
-      (coord) => approachHexKeys.has(getHexCoordKey(coord)),
-      (coord) => this.getUnitAt(coord) !== undefined,
-    );
-  }
-
-  private moveServantTowardHex(
-    servant: Unit,
-    targetHex: HexCoord,
-    remainingActionPoints: number,
-  ): TimelineAction {
-    const path = this.findShortestApproachPath(servant, targetHex);
-    if (!path || path.steps.length === 0) {
-      return TimelineAction.Wait;
-    }
-
-    return this.resolveAutonomousMovement(
-      servant,
-      path.steps[0],
-      remainingActionPoints,
-    );
-  }
-
-  private canUnitOccupy(unit: Unit, coord: HexCoord): boolean {
-    const field = this.gameMap.getField(coord.q, coord.r);
-    return field !== undefined
-      && field.getAllowedMovements()[unit.movementType]
-      && this.getUnitAt(coord) === undefined;
-  }
-
-  private resolveAutonomousMovement(
+  private applyAutonomousTacticalDecision(
     unit: Unit,
-    destination: HexCoord,
     remainingActionPoints: number,
+    decision: AutonomousTacticalDecision,
+  ): TimelineAction {
+    this.applyAutonomousMemoryDirectives(unit.id, decision.memoryDirectives);
+    if (decision.clearServantStrategy) {
+      this.servantStrategiesByUnitId.delete(unit.id);
+    }
+
+    switch (decision.action) {
+      case TimelineAction.Wait:
+        return TimelineAction.Wait;
+      case TimelineAction.Attack: {
+        const target = this.unitsById.get(decision.targetId);
+        if (!target || !this.canApplyAutonomousAttack(
+          unit,
+          target,
+          remainingActionPoints,
+        )) {
+          return TimelineAction.Wait;
+        }
+
+        this.applyMeleeDamage(unit, target, true);
+        return TimelineAction.Attack;
+      }
+      case TimelineAction.Move:
+      case TimelineAction.MoveUphill:
+        return this.applyAutonomousMovementDecision(
+          unit,
+          remainingActionPoints,
+          decision,
+        );
+    }
+  }
+
+  private applyAutonomousMovementDecision(
+    unit: Unit,
+    remainingActionPoints: number,
+    decision: Extract<
+      AutonomousTacticalDecision,
+      { action: TimelineAction.Move | TimelineAction.MoveUphill }
+    >,
   ): TimelineAction {
     const traversalCost = this.gameMap.getTraversalCost(
       unit.position,
-      destination,
+      decision.destination,
       unit.movementType,
     );
     if (traversalCost === undefined
-      || !this.canAffordAutonomousAction(remainingActionPoints, traversalCost)) {
+      || traversalCost > remainingActionPoints
+      || this.getUnitAt(decision.destination) !== undefined
+      || (traversalCost === TacticalActionPointCost.Move
+        && decision.action !== TimelineAction.Move)
+      || (traversalCost === TacticalActionPointCost.MoveUphill
+        && decision.action !== TimelineAction.MoveUphill)) {
       return TimelineAction.Wait;
     }
 
-    this.moveAutonomousUnit(unit, destination);
-    switch (traversalCost) {
-      case TacticalActionPointCost.Move:
-        return TimelineAction.Move;
-      case TacticalActionPointCost.MoveUphill:
-        return TimelineAction.MoveUphill;
-      default:
-        throw new Error(`Unsupported autonomous movement cost: ${traversalCost}`);
+    this.moveAutonomousUnit(unit, decision.destination);
+    return decision.action;
+  }
+
+  /** The resolver proposes attacks; GameSession owns their final legality. */
+  private canApplyAutonomousAttack(
+    attacker: Unit,
+    target: Unit,
+    remainingActionPoints: number,
+  ): boolean {
+    return attacker.isAlive
+      && target.isAlive
+      && remainingActionPoints >= TacticalActionPointCost.Attack
+      && this.gameMap.getHexDistance(attacker.position, target.position) === 1
+      && getFactionDisposition(attacker.faction, target.faction)
+        === FactionDisposition.Enemy;
+  }
+
+  private applyAutonomousMemoryDirectives(
+    unitId: string,
+    directives: readonly AutonomousMemoryDirective[],
+  ): void {
+    for (const directive of directives) {
+      switch (directive.type) {
+        case AutonomousMemoryDirectiveType.RememberEnemyHostile:
+          this.enemyTacticalMemory.rememberHostilePosition(
+            unitId,
+            directive.hostileId,
+            directive.position,
+          );
+          break;
+        case AutonomousMemoryDirectiveType.ClearEnemyMemory:
+          this.enemyTacticalMemory.clear(unitId);
+          break;
+        case AutonomousMemoryDirectiveType.RememberServantDefaultTarget:
+          this.servantTacticalMemory.rememberDefaultTarget(
+            unitId,
+            directive.targetId,
+          );
+          break;
+        case AutonomousMemoryDirectiveType.ClearServantDefaultTarget:
+          this.servantTacticalMemory.clear(unitId);
+          break;
+      }
     }
   }
 
@@ -2007,5 +1620,9 @@ function getInitiativeQueueActorLabel(unit: Unit): InitiativeQueueActorLabel {
   }
 }
 
-const adjacentHexDistance = 1;
+interface AutonomousUnitSnapshots {
+  readonly units: readonly AutonomousUnitSnapshot[];
+  readonly unitsById: ReadonlyMap<string, AutonomousUnitSnapshot>;
+}
+
 const noActionPoints = 0;
