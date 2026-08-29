@@ -103,6 +103,17 @@ export class GameController {
     return action;
   }
 
+  endMageTurn(): GameAction {
+    if (this.tacticalPresentationPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
+    const action = this.session.endMageTurn();
+    this.syncResolvedTacticalPresentation();
+    this.syncTacticalInterface();
+    return action;
+  }
+
   assignHoldStrategy(): GameAction {
     if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();

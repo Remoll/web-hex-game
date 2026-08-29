@@ -258,6 +258,36 @@ describe("GameController", () => {
     });
   });
 
+  it("ends the ready Mage activation without requiring Wait first", () => {
+    const player = new Player(
+      "player",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+    );
+    const session = new GameSession(new GameMap(mapData), [player]);
+    const presenter = createTacticalPresentationPresenter();
+    const timelinePresenter: TimelinePresenter = { sync: vi.fn() };
+    const controller = new GameController(
+      session,
+      presenter,
+      undefined,
+      timelinePresenter,
+    );
+
+    expect(controller.endMageTurn()).toEqual({
+      type: GameActionType.TurnEnded,
+      unitId: player.id,
+    });
+    expect(timelinePresenter.sync).toHaveBeenLastCalledWith({
+      currentTime: baseTimelineRecoveryDelay,
+      readyActorId: player.id,
+      readyActorActionPoints: actionPointsPerActivation,
+      actionPointsPerActivation,
+      readyActorHasWaited: false,
+      readyActorRecoveryDelay: baseTimelineRecoveryDelay,
+    });
+  });
+
   it("passes autonomous Move then Attack events to presentation in resolution order", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const enemy = new Unit("enemy", { q: 2, r: 0 }, UnitTexture.EnemyIdle, {

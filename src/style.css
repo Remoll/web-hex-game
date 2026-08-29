@@ -11,6 +11,11 @@ canvas {
 }
 
 .timeline-hud {
+  --timeline-hud-control-gap: 8px;
+  --timeline-hud-minimum-touch-target-size: 44px;
+  --timeline-hud-control-vertical-padding: 4px;
+  --timeline-hud-control-horizontal-padding: 8px;
+
   position: fixed;
   top: 12px;
   left: 50%;
@@ -34,8 +39,17 @@ canvas {
   color: #c7c2b6;
 }
 
-.timeline-hud__wait {
-  padding: 4px 8px;
+.timeline-hud__activation-controls {
+  display: flex;
+  gap: var(--timeline-hud-control-gap);
+}
+
+.timeline-hud__wait,
+.timeline-hud__end-turn {
+  min-width: var(--timeline-hud-minimum-touch-target-size);
+  min-height: var(--timeline-hud-minimum-touch-target-size);
+  padding: var(--timeline-hud-control-vertical-padding)
+    var(--timeline-hud-control-horizontal-padding);
   color: inherit;
   font: inherit;
   background: #4f3b2d;
@@ -44,7 +58,8 @@ canvas {
   cursor: pointer;
 }
 
-.timeline-hud__wait:disabled {
+.timeline-hud__wait:disabled,
+.timeline-hud__end-turn:disabled {
   color: #90897d;
   background: #2c2925;
   border-color: #514b43;

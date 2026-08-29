@@ -112,6 +112,7 @@ export class GameApp {
       container,
       mageId: player.id,
       onWait: () => gameController?.waitForMage(),
+      onEndTurn: () => gameController?.endMageTurn(),
     });
     this.initiativeQueueHud = new InitiativeQueueHud({
       container,

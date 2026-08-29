@@ -67,10 +67,11 @@ its current map position.
 - Ending an activation applies one base recovery delay of `100` timeline time,
   modified only by Finesse-derived Tempo. Move and attack no longer apply
   independent recovery delays.
-- **Wait** is available once per Mage activation. It moves the Mage behind the
-  actors currently ready at that simulation time without spending AP. When the
-  Mage becomes ready again, the control changes to **End Turn**; using it
-  discards remaining AP and starts the normal recovery delay.
+- **Wait** and **End Turn** are separate controls while the Mage is ready.
+  **Wait** is available once per Mage activation and moves the Mage behind the
+  actors currently ready at that simulation time without spending AP. It then
+  disables until the next activation. **End Turn** always remains available to
+  discard remaining AP and start the normal recovery delay.
 - Every completed servant command—**Hold**, **Protect Mage**, **Pursue
   Designated Enemy**, **Secure Designated Hex**, or **Clear strategy**—costs
   1 AP. The Mage remains ready while AP remain; at zero AP the activation ends
@@ -159,8 +160,9 @@ its current map position.
 - Hover a living adjacent hostile unit to see a red attack cursor and target
   highlight. Click it to deal 20 damage. A unit may attack only factions in
   its `dispositionToFactions.enemy` category.
-- Use **Wait** in the timeline HUD to defer the Mage once without spending AP;
-  its label then changes to **End Turn** for the rest of that activation.
+- Use **Wait** in the timeline HUD to defer the Mage once without spending AP.
+  It then disables for that activation, while **End Turn** remains available
+  to finish the Mage's turn at any time.
 - Living units display a health bar. At zero HP, a unit becomes non-interactive
   and leaves a visual-only temporary remains marker. Remains do not block
   movement or receive input.

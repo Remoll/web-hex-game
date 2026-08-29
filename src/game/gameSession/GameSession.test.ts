@@ -677,6 +677,11 @@ describe("GameSession", () => {
     });
 
     expect(session.waitForMage()).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.NotReady,
+    });
+
+    expect(session.endMageTurn()).toEqual({
       type: GameActionType.TurnEnded,
       unitId: player.id,
     });
@@ -684,6 +689,24 @@ describe("GameSession", () => {
       currentTime: baseTimelineRecoveryDelay * 2,
       readyActorId: player.id,
       readyActorHasWaited: false,
+    });
+  });
+
+  it("ends the ready Mage activation without requiring a prior Wait", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const session = new GameSession(new GameMap(mapData), [mage]);
+
+    expect(session.endMageTurn()).toEqual({
+      type: GameActionType.TurnEnded,
+      unitId: mage.id,
+    });
+    expect(session.timelinePresentation).toEqual({
+      currentTime: baseTimelineRecoveryDelay,
+      readyActorId: mage.id,
+      readyActorActionPoints: actionPointsPerActivation,
+      actionPointsPerActivation,
+      readyActorHasWaited: false,
+      readyActorRecoveryDelay: baseTimelineRecoveryDelay,
     });
   });
 
@@ -931,7 +954,7 @@ describe("GameSession", () => {
     session.waitForMage();
     expect(servant.position).toEqual(targetHex);
 
-    session.waitForMage();
+    session.endMageTurn();
     expect(servant.position).toEqual(targetHex);
 
     expect(session.clickHex(mage.position)).toEqual({
@@ -980,7 +1003,7 @@ describe("GameSession", () => {
     expect(servant.position).toEqual({ q: 1, r: 0 });
     expect(hostile.currentHp).toBe(hostile.maxHp - servant.attackPower);
 
-    session.waitForMage();
+    session.endMageTurn();
     session.waitForMage();
     expect(hostile.currentHp).toBe(hostile.maxHp - servant.attackPower * 2);
     expect(servant.position).toEqual({ q: 1, r: 0 });
@@ -1017,7 +1040,7 @@ describe("GameSession", () => {
     session.waitForMage();
     expect(servant.position).toEqual({ q: 1, r: 0 });
 
-    session.waitForMage();
+    session.endMageTurn();
     expect(neutral.currentHp).toBe(neutral.maxHp);
     expect(servant.position).toEqual({ q: 1, r: 0 });
   });
@@ -1166,7 +1189,7 @@ describe("GameSession", () => {
       baseTimelineRecoveryDelay,
     );
 
-    session.waitForMage();
+    session.endMageTurn();
     session.waitForMage();
 
     expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
@@ -1533,7 +1556,7 @@ describe("GameSession", () => {
       });
       if (health > 0) {
         session.waitForMage();
-        session.waitForMage();
+        session.endMageTurn();
       }
     }
 

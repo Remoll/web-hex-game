@@ -1020,7 +1020,7 @@ export class GameSession {
     this.reconcileTacticalSelection();
   }
 
-  /** Defers once, then ends the deferred Mage activation on the next request. */
+  /** Defers the ready Mage once without spending Action Points. */
   waitForMage(): GameAction {
     this.reconcileTacticalSelection();
     const mage = this.unitsById.get(this.mageId);
@@ -1032,16 +1032,33 @@ export class GameSession {
     }
 
     if (this.timeline.hasWaitedDuringReadyActivation(mage.id)) {
-      this.timeline.endReadyActivation(mage.id);
-      this.clearServantCommandTarget();
-      this.resolveAutonomousActivations();
-      return { type: GameActionType.TurnEnded, unitId: mage.id };
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NotReady,
+      };
     }
 
     this.timeline.deferReadyActivation(mage.id);
     this.clearServantCommandTarget();
     this.resolveAutonomousActivations();
     return { type: GameActionType.Waited, unitId: mage.id };
+  }
+
+  /** Ends the ready Mage activation and discards its remaining Action Points. */
+  endMageTurn(): GameAction {
+    this.reconcileTacticalSelection();
+    const mage = this.unitsById.get(this.mageId);
+    if (!mage || !mage.isAlive || !this.timeline.isReady(mage.id)) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NotReady,
+      };
+    }
+
+    this.timeline.endReadyActivation(mage.id);
+    this.clearServantCommandTarget();
+    this.resolveAutonomousActivations();
+    return { type: GameActionType.TurnEnded, unitId: mage.id };
   }
 
   private moveSelectedUnit(

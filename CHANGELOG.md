@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-29
+
+- Added persistent, separate Mage **Wait** and **End Turn** controls: Wait
+  disables after its one activation use, while End Turn remains available.
+
 ## 2026-08-28
 
 - Added 1-AP servant orders, including Protect Mage: servants defend perceived
