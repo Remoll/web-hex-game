@@ -24,7 +24,7 @@ import {
 } from "@/game/eventTimeline/EventTimeline";
 import { EnemyTacticalMemory } from "@/game/enemyAi/EnemyTacticalMemory";
 import { ServantTacticalMemory } from "@/game/servantAi/ServantTacticalMemory";
-import { Unit, UnitTacticalRole } from "@/game/unit/Unit";
+import { Unit, UnitTacticalRole, type UnitTexture } from "@/game/unit/Unit";
 import {
   holdServantStrategy,
   protectMageServantStrategy,
@@ -170,15 +170,45 @@ export interface ReachableHex {
   readonly cost: number;
 }
 
+/** Stable visual event kinds emitted by resolved tactical actions. */
+export enum TacticalPresentationEventKind {
+  Move = "move",
+  Attack = "attack",
+}
+
+/**
+ * Immutable, renderer-neutral state at one resolved tactical event boundary.
+ * It is deliberately limited to data needed to play an already-visible unit.
+ */
+export interface TacticalUnitPresentation {
+  readonly id: string;
+  readonly position: Readonly<HexCoord>;
+  readonly texture: UnitTexture;
+  readonly currentHp: number;
+  readonly maxHp: number;
+  readonly isAlive: boolean;
+}
+
 /**
  * An immutable presentation event emitted after a legal domain movement.
  * `steps` excludes `from` and preserves the legal path's original order.
  */
 export interface UnitMovementEvent {
-  readonly unitId: string;
+  readonly kind: TacticalPresentationEventKind.Move;
+  readonly unit: TacticalUnitPresentation;
   readonly from: Readonly<HexCoord>;
   readonly steps: readonly Readonly<HexCoord>[];
 }
+
+/** A safe snapshot of the health/remains state resulting from one melee hit. */
+export interface UnitAttackEvent {
+  readonly kind: TacticalPresentationEventKind.Attack;
+  readonly attacker: TacticalUnitPresentation;
+  readonly target: TacticalUnitPresentation;
+}
+
+/** Ordered renderer-facing playback stream; it never grants mutation authority. */
+export type TacticalPresentationEvent = UnitMovementEvent | UnitAttackEvent;
 
 /** Information-safe visual states for initiative cards. */
 export enum InitiativeQueueCardState {
@@ -237,8 +267,8 @@ export class GameSession {
   private readonly enemyTacticalMemory = new EnemyTacticalMemory();
   private readonly servantTacticalMemory = new ServantTacticalMemory();
   private readonly servantStrategiesByUnitId = new Map<string, ServantStrategy>();
-  private readonly autonomousUnitUpdates = new Set<string>();
-  private readonly movementEvents: UnitMovementEvent[] = [];
+  private readonly tacticalPresentationEvents: TacticalPresentationEvent[] = [];
+  private requiresTacticalVisibilitySync = false;
   private _selectedUnitId: string | null = null;
   private _selectedServantCommandId: string | null = null;
   private _targetSelection: ServantStrategyTargetSelection | undefined;
@@ -343,21 +373,28 @@ export class GameSession {
   }
 
   /**
-   * Reports whether autonomous resolution changed any units since the last
-   * call, without exposing mutable domain units to application presentation.
+   * Returns immutable, fog-safe visual events in the exact order their domain
+   * actions resolved. The simulation has already reached authoritative state.
    */
-  consumeAutonomousUnitUpdateSignal(): boolean {
-    const hasAutonomousUnitUpdates = this.autonomousUnitUpdates.size > 0;
-    this.autonomousUnitUpdates.clear();
-    return hasAutonomousUnitUpdates;
+  consumeTacticalPresentationEvents(): readonly TacticalPresentationEvent[] {
+    const events = Object.freeze(
+      this.tacticalPresentationEvents.filter((event) =>
+        this.isTacticalPresentationEventSafe(event),
+      ),
+    );
+    this.tacticalPresentationEvents.length = 0;
+    return events;
   }
 
   /**
-   * Returns each ordered movement exactly once for renderer-only playback.
-   * The simulation has already reached its final authoritative state.
+   * Signals that a completed tactical action changed board presentation state.
+   * It contains no unit identity or coordinate, so callers can safely refresh
+   * current fog and hide stale visuals when no event remains visible.
    */
-  consumeMovementEvents(): readonly UnitMovementEvent[] {
-    return this.movementEvents.splice(0);
+  consumeTacticalVisibilitySyncSignal(): boolean {
+    const requiresSync = this.requiresTacticalVisibilitySync;
+    this.requiresTacticalVisibilitySync = false;
+    return requiresSync;
   }
 
   /** Stable read-only visibility API for app and rendering adapters. */
@@ -1031,10 +1068,12 @@ export class GameSession {
 
     const from = unit.position;
     this.moveLivingUnit(unit, preview.destination);
-    this.publishMovementEvent(unit.id, from, preview.path.steps);
     if (unit.id === this.mageId) {
       this.recalculateMageVisibility();
       this.clearServantCommandTarget();
+    }
+    this.publishMovementEvent(unit, from, preview.path.steps);
+    if (unit.id === this.mageId) {
       this.resolveAutonomousActivationsIfActivationEnded(unit.id, remainingActionPoints);
     }
 
@@ -1070,7 +1109,7 @@ export class GameSession {
     );
     this.clearServantCommandTarget();
 
-    this.applyMeleeDamage(attacker, target, false);
+    this.applyMeleeDamage(attacker, target);
     this.resolveAutonomousActivationsIfActivationEnded(
       attacker.id,
       remainingActionPoints,
@@ -1404,7 +1443,7 @@ export class GameSession {
           return TimelineAction.Wait;
         }
 
-        this.applyMeleeDamage(unit, target, true);
+        this.applyMeleeDamage(unit, target);
         return TimelineAction.Attack;
       }
       case TimelineAction.Move:
@@ -1491,25 +1530,30 @@ export class GameSession {
     this.unregisterLivingUnit(unit);
     unit.moveTo(destination);
     this.registerLivingUnit(unit);
+    this.requiresTacticalVisibilitySync = true;
   }
 
   private moveAutonomousUnit(unit: Unit, destination: HexCoord): void {
     const from = unit.position;
     this.moveLivingUnit(unit, destination);
-    this.publishMovementEvent(unit.id, from, [destination]);
-    this.autonomousUnitUpdates.add(unit.id);
+    this.publishMovementEvent(unit, from, [destination]);
   }
 
   private publishMovementEvent(
-    unitId: string,
+    unit: Unit,
     from: HexCoord,
     steps: readonly HexCoord[],
   ): void {
+    if (!this.isUnitVisible(unit)) {
+      return;
+    }
+
     const immutableSteps = Object.freeze(
       steps.map((step) => Object.freeze({ ...step })),
     );
-    this.movementEvents.push(Object.freeze({
-      unitId,
+    this.tacticalPresentationEvents.push(Object.freeze({
+      kind: TacticalPresentationEventKind.Move,
+      unit: this.createTacticalUnitPresentation(unit),
       from: Object.freeze({ ...from }),
       steps: immutableSteps,
     }));
@@ -1518,12 +1562,13 @@ export class GameSession {
   private applyMeleeDamage(
     attacker: Unit,
     target: Unit,
-    isAutonomousAction: boolean,
   ): void {
+    const canPresentAttack = this.isUnitVisible(attacker)
+      && this.isUnitVisible(target);
     target.receiveDamage(attacker.attackPower);
-    if (isAutonomousAction) {
-      this.autonomousUnitUpdates.add(attacker.id);
-      this.autonomousUnitUpdates.add(target.id);
+    this.requiresTacticalVisibilitySync = true;
+    if (canPresentAttack) {
+      this.publishAttackEvent(attacker, target);
     }
 
     if (!target.isAlive) {
@@ -1540,6 +1585,50 @@ export class GameSession {
         this.recalculateMageVisibility();
       }
     }
+  }
+
+  private publishAttackEvent(attacker: Unit, target: Unit): void {
+    this.tacticalPresentationEvents.push(Object.freeze({
+      kind: TacticalPresentationEventKind.Attack,
+      attacker: this.createTacticalUnitPresentation(attacker),
+      target: this.createTacticalUnitPresentation(target),
+    }));
+  }
+
+  private createTacticalUnitPresentation(unit: Unit): TacticalUnitPresentation {
+    return Object.freeze({
+      id: unit.id,
+      position: Object.freeze(unit.position),
+      texture: unit.texture,
+      currentHp: unit.currentHp,
+      maxHp: unit.maxHp,
+      isAlive: unit.isAlive,
+    });
+  }
+
+  private isTacticalPresentationEventSafe(event: TacticalPresentationEvent): boolean {
+    switch (event.kind) {
+      case TacticalPresentationEventKind.Move:
+        return this.isTacticalUnitPresentationSafe(event.unit)
+          && this.isVisiblePresentationCoord(event.from)
+          && event.steps.every((step) => this.isVisiblePresentationCoord(step));
+      case TacticalPresentationEventKind.Attack:
+        return this.isTacticalUnitPresentationSafe(event.attacker)
+          && this.isTacticalUnitPresentationSafe(event.target);
+    }
+  }
+
+  private isTacticalUnitPresentationSafe(
+    presentation: TacticalUnitPresentation,
+  ): boolean {
+    const unit = this.unitsById.get(presentation.id);
+    return unit !== undefined
+      && this.isUnitVisible(unit)
+      && this.isVisiblePresentationCoord(presentation.position);
+  }
+
+  private isVisiblePresentationCoord(coord: Readonly<HexCoord>): boolean {
+    return this.getFieldVisibility(coord) === FieldVisibility.Visible;
   }
 
   private clearStrategiesPursuingTarget(targetId: string): void {

@@ -14,6 +14,7 @@ import {
   GameActionRejectionReason,
   GameSession,
   ServantStrategyTargetSelection,
+  TacticalPresentationEventKind,
 } from "@/game/gameSession/GameSession";
 import {
   actionPointsPerActivation,
@@ -134,14 +135,17 @@ describe("GameController", () => {
 
     controller.clickHex({ q: 1, r: 0 });
     expect(presenter.sync).toHaveBeenCalledTimes(1);
-    expect(presenter.sync).toHaveBeenCalledWith([{
-      unitId: player.id,
-      from: { q: 0, r: 0 },
-      steps: [{ q: 1, r: 0 }],
-    }]);
+    expect(presenter.sync).toHaveBeenCalledWith([
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Move,
+        unit: expect.objectContaining({ id: player.id, position: { q: 1, r: 0 } }),
+        from: { q: 0, r: 0 },
+        steps: [{ q: 1, r: 0 }],
+      }),
+    ], true);
   });
 
-  it("synchronizes a direct attack once without inventing a movement event", () => {
+  it("synchronizes a direct attack with its immutable health snapshot", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
       faction: Faction.Enemy,
@@ -158,10 +162,19 @@ describe("GameController", () => {
       targetId: enemy.id,
     });
     expect(presenter.sync).toHaveBeenCalledTimes(1);
-    expect(presenter.sync).toHaveBeenCalledWith([]);
+    expect(presenter.sync).toHaveBeenCalledWith([
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Attack,
+        attacker: expect.objectContaining({ id: mage.id }),
+        target: expect.objectContaining({
+          id: enemy.id,
+          currentHp: enemy.maxHp - mage.attackPower,
+        }),
+      }),
+    ], true);
   });
 
-  it("coalesces movement presentation and final state sync while blocking input", () => {
+  it("blocks input while tactical events remain queued", () => {
     const player = new Player(
       "player",
       { q: 0, r: 0 },
@@ -189,12 +202,13 @@ describe("GameController", () => {
     });
     expect(tacticalPresentationPresenter.sync).toHaveBeenCalledTimes(1);
     expect(tacticalPresentationPresenter.sync).toHaveBeenLastCalledWith([
-      {
-        unitId: player.id,
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Move,
+        unit: expect.objectContaining({ id: player.id }),
         from: { q: 0, r: 0 },
         steps: [{ q: 1, r: 0 }],
-      },
-    ]);
+      }),
+    ], true);
     expect(controller.previewHex({ q: 0, r: 0 })).toEqual({
       type: GameActionPreviewType.OutOfRange,
       reason: GameActionRejectionReason.PresentationBusy,
@@ -244,7 +258,7 @@ describe("GameController", () => {
     });
   });
 
-  it("coalesces autonomous Enemy movement and attack into one tactical update", () => {
+  it("passes autonomous Move then Attack events to presentation in resolution order", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const enemy = new Unit("enemy", { q: 2, r: 0 }, UnitTexture.EnemyIdle, {
       faction: Faction.Enemy,
@@ -256,12 +270,40 @@ describe("GameController", () => {
     controller.waitForMage();
 
     expect(presenter.sync).toHaveBeenCalledTimes(1);
-    expect(presenter.sync).toHaveBeenCalledWith([{
-      unitId: enemy.id,
-      from: { q: 2, r: 0 },
-      steps: [{ q: 1, r: 0 }],
-    }]);
+    expect(presenter.sync).toHaveBeenCalledWith([
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Move,
+        unit: expect.objectContaining({ id: enemy.id, position: { q: 1, r: 0 } }),
+        from: { q: 2, r: 0 },
+        steps: [{ q: 1, r: 0 }],
+      }),
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Attack,
+        attacker: expect.objectContaining({ id: enemy.id }),
+        target: expect.objectContaining({
+          id: mage.id,
+          currentHp: mage.maxHp - enemy.attackPower,
+        }),
+      }),
+    ], true);
     expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
+  });
+
+  it("requests a fog-safe visibility sync without hidden event data", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+      currentHp: 20,
+    });
+    const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(new GameMap(mapData), [mage, enemy]);
+    const presenter = createTacticalPresentationPresenter();
+    const controller = new GameController(session, presenter);
+
+    controller.waitForMage();
+
+    expect(mage.isAlive).toBe(false);
+    expect(presenter.sync).toHaveBeenCalledWith([], true);
   });
 
   it("presents a servant as a command target without granting direct control", () => {

@@ -32,6 +32,8 @@ These instructions apply to every code change in this repository.
   ranges, render offsets, cursor hotspots, and non-obvious geometry formulae.
 - Prefer clear names over abbreviated names. Keep one responsibility per class,
   module, or helper.
+- Do not use unexplained shortened or abbreviated variable, parameter, or
+  helper names; prefer complete names when they improve clarity.
 - Do not use `any`, unsafe casts, or implicit mutable shared state to avoid a
   type error. Model the valid state explicitly instead.
 - Preserve deterministic behaviour: define stable tie-breakers for target,

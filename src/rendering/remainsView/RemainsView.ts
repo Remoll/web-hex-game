@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { Unit } from "@/game/unit/Unit";
+import type { TacticalUnitPresentation } from "@/game/gameSession/GameSession";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 import { buildRemainsRenderState } from "@/rendering/remainsView/RemainsRenderModel";
 
@@ -37,6 +38,13 @@ export class RemainsView {
   }
 
   sync(unit: Unit, visible: boolean = true): void {
+    this.syncSnapshot(unit, visible);
+  }
+
+  syncSnapshot(
+    unit: TacticalUnitPresentation,
+    visible: boolean = true,
+  ): void {
     const index = this.getOrCreateIndex(unit.id);
     const state = visible
       ? buildRemainsRenderState(unit, this.gameMap, this.config)

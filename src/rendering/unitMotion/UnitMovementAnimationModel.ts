@@ -1,27 +1,24 @@
 import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { UnitMovementEvent } from "@/game/gameSession/GameSession";
-import type { Unit } from "@/game/unit/Unit";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 import { buildUnitRenderStateAt } from "@/rendering/unitView/UnitRenderModel";
 import type { UnitMovementAnimation } from "@/rendering/unitMotion/UnitMovementAnimationQueue";
 
 /**
- * Converts a domain event to visual keyframes only when the final unit is
- * currently safe to render. The event itself never changes game state.
+ * Converts a fog-safe domain event to visual keyframes. The event itself never
+ * changes game state or reads a later authoritative unit state.
  */
 export function buildVisibleUnitMovementAnimation(
   event: UnitMovementEvent,
-  unit: Unit | undefined,
-  isVisible: boolean,
   gameMap: GameMap,
   config: RenderConfig,
 ): UnitMovementAnimation | undefined {
-  if (!unit?.isAlive || !isVisible) {
+  if (!event.unit.isAlive) {
     return undefined;
   }
 
   return {
-    unitId: event.unitId,
+    unitId: event.unit.id,
     states: [event.from, ...event.steps].map((coord) =>
       buildUnitRenderStateAt(coord, gameMap, config),
     ),

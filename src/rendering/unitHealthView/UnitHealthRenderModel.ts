@@ -1,5 +1,5 @@
 import type { GameMap } from "@/game/board/gameMap/GameMap";
-import type { Unit } from "@/game/unit/Unit";
+import type { HexCoord } from "@/game/types";
 import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 
@@ -14,6 +14,14 @@ export interface UnitHealthRenderState {
   readonly y: number;
   readonly z: number;
   readonly fillRatio: number;
+}
+
+export interface UnitHealthPresentation {
+  readonly id: string;
+  readonly position: Readonly<HexCoord>;
+  readonly currentHp: number;
+  readonly maxHp: number;
+  readonly isAlive: boolean;
 }
 
 /** Converts a unit-sprite centre elevation into the health-bar elevation above it. */
@@ -39,7 +47,7 @@ export function getHealthBarFillX(
 
 /** Builds a Three.js-independent health-bar state for a living unit. */
 export function buildUnitHealthRenderState(
-  unit: Unit,
+  unit: UnitHealthPresentation,
   gameMap: GameMap,
   config: RenderConfig,
 ): UnitHealthRenderState | undefined {

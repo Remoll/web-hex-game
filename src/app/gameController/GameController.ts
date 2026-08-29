@@ -7,7 +7,7 @@ import {
   type GameActionPreview,
   type InitiativeQueuePresentation,
   type ServantCommandPresentation,
-  type UnitMovementEvent,
+  type TacticalPresentationEvent,
 } from "@/game/gameSession/GameSession";
 import type { TimelinePresentation } from "@/game/eventTimeline/EventTimeline";
 import type { HexCoord } from "@/game/types";
@@ -35,10 +35,13 @@ export interface InitiativeQueuePresenter {
 /** Synchronizes one resolved state without allowing presentation to change rules. */
 export interface TacticalPresentationPresenter {
   readonly isAnimating: boolean;
-  sync(events: readonly UnitMovementEvent[]): void;
+  sync(
+    events: readonly TacticalPresentationEvent[],
+    requiresTacticalVisibilitySync: boolean,
+  ): void;
 }
 
-const noMovementEvents = 0;
+const noTacticalPresentationEvents = 0;
 
 const noopFeedbackPresenter: TacticalFeedbackPresenter = {
   sync: () => undefined,
@@ -83,7 +86,7 @@ export class GameController {
       this.session.resolveAutonomousActivations();
     }
 
-    this.syncResolvedTacticalPresentation(action);
+    this.syncResolvedTacticalPresentation();
     this.syncTacticalInterface();
 
     return action;
@@ -95,7 +98,7 @@ export class GameController {
     }
 
     const action = this.session.waitForMage();
-    this.syncResolvedTacticalPresentation(action);
+    this.syncResolvedTacticalPresentation();
     this.syncTacticalInterface();
     return action;
   }
@@ -171,12 +174,20 @@ export class GameController {
 
   /** Applies a temporary queue hover/focus/tap highlight only if still safe. */
   highlightInitiativeQueueUnit(unitId: string): void {
+    if (this.tacticalPresentationPresenter.isAnimating) {
+      return;
+    }
+
     this.initiativeQueueHighlightedUnitId = this.session
       .getInitiativeQueueHighlightUnitId(unitId);
     this.refreshTacticalFeedback();
   }
 
   clearInitiativeQueueHighlight(): void {
+    if (this.tacticalPresentationPresenter.isAnimating) {
+      return;
+    }
+
     this.initiativeQueueHighlightedUnitId = undefined;
     this.refreshTacticalFeedback();
   }
@@ -185,20 +196,17 @@ export class GameController {
     return this.session.selectedUnitId !== null;
   }
 
-  /** Coalesces one resolved action into at most one full tactical refresh. */
-  private syncResolvedTacticalPresentation(action: GameAction): void {
-    const movementEvents = this.session.consumeMovementEvents();
-    const hasAutonomousUnitUpdates = this.session
-      .consumeAutonomousUnitUpdateSignal();
-    const hasMovementEvents = movementEvents.length > noMovementEvents;
-    const hasDirectUnitUpdate = action.type === GameActionType.Moved
-      || action.type === GameActionType.Attacked;
-
-    if (!hasDirectUnitUpdate && !hasAutonomousUnitUpdates && !hasMovementEvents) {
+  /** Publishes one resolved action's safe visual events without reordering them. */
+  private syncResolvedTacticalPresentation(): void {
+    const events = this.session.consumeTacticalPresentationEvents();
+    const requiresTacticalVisibilitySync = this.session
+      .consumeTacticalVisibilitySyncSignal();
+    if (events.length === noTacticalPresentationEvents
+      && !requiresTacticalVisibilitySync) {
       return;
     }
 
-    this.tacticalPresentationPresenter.sync(movementEvents);
+    this.tacticalPresentationPresenter.sync(events, requiresTacticalVisibilitySync);
   }
 
   private presentationBusyAction(): GameAction {
@@ -338,7 +346,7 @@ export class GameController {
       this.session.resolveAutonomousActivations();
     }
 
-    this.syncResolvedTacticalPresentation(action);
+    this.syncResolvedTacticalPresentation();
     this.syncTacticalInterface();
   }
 }

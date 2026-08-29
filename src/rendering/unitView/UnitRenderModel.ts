@@ -1,5 +1,4 @@
 import type { GameMap } from "@/game/board/gameMap/GameMap";
-import type { Unit } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
 import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
 import type { RenderConfig } from "@/rendering/RenderConfig";
@@ -10,8 +9,12 @@ export interface UnitRenderState {
   readonly z: number;
 }
 
+export interface UnitPositionPresentation {
+  readonly position: Readonly<HexCoord>;
+}
+
 export function buildUnitRenderState(
-  unit: Unit,
+  unit: UnitPositionPresentation,
   gameMap: GameMap,
   config: RenderConfig,
 ): UnitRenderState {

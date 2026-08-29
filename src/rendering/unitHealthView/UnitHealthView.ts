@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Unit } from "@/game/unit/Unit";
+import type { TacticalUnitPresentation } from "@/game/gameSession/GameSession";
 import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 import {
@@ -45,6 +46,14 @@ export class UnitHealthView {
     visible: boolean = true,
     preservePosition: boolean = false,
   ): void {
+    this.syncSnapshot(unit, visible, preservePosition);
+  }
+
+  syncSnapshot(
+    unit: TacticalUnitPresentation,
+    visible: boolean = true,
+    preservePosition: boolean = false,
+  ): void {
     const index = this.getOrCreateIndex(unit.id);
     const state = buildUnitHealthRenderState(unit, this.gameMap, this.config);
 
@@ -60,7 +69,7 @@ export class UnitHealthView {
   }
 
   applyMovementFrame(
-    unit: Unit,
+    unit: TacticalUnitPresentation,
     from: UnitRenderState,
     to: UnitRenderState,
     progress: number,
@@ -165,7 +174,7 @@ function interpolate(from: number, to: number, progress: number): number {
   return from + (to - from) * progress;
 }
 
-function getFillRatio(unit: Unit): number | undefined {
+function getFillRatio(unit: TacticalUnitPresentation): number | undefined {
   if (!unit.isAlive || unit.maxHp <= 0) {
     return undefined;
   }

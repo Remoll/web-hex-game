@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { GameMap } from "@/game/board/gameMap/GameMap";
 import type { Unit } from "@/game/unit/Unit";
+import type { TacticalUnitPresentation } from "@/game/gameSession/GameSession";
 import type { PlaneCoord } from "@/game/types";
 import { AtlasInstancedMesh } from "@/rendering/customInstancedMesh/atlasInstancedMesh/AtlasInstancedMesh";
 import type { RenderConfig } from "@/rendering/RenderConfig";
@@ -48,6 +49,14 @@ export class UnitView {
 
   sync(
     unit: Unit,
+    visible: boolean = true,
+    preservePosition: boolean = false,
+  ): void {
+    this.syncSnapshot(unit, visible, preservePosition);
+  }
+
+  syncSnapshot(
+    unit: TacticalUnitPresentation,
     visible: boolean = true,
     preservePosition: boolean = false,
   ): void {

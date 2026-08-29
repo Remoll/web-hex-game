@@ -8,6 +8,7 @@ import {
   GameSession,
   InitiativeQueueActorLabel,
   InitiativeQueueCardState,
+  TacticalPresentationEventKind,
 } from "@/game/gameSession/GameSession";
 import {
   actionPointsPerActivation,
@@ -210,7 +211,7 @@ describe("GameSession", () => {
     expect(session.isUnitVisible(enemy)).toBe(false);
   });
 
-  it("publishes ordered immutable paths after authoritative player movement", () => {
+  it("publishes ordered immutable Move snapshots after authoritative player movement", () => {
     const { session, player } = createSession();
     session.clickHex(player.position);
 
@@ -218,22 +219,35 @@ describe("GameSession", () => {
       type: GameActionType.Moved,
       unitId: player.id,
     });
-    const events = session.consumeMovementEvents();
+    const events = session.consumeTacticalPresentationEvents();
     expect(events).toEqual([
-      {
-        unitId: player.id,
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Move,
+        unit: expect.objectContaining({
+          id: player.id,
+          position: { q: 0, r: -2 },
+          currentHp: player.currentHp,
+          isAlive: true,
+        }),
         from: { q: 0, r: 0 },
         steps: [{ q: 0, r: -1 }, { q: 0, r: -2 }],
-      },
+      }),
     ]);
-    expect(Object.isFrozen(events[0])).toBe(true);
-    expect(Object.isFrozen(events[0].from)).toBe(true);
-    expect(Object.isFrozen(events[0].steps)).toBe(true);
+    expect(Object.isFrozen(events)).toBe(true);
+    const firstEvent = events[0];
+    if (!firstEvent || firstEvent.kind !== TacticalPresentationEventKind.Move) {
+      throw new Error("Expected one Move presentation event");
+    }
+    expect(Object.isFrozen(firstEvent)).toBe(true);
+    expect(Object.isFrozen(firstEvent.unit)).toBe(true);
+    expect(Object.isFrozen(firstEvent.unit.position)).toBe(true);
+    expect(Object.isFrozen(firstEvent.from)).toBe(true);
+    expect(Object.isFrozen(firstEvent.steps)).toBe(true);
     expect(player.position).toEqual({ q: 0, r: -2 });
-    expect(session.consumeMovementEvents()).toEqual([]);
+    expect(session.consumeTacticalPresentationEvents()).toEqual([]);
   });
 
-  it("preserves autonomous movement event order independently of final state", () => {
+  it("preserves autonomous Move event order independently of final state", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const enemy = new Unit("enemy", { q: 3, r: 0 }, UnitTexture.EnemyIdle, {
       faction: Faction.Enemy,
@@ -250,22 +264,48 @@ describe("GameSession", () => {
 
     session.waitForMage();
 
-    expect(session.consumeMovementEvents()).toEqual([
-      {
-        unitId: enemy.id,
+    expect(session.consumeTacticalPresentationEvents()).toEqual([
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Move,
+        unit: expect.objectContaining({ id: enemy.id, position: { q: 2, r: 0 } }),
         from: { q: 3, r: 0 },
         steps: [{ q: 2, r: 0 }],
-      },
-      {
-        unitId: enemy.id,
+      }),
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Move,
+        unit: expect.objectContaining({ id: enemy.id, position: { q: 1, r: 0 } }),
         from: { q: 2, r: 0 },
         steps: [{ q: 1, r: 0 }],
-      },
+      }),
     ]);
     expect(enemy.position).toEqual({ q: 1, r: 0 });
   });
 
-  it("publishes autonomous unit changes as a consumable boolean signal", () => {
+  it("does not expose a move path that crossed currently hidden fields", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+      viewRange: 1,
+    });
+    const enemy = new Unit("enemy", { q: 3, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 2, r: 0 },
+        { q: 3, r: 0 },
+      ])),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(session.consumeTacticalPresentationEvents()).toEqual([]);
+    expect(session.consumeTacticalVisibilitySyncSignal()).toBe(true);
+    expect(session.consumeTacticalVisibilitySyncSignal()).toBe(false);
+  });
+
+  it("publishes an autonomous Attack snapshot after an adjacent hostile hit", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
       faction: Faction.Enemy,
@@ -275,11 +315,38 @@ describe("GameSession", () => {
       [mage, enemy],
     );
 
-    expect(session.consumeAutonomousUnitUpdateSignal()).toBe(false);
     session.waitForMage();
 
-    expect(session.consumeAutonomousUnitUpdateSignal()).toBe(true);
-    expect(session.consumeAutonomousUnitUpdateSignal()).toBe(false);
+    expect(session.consumeTacticalPresentationEvents()).toEqual([
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Attack,
+        attacker: expect.objectContaining({ id: enemy.id, isAlive: true }),
+        target: expect.objectContaining({
+          id: mage.id,
+          currentHp: mage.maxHp - enemy.attackPower,
+          isAlive: true,
+        }),
+      }),
+    ]);
+  });
+
+  it("withholds known attacker data when Mage defeat removes current visibility", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle, {
+      currentHp: 20,
+    });
+    const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const session = new GameSession(
+      new GameMap(createGrassMap([mage.position, enemy.position])),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(mage.isAlive).toBe(false);
+    expect(session.consumeTacticalPresentationEvents()).toEqual([]);
+    expect(session.consumeTacticalVisibilitySyncSignal()).toBe(true);
   });
 
   it("keeps direct control Mage-exclusive and selects a servant only as a command target", () => {

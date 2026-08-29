@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
-import type { UnitMovementEvent } from "@/game/gameSession/GameSession";
-import { Unit, UnitTexture } from "@/game/unit/Unit";
-import { Faction, MovementType, TerrainType, type MapArray } from "@/game/types";
+import {
+  TacticalPresentationEventKind,
+  type UnitMovementEvent,
+} from "@/game/gameSession/GameSession";
+import { UnitTexture } from "@/game/unit/Unit";
+import { MovementType, TerrainType, type MapArray } from "@/game/types";
 import { defaultRenderConfig } from "@/rendering/RenderConfig";
 import { buildVisibleUnitMovementAnimation } from "@/rendering/unitMotion/UnitMovementAnimationModel";
 
@@ -30,47 +33,40 @@ const map: MapArray = [
 ];
 
 const movementEvent: UnitMovementEvent = {
-  unitId: "enemy",
+  kind: TacticalPresentationEventKind.Move,
+  unit: {
+    id: "enemy",
+    position: { q: 1, r: 0 },
+    texture: UnitTexture.EnemyIdle,
+    currentHp: 100,
+    maxHp: 100,
+    isAlive: true,
+  },
   from: { q: 0, r: 0 },
   steps: [{ q: 1, r: 0 }],
 };
 
 describe("buildVisibleUnitMovementAnimation", () => {
-  it("does not create presentation work for a unit outside current Mage sight", () => {
-    const enemy = new Unit(
-      "enemy",
-      { q: 1, r: 0 },
-      UnitTexture.EnemyIdle,
-      { faction: Faction.Enemy },
-    );
-
+  it("does not create presentation work for a defeated snapshot", () => {
     expect(buildVisibleUnitMovementAnimation(
-      movementEvent,
-      enemy,
-      false,
+      {
+        ...movementEvent,
+        unit: { ...movementEvent.unit, isAlive: false },
+      },
       new GameMap(map),
       defaultRenderConfig,
     )).toBeUndefined();
   });
 
-  it("retains every event keyframe for a visible living unit", () => {
-    const enemy = new Unit(
-      "enemy",
-      { q: 1, r: 0 },
-      UnitTexture.EnemyIdle,
-      { faction: Faction.Enemy },
-    );
-
+  it("retains every keyframe for a fog-safe living Move event", () => {
     const animation = buildVisibleUnitMovementAnimation(
       movementEvent,
-      enemy,
-      true,
       new GameMap(map),
       defaultRenderConfig,
     );
 
     expect(animation).toMatchObject({
-      unitId: enemy.id,
+      unitId: movementEvent.unit.id,
       states: [
         { x: 0, y: 0 },
         { x: 96 },

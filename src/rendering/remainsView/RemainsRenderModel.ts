@@ -1,5 +1,5 @@
 import type { GameMap } from "@/game/board/gameMap/GameMap";
-import type { Unit } from "@/game/unit/Unit";
+import type { HexCoord } from "@/game/types";
 import { HexLayout } from "@/rendering/geometry/hexLayout/HexLayout";
 import type { RenderConfig } from "@/rendering/RenderConfig";
 
@@ -10,9 +10,15 @@ export interface RemainsRenderState {
   readonly z: number;
 }
 
+export interface RemainsPresentation {
+  readonly id: string;
+  readonly position: Readonly<HexCoord>;
+  readonly isAlive: boolean;
+}
+
 /** Dead units retain a visual coordinate without participating in game rules. */
 export function buildRemainsRenderState(
-  unit: Unit,
+  unit: RemainsPresentation,
   gameMap: GameMap,
   config: RenderConfig,
 ): RemainsRenderState | undefined {

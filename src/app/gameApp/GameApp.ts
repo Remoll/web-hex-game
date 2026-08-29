@@ -9,7 +9,9 @@ import { InitiativeQueueHud } from "@/app/initiativeQueueHud/InitiativeQueueHud"
 import { ServantCommandHud } from "@/app/servantCommandHud/ServantCommandHud";
 import {
   type GameSession,
-  type UnitMovementEvent,
+  TacticalPresentationEventKind,
+  type TacticalPresentationEvent,
+  type TacticalUnitPresentation,
 } from "@/game/gameSession/GameSession";
 import {
   createGameSession,
@@ -28,9 +30,9 @@ import { UnitView } from "@/rendering/unitView/UnitView";
 import { UnitHealthView } from "@/rendering/unitHealthView/UnitHealthView";
 import {
   UnitMovementAnimationQueue,
-  type UnitMovementAnimation,
 } from "@/rendering/unitMotion/UnitMovementAnimationQueue";
 import { buildVisibleUnitMovementAnimation } from "@/rendering/unitMotion/UnitMovementAnimationModel";
+import { TacticalPresentationQueue } from "@/rendering/tacticalPresentation/TacticalPresentationQueue";
 
 export interface GameAppOptions {
   readonly level: LevelDefinition;
@@ -49,11 +51,13 @@ export class GameApp {
   private readonly unitView: UnitView;
   private readonly unitHealthView: UnitHealthView;
   private readonly unitMovementAnimationQueue: UnitMovementAnimationQueue;
+  private readonly tacticalPresentationQueue: TacticalPresentationQueue;
   private readonly remainsView: RemainsView;
   private readonly timelineHud: TimelineHud;
   private readonly initiativeQueueHud: InitiativeQueueHud;
   private readonly servantCommandHud: ServantCommandHud;
   private readonly input: InputController;
+  private tacticalVisibilitySyncPending = false;
 
   constructor({ level, container, renderConfig = defaultRenderConfig }: GameAppOptions) {
     this.renderConfig = renderConfig;
@@ -90,6 +94,19 @@ export class GameApp {
       isMovementAnimationEnabled(),
     );
     this.remainsView = new RemainsView(scene, gameMap, renderConfig);
+    this.tacticalPresentationQueue = new TacticalPresentationQueue({
+      movementAnimationQueue: this.unitMovementAnimationQueue,
+      createMovementAnimation: (event) => buildVisibleUnitMovementAnimation(
+        event,
+        gameMap,
+        this.renderConfig,
+      ),
+      onEventCompleted: (event) => this.completeTacticalPresentationEvent(event),
+      onMovementFrame: (event, from, to, progress) => {
+        this.unitView.applyMovementFrame(event.unit.id, from, to, progress);
+        this.unitHealthView.applyMovementFrame(event.unit, from, to, progress);
+      },
+    });
     let gameController: GameController | undefined;
     this.timelineHud = new TimelineHud({
       container,
@@ -111,14 +128,15 @@ export class GameApp {
     });
     this.syncTacticalPresentation();
 
-    const unitMovementAnimationQueue = this.unitMovementAnimationQueue;
+    const tacticalPresentationQueue = this.tacticalPresentationQueue;
     const tacticalPresentationPresenter: TacticalPresentationPresenter = {
-      sync: (events) => {
-        this.enqueueUnitMovementAnimations(events);
-        this.syncTacticalPresentation();
+      sync: (events, requiresTacticalVisibilitySync) => {
+        this.tacticalVisibilitySyncPending ||= requiresTacticalVisibilitySync;
+        this.tacticalPresentationQueue.enqueue(events);
+        this.syncTacticalPresentationWhenIdle();
       },
       get isAnimating(): boolean {
-        return unitMovementAnimationQueue.isAnimating;
+        return tacticalPresentationQueue.isAnimating;
       },
     };
 
@@ -150,7 +168,7 @@ export class GameApp {
     this.camera.dispose();
     this.mapView.dispose();
     this.mapHighlightView.dispose();
-    this.unitMovementAnimationQueue.clear();
+    this.tacticalPresentationQueue.clear();
     this.unitView.dispose();
     this.unitHealthView.dispose();
     this.remainsView.dispose();
@@ -170,6 +188,16 @@ export class GameApp {
     this.remainsView.sync(unit, visible);
   }
 
+  private syncUnitSnapshot(unit: TacticalUnitPresentation): void {
+    const preservePosition = this.tacticalPresentationQueue
+      .hasAnimationForUnit(unit.id);
+    const currentUnit = this.session.getUnit(unit.id);
+    const isVisible = currentUnit !== undefined && this.session.isUnitVisible(currentUnit);
+    this.unitView.syncSnapshot(unit, isVisible, preservePosition);
+    this.unitHealthView.syncSnapshot(unit, isVisible, preservePosition);
+    this.remainsView.syncSnapshot(unit, isVisible);
+  }
+
   private syncTacticalPresentation(): void {
     this.mapView.syncVisibility(this.session.visibility);
     for (const unit of this.session.units) {
@@ -177,50 +205,30 @@ export class GameApp {
     }
   }
 
-  private enqueueUnitMovementAnimations(events: readonly UnitMovementEvent[]): void {
-    const animations: UnitMovementAnimation[] = [];
-
-    for (const event of events) {
-      const unit = this.session.getUnit(event.unitId);
-      const animation = buildVisibleUnitMovementAnimation(
-        event,
-        unit,
-        unit !== undefined && this.session.isUnitVisible(unit),
-        this.session.gameMap,
-        this.renderConfig,
-      );
-      if (animation) {
-        animations.push(animation);
-      }
+  private completeTacticalPresentationEvent(event: TacticalPresentationEvent): void {
+    switch (event.kind) {
+      case TacticalPresentationEventKind.Move:
+        this.syncUnitSnapshot(event.unit);
+        return;
+      case TacticalPresentationEventKind.Attack:
+        this.syncUnitSnapshot(event.attacker);
+        this.syncUnitSnapshot(event.target);
+        return;
     }
-
-    this.unitMovementAnimationQueue.enqueue(animations);
   }
 
   private updateUnitMovementPresentation(): void {
-    const completedUnitIds = this.unitMovementAnimationQueue.update(
-      performance.now(),
-      (unitId, from, to, progress) => {
-        const unit = this.session.getUnit(unitId);
-        if (!unit?.isAlive || !this.session.isUnitVisible(unit)) {
-          return;
-        }
+    this.tacticalPresentationQueue.update(performance.now());
+    this.syncTacticalPresentationWhenIdle();
+  }
 
-        this.unitView.applyMovementFrame(unitId, from, to, progress);
-        this.unitHealthView.applyMovementFrame(unit, from, to, progress);
-      },
-    );
-
-    for (const unitId of completedUnitIds) {
-      if (this.unitMovementAnimationQueue.hasAnimationForUnit(unitId)) {
-        continue;
-      }
-
-      const unit = this.session.getUnit(unitId);
-      if (unit) {
-        this.syncUnitPresentation(unit);
-      }
+  private syncTacticalPresentationWhenIdle(): void {
+    if (!this.tacticalVisibilitySyncPending || this.tacticalPresentationQueue.isAnimating) {
+      return;
     }
+
+    this.syncTacticalPresentation();
+    this.tacticalVisibilitySyncPending = false;
   }
 }
 
