@@ -42,9 +42,10 @@ such a blocker. The elevated blocking field itself remains visible. Standing
 on high ground does not yet increase view range; elevated-observer bonuses,
 facing, and stealth remain deferred.
 
-- **Undiscovered** hexes are covered by black fog.
-- **Discovered** hexes retain visible terrain under translucent fog, but units
-  and remains are hidden.
+- **Undiscovered** hexes are covered by black fog that masks their caps and
+  vertical terrain walls.
+- **Discovered** hexes retain terrain caps and vertical sides under translucent
+  fog, but units and remains are hidden.
 - **Visible** hexes show terrain, living units, and remains normally.
 
 The Mage can be selected only while currently Visible. Hovering or clicking a
@@ -55,7 +56,7 @@ hidden unit remains unavailable and reveals no unit information.
 The Mage and autonomous units share a discrete, integer event timeline rather
 than a wall-clock timer. The timeline HUD shows the current simulation time,
 the ready actor, the current AP pool, and the Mage's available action costs.
-The Mage starts ready at time `0` with three Action Points (AP).
+The Mage starts ready at time `0` with four Action Points (AP).
 
 The bottom initiative queue mirrors the deterministic upcoming timeline order.
 Its cards are horizontally scrollable on touch devices, while the current actor
@@ -92,8 +93,10 @@ its current map position.
   against an adjacent hostile, **Protect Mage**, **Pursue Designated Enemy**,
   and **Secure Designated Hex**. A servant with no Mage-issued strategy
   remembers the first hostile it currently perceives and uses legal AP-limited
-  paths to engage it. An explicit strategy always takes precedence over this
-  default behaviour.
+  paths to engage it. If it perceives no hostile, it uses the same deterministic
+  legal approach to move toward an unoccupied hex beside the Mage, then waits
+  while already adjacent or blocked. An explicit strategy always takes
+  precedence over this default behaviour; following stores no target memory.
   Pursuit stores one
   explicit Enemy identity and, on the servant's later activation, attacks that
   Enemy if adjacent or takes deterministic legal Ground steps toward an empty

@@ -112,4 +112,47 @@ export class Hex {
 
     return geometry;
   }
+
+  /** A unit-height hex prism that overlays both a terrain cap and its walls. */
+  static createHexFogPrismGeometry(size: number): THREE.BufferGeometry {
+    const geometry = new THREE.BufferGeometry();
+    const outerRadius = size;
+    const baseZ = 0;
+    const topZ = 1;
+    const verticesPerTriangle = 3;
+    const trianglesPerSide = 2;
+    const hexSideCount = 6;
+    const outerPoints: PlaneCoord[] = [];
+
+    for (let index = 0; index < hexSideCount; index += 1) {
+      outerPoints.push(HexLayout.hexVertex(index, outerRadius));
+    }
+
+    const positions: number[] = [];
+    for (let index = 0; index < hexSideCount; index += 1) {
+      const nextIndex = (index + 1) % hexSideCount;
+      const start = outerPoints[index];
+      const end = outerPoints[nextIndex];
+
+      positions.push(start.x, start.y, topZ, end.x, end.y, baseZ, end.x, end.y, topZ);
+      positions.push(start.x, start.y, topZ, start.x, start.y, baseZ, end.x, end.y, baseZ);
+    }
+
+    for (let index = 0; index < hexSideCount; index += 1) {
+      const nextIndex = (index + 1) % hexSideCount;
+      const start = outerPoints[index];
+      const end = outerPoints[nextIndex];
+
+      positions.push(0, 0, topZ, start.x, start.y, topZ, end.x, end.y, topZ);
+    }
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    const sideVertexCount = hexSideCount * trianglesPerSide * verticesPerTriangle;
+    const capVertexCount = hexSideCount * verticesPerTriangle;
+    geometry.addGroup(0, sideVertexCount, 0);
+    geometry.addGroup(sideVertexCount, capVertexCount, 1);
+    geometry.computeVertexNormals();
+
+    return geometry;
+  }
 }

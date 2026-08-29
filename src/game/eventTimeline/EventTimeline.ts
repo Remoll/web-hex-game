@@ -33,7 +33,7 @@ export enum TacticalActionPointCost {
   Wait = 0,
 }
 
-export const actionPointsPerActivation = 3;
+export const actionPointsPerActivation = 4;
 export const baseTimelineRecoveryDelay = 100;
 export const minimumTimelineRecoveryDelay = 1;
 

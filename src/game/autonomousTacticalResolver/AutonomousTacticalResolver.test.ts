@@ -9,6 +9,7 @@ import {
 import { getHexCoordKey } from "@/game/board/hexCoord/HexCoord";
 import { Faction } from "@/game/faction/Faction";
 import {
+  actionPointsPerActivation,
   TacticalActionPointCost,
   TimelineAction,
 } from "@/game/eventTimeline/EventTimeline";
@@ -37,6 +38,22 @@ const mapData: MapArray = [-1, 0, 1, 2, 3].map((q) => ({
 }));
 
 const gameMap = new GameMap(mapData);
+
+function createGrassGameMap(coordinates: readonly { q: number; r: number }[]): GameMap {
+  return new GameMap(coordinates.map(({ q, r }) => ({
+    q,
+    r,
+    fieldAttrs: {
+      terrainType: TerrainType.Grass,
+      allowedMovements: {
+        [MovementType.Ground]: true,
+        [MovementType.Flying]: true,
+      },
+      groundLevel: 0,
+      leavingCostMultiplier: standardLeavingCostMultiplier,
+    },
+  })));
+}
 
 function unit(
   id: string,
@@ -76,7 +93,7 @@ function input(
       .map((unit) => [getHexCoordKey(unit.position), unit.id])),
     actorId,
     mageId: "mage",
-    remainingActionPoints: 3,
+    remainingActionPoints: actionPointsPerActivation,
     enemyMemory: { lastKnownHostilePosition: undefined },
     servantMemory: { defaultTargetId: undefined },
     servantStrategy: undefined,
@@ -85,6 +102,138 @@ function input(
 }
 
 describe("AutonomousTacticalResolver", () => {
+  it("moves an unordered servant one legal step toward a distant Mage", () => {
+    const mage = unit(
+      "mage",
+      Faction.Player,
+      3,
+      { tacticalRole: UnitTacticalRole.Mage },
+    );
+    const servant = unit("servant", Faction.Player, 0);
+
+    expect(resolveAutonomousTacticalDecision(input(
+      servant.id,
+      [mage, servant],
+    ))).toEqual({
+      action: TimelineAction.Move,
+      destination: { q: 1, r: 0 },
+      actionPointCost: TacticalActionPointCost.Move,
+      memoryDirectives: [],
+      clearServantStrategy: false,
+    });
+  });
+
+  it("uses the deterministic shortest-approach tie break when following the Mage", () => {
+    const servant = unit("servant", Faction.Player, 0);
+    const mage = {
+      ...unit("mage", Faction.Player, 2, { tacticalRole: UnitTacticalRole.Mage }),
+      position: { q: 2, r: 0 },
+    };
+    const equalApproachMap = createGrassGameMap([
+      servant.position,
+      { q: 1, r: -1 },
+      { q: 2, r: -1 },
+      { q: 0, r: 1 },
+      { q: 1, r: 1 },
+      mage.position,
+    ]);
+
+    expect(resolveAutonomousTacticalDecision(input(
+      servant.id,
+      [mage, servant],
+      {},
+      equalApproachMap,
+    ))).toMatchObject({
+      action: TimelineAction.Move,
+      destination: { q: 1, r: -1 },
+      actionPointCost: TacticalActionPointCost.Move,
+    });
+  });
+
+  it("waits beside the Mage and never chooses the occupied Mage hex", () => {
+    const mage = unit(
+      "mage",
+      Faction.Player,
+      0,
+      { tacticalRole: UnitTacticalRole.Mage },
+    );
+    const servant = unit("servant", Faction.Player, -1);
+
+    expect(resolveAutonomousTacticalDecision(input(
+      servant.id,
+      [mage, servant],
+    ))).toEqual({
+      action: TimelineAction.Wait,
+      memoryDirectives: [],
+      clearServantStrategy: false,
+    });
+  });
+
+  it("waits when no legal route can approach the Mage", () => {
+    const mage = unit(
+      "mage",
+      Faction.Player,
+      2,
+      { tacticalRole: UnitTacticalRole.Mage },
+    );
+    const servant = unit("servant", Faction.Player, 0);
+    const blockingAlly = unit("blocking-ally", Faction.Player, 1);
+
+    expect(resolveAutonomousTacticalDecision(input(
+      servant.id,
+      [mage, servant, blockingAlly],
+    ))).toEqual({
+      action: TimelineAction.Wait,
+      memoryDirectives: [],
+      clearServantStrategy: false,
+    });
+  });
+
+  it("prioritizes a perceived hostile over following the Mage", () => {
+    const mage = unit(
+      "mage",
+      Faction.Player,
+      -1,
+      { tacticalRole: UnitTacticalRole.Mage },
+    );
+    const servant = unit("servant", Faction.Player, 0);
+    const enemy = unit("enemy", Faction.Enemy, 2);
+
+    expect(resolveAutonomousTacticalDecision(input(
+      servant.id,
+      [mage, servant, enemy],
+    ))).toEqual({
+      action: TimelineAction.Move,
+      destination: { q: 1, r: 0 },
+      actionPointCost: TacticalActionPointCost.Move,
+      memoryDirectives: [{
+        type: AutonomousMemoryDirectiveType.RememberServantDefaultTarget,
+        targetId: enemy.id,
+      }],
+      clearServantStrategy: false,
+    });
+  });
+
+  it("keeps an explicit servant strategy ahead of default Mage following", () => {
+    const mage = unit(
+      "mage",
+      Faction.Player,
+      3,
+      { tacticalRole: UnitTacticalRole.Mage },
+    );
+    const servant = unit("servant", Faction.Player, 0);
+
+    expect(resolveAutonomousTacticalDecision(input(
+      servant.id,
+      [mage, servant],
+      { servantStrategy: { type: ServantStrategyType.Hold } },
+    ))).toEqual({
+      action: TimelineAction.Wait,
+      memoryDirectives: [],
+      clearServantStrategy: false,
+    });
+  });
+
   it("derives an exact Shallow Water uphill cost for a semantic Move", () => {
     const shallowWaterGroundLevel = 0;
     const uphillGroundLevel = 1;

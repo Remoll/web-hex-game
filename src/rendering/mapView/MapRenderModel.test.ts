@@ -44,6 +44,7 @@ describe("MapRenderModel", () => {
       x: 0,
       y: 0,
       height: 48,
+      fogPrismHeight: 48.05,
       terrainType: TerrainType.Grass,
     });
     expect(getHexForInstance(model, 1)).toEqual({ q: -1, r: 1 });

@@ -9,6 +9,8 @@ export interface MapRenderCell {
   readonly x: number;
   readonly y: number;
   readonly height: number;
+  /** Prism height lets fog mask the cap and every vertical terrain wall. */
+  readonly fogPrismHeight: number;
   readonly terrainType: TerrainType;
 }
 
@@ -27,13 +29,15 @@ export function buildMapRenderModel(
     const coord = { q, r };
     const position = HexLayout.hexCoordToPlaneCoord(coord, config.hexSize);
 
+    const height = (field.getGroundLevel() + config.terrainBaseLevel) * config.hexDepth;
+
     cells.push({
       instanceId: cells.length,
       coord,
       x: position.x,
       y: position.y,
-      height:
-        (field.getGroundLevel() + config.terrainBaseLevel) * config.hexDepth,
+      height,
+      fogPrismHeight: height + config.fogZOffset,
       terrainType: field.getTerrainType(),
     });
   });

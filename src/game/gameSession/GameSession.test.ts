@@ -16,6 +16,7 @@ import {
   TacticalActionPointCost,
 } from "@/game/eventTimeline/EventTimeline";
 import {
+  groundUphillAdditionalActionPointCost,
   groundUphillMovementActionPointCost,
   shallowWaterLeavingCostMultiplier,
 } from "@/game/movement/GroundMovementRules";
@@ -32,6 +33,9 @@ import {
 import { FieldVisibility } from "@/game/visibility/MageVisibility";
 
 const standardLeavingCostMultiplier = 1;
+const shallowWaterUphillActionPointCost = TacticalActionPointCost.Move
+  * shallowWaterLeavingCostMultiplier
+  + groundUphillAdditionalActionPointCost;
 
 const mapData: MapArray = [
   { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass) },
@@ -106,7 +110,7 @@ function createSession(): {
 }
 
 describe("GameSession", () => {
-  it("derives Mage Shallow Water highlights and rejects an uphill exit beyond remaining AP", () => {
+  it("derives Mage Shallow Water highlights including a legal uphill exit", () => {
     const mageStart = { q: 0, r: 0 };
     const shallowWaterHex = { q: 1, r: 0 };
     const uphillDestination = { q: 2, r: 0 };
@@ -152,12 +156,20 @@ describe("GameSession", () => {
       from: mageStart,
       to: shallowWaterHex,
     });
-    expect(session.getReachableHexes()).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ coord: uphillDestination }),
+    expect(session.getReachableHexes()).toEqual(expect.arrayContaining([
+      {
+        coord: uphillDestination,
+        cost: shallowWaterUphillActionPointCost,
+      },
     ]));
     expect(session.previewHex(uphillDestination)).toEqual({
-      type: GameActionPreviewType.OutOfRange,
-      reason: GameActionRejectionReason.OutOfRange,
+      type: GameActionPreviewType.ValidMove,
+      unitId: mage.id,
+      destination: uphillDestination,
+      path: {
+        cost: shallowWaterUphillActionPointCost,
+        steps: [uphillDestination],
+      },
     });
     expect(session.previewHex(deepWaterHex)).toEqual({
       type: GameActionPreviewType.OutOfRange,
@@ -183,7 +195,10 @@ describe("GameSession", () => {
     session.clickHex(mage.position);
     expect(session.getReachableHexes()).toEqual(expect.arrayContaining([
       { coord: climbHex, cost: groundUphillMovementActionPointCost },
-      { coord: plateauHex, cost: actionPointsPerActivation },
+      {
+        coord: plateauHex,
+        cost: groundUphillMovementActionPointCost + TacticalActionPointCost.Move,
+      },
     ]));
     expect(session.getReachableHexes()).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ coord: steepHex }),
@@ -199,7 +214,7 @@ describe("GameSession", () => {
 
     session.clickHex(climbHex);
     expect(session.timelinePresentation.readyActorActionPoints).toBe(
-      TacticalActionPointCost.Move,
+      actionPointsPerActivation - groundUphillMovementActionPointCost,
     );
     expect(session.clickHex(plateauHex)).toMatchObject({
       type: GameActionType.Moved,
@@ -224,7 +239,7 @@ describe("GameSession", () => {
     session.waitForMage();
 
     expect(enemy.position).toEqual({ q: 1, r: 0 });
-    expect(mage.currentHp).toBe(mage.maxHp);
+    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
     expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
       baseTimelineRecoveryDelay,
     );
@@ -256,7 +271,7 @@ describe("GameSession", () => {
     session.waitForMage();
 
     expect(enemy.position).toEqual({ q: 1, r: 0 });
-    expect(mage.currentHp).toBe(mage.maxHp);
+    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
     expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
       baseTimelineRecoveryDelay,
     );
@@ -290,7 +305,7 @@ describe("GameSession", () => {
     session.waitForMage();
 
     expect(enemy.position).toEqual({ q: 1, r: 0 });
-    expect(mage.currentHp).toBe(mage.maxHp);
+    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
     expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
       baseTimelineRecoveryDelay,
     );
@@ -337,7 +352,16 @@ describe("GameSession", () => {
     const mage = new Player("mage", { q: 3, r: 0 }, UnitTexture.PlayerIdle);
     const session = new GameSession(
       new GameMap([
-        { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+        {
+          q: 0,
+          r: 0,
+          fieldAttrs: field(
+            TerrainType.ShallowWater,
+            true,
+            0,
+            shallowWaterLeavingCostMultiplier,
+          ),
+        },
         {
           q: 1,
           r: 0,
@@ -445,7 +469,7 @@ describe("GameSession", () => {
     expect(session.consumeTacticalPresentationEvents()).toEqual([]);
   });
 
-  it("preserves autonomous Move event order independently of final state", () => {
+  it("preserves autonomous Move then Attack event order independently of final state", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const enemy = new Unit("enemy", { q: 3, r: 0 }, UnitTexture.EnemyIdle, {
       faction: Faction.Enemy,
@@ -475,6 +499,17 @@ describe("GameSession", () => {
         from: { q: 2, r: 0 },
         steps: [{ q: 1, r: 0 }],
       }),
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Attack,
+        attacker: expect.objectContaining({
+          id: enemy.id,
+          position: { q: 1, r: 0 },
+        }),
+        target: expect.objectContaining({
+          id: mage.id,
+          currentHp: mage.maxHp - enemy.attackPower,
+        }),
+      }),
     ]);
     expect(enemy.position).toEqual({ q: 1, r: 0 });
   });
@@ -498,12 +533,25 @@ describe("GameSession", () => {
 
     session.waitForMage();
 
-    expect(session.consumeTacticalPresentationEvents()).toEqual([]);
+    const presentationEvents = session.consumeTacticalPresentationEvents();
+    expect(presentationEvents.some((event) => (
+      event.kind === TacticalPresentationEventKind.Move
+    ))).toBe(false);
+    expect(presentationEvents).toEqual([
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Attack,
+        attacker: expect.objectContaining({ id: enemy.id }),
+        target: expect.objectContaining({
+          id: mage.id,
+          currentHp: mage.maxHp - enemy.attackPower,
+        }),
+      }),
+    ]);
     expect(session.consumeTacticalVisibilitySyncSignal()).toBe(true);
     expect(session.consumeTacticalVisibilitySyncSignal()).toBe(false);
   });
 
-  it("publishes an autonomous Attack snapshot after an adjacent hostile hit", () => {
+  it("publishes an autonomous Attack snapshot after every adjacent hostile hit", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const enemy = new Unit("enemy", { q: 1, r: 0 }, UnitTexture.EnemyIdle, {
       faction: Faction.Enemy,
@@ -522,6 +570,15 @@ describe("GameSession", () => {
         target: expect.objectContaining({
           id: mage.id,
           currentHp: mage.maxHp - enemy.attackPower,
+          isAlive: true,
+        }),
+      }),
+      expect.objectContaining({
+        kind: TacticalPresentationEventKind.Attack,
+        attacker: expect.objectContaining({ id: enemy.id, isAlive: true }),
+        target: expect.objectContaining({
+          id: mage.id,
+          currentHp: mage.maxHp - enemy.attackPower * 2,
           isAlive: true,
         }),
       }),
@@ -714,7 +771,7 @@ describe("GameSession", () => {
     session.assignProtectMageStrategy();
     session.waitForMage();
 
-    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
+    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower * 2);
     expect(servant.position).toEqual({ q: 0, r: 1 });
   });
 
@@ -813,7 +870,7 @@ describe("GameSession", () => {
     expect(session.getServantStrategyType(servant.id)).toBeUndefined();
   });
 
-  it("spends Mage AP before applying one recovery delay and allows one deferral", () => {
+  it("spends Mage AP before ending its activation and allows one deferral", () => {
     const { session, player } = createSession();
     expect(session.timelinePresentation).toMatchObject({
       currentTime: 0,
@@ -856,6 +913,12 @@ describe("GameSession", () => {
     });
 
     session.clickHex({ q: 0, r: -3 });
+    expect(session.timelinePresentation).toMatchObject({
+      currentTime: 0,
+      readyActorId: player.id,
+      readyActorActionPoints: TacticalActionPointCost.Move,
+    });
+    session.endMageTurn();
     expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(baseTimelineRecoveryDelay);
     expect(session.timelinePresentation).toMatchObject({
       currentTime: baseTimelineRecoveryDelay,
@@ -1203,7 +1266,7 @@ describe("GameSession", () => {
 
     session.endMageTurn();
     session.waitForMage();
-    expect(hostile.currentHp).toBe(hostile.maxHp - servant.attackPower * 2);
+    expect(hostile.currentHp).toBe(hostile.maxHp - servant.attackPower * 3);
     expect(servant.position).toEqual({ q: 1, r: 0 });
   });
 
@@ -1340,7 +1403,7 @@ describe("GameSession", () => {
     });
   });
 
-  it("moves a pursuing servant until its remaining AP cannot fund an attack", () => {
+  it("moves a pursuing servant and uses its remaining AP on a legal attack", () => {
     const mage = new Player("mage", { q: 0, r: -1 }, UnitTexture.PlayerIdle);
     const servant = new Unit(
       "servant",
@@ -1382,7 +1445,7 @@ describe("GameSession", () => {
     session.waitForMage();
 
     expect(servant.position).toEqual({ q: 2, r: 0 });
-    expect(enemy.currentHp).toBe(enemy.maxHp);
+    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
     expect(session.eventTimeline.getNextReadyAt(servant.id)).toBe(
       baseTimelineRecoveryDelay,
     );
@@ -1390,7 +1453,7 @@ describe("GameSession", () => {
     session.endMageTurn();
     session.waitForMage();
 
-    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
+    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower * 3);
     expect(session.eventTimeline.getNextReadyAt(servant.id)).toBe(
       baseTimelineRecoveryDelay * 2,
     );
@@ -1434,6 +1497,8 @@ describe("GameSession", () => {
     session.clickHex({ q: 0, r: -2 });
     expect(session.isUnitVisible(enemy)).toBe(false);
     expect(session.servantCommandPresentation.visiblePursuitTargetId).toBeUndefined();
+
+    session.endMageTurn();
 
     expect(servant.position).toEqual({ q: 0, r: 0 });
     expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
@@ -1483,7 +1548,7 @@ describe("GameSession", () => {
     });
   });
 
-  it("holds an unordered servant without spending AP when no hostile is perceived", () => {
+  it("keeps an unordered servant adjacent to the Mage without overlap", () => {
     const player = new Player("player", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const playerAlly = new Unit(
       "player-ally",
@@ -1503,11 +1568,47 @@ describe("GameSession", () => {
     expect(session.eventTimeline.getNextReadyAt(playerAlly.id)).toBe(
       baseTimelineRecoveryDelay,
     );
+    expect(playerAlly.position).toEqual({ q: -1, r: 0 });
+    expect(playerAlly.position).not.toEqual(player.position);
     expect(session.timelinePresentation).toMatchObject({
       currentTime: 0,
       readyActorId: player.id,
       readyActorHasWaited: true,
     });
+  });
+
+  it("runs unordered servant following only during its timeline activation", () => {
+    const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
+    const servant = new Unit(
+      "servant",
+      { q: -3, r: 0 },
+      UnitTexture.PlayerIdle,
+      { faction: Faction.Player },
+    );
+    const session = new GameSession(
+      new GameMap(createGrassMap([
+        servant.position,
+        { q: -2, r: 0 },
+        { q: -1, r: 0 },
+        mage.position,
+      ])),
+      [mage, servant],
+    );
+
+    expect(session.timelinePresentation.readyActorId).toBe(mage.id);
+    expect(session.timelinePresentation.readyActorId).toBe(mage.id);
+    expect(servant.position).toEqual({ q: -3, r: 0 });
+
+    expect(session.waitForMage()).toEqual({
+      type: GameActionType.Waited,
+      unitId: mage.id,
+    });
+
+    expect(servant.position).toEqual({ q: -1, r: 0 });
+    expect(servant.position).not.toEqual(mage.position);
+    expect(session.eventTimeline.getNextReadyAt(servant.id)).toBe(
+      baseTimelineRecoveryDelay,
+    );
   });
 
   it("has an unordered servant engage the first perceived hostile deterministically", () => {
@@ -1582,7 +1683,7 @@ describe("GameSession", () => {
     session.waitForMage();
 
     expect(defeatedTarget.isAlive).toBe(false);
-    expect(servant.position).toEqual({ q: 1, r: 0 });
+    expect(servant.position).toEqual({ q: 2, r: 0 });
   });
 
   it("keeps an explicit Hold order from pursuing while defending against an adjacent hostile", () => {
@@ -1611,7 +1712,7 @@ describe("GameSession", () => {
     session.waitForMage();
 
     expect(servant.position).toEqual({ q: 0, r: 0 });
-    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower);
+    expect(enemy.currentHp).toBe(enemy.maxHp - servant.attackPower * 2);
   });
 
   it("spends one AP for each changed or cleared visible servant strategy", () => {
@@ -1649,6 +1750,10 @@ describe("GameSession", () => {
       type: GameActionType.StrategyCleared,
       servantId: playerAlly.id,
     });
+    expect(session.timelinePresentation.readyActorActionPoints).toBe(
+      TacticalActionPointCost.Move,
+    );
+    session.endMageTurn();
     expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(
       initialMageNextReadyAt + baseTimelineRecoveryDelay,
     );
@@ -1717,6 +1822,7 @@ describe("GameSession", () => {
 
   it("allows adjacent Mage attacks after movement and invalidates defeated units", () => {
     const { session, player, enemy, neutral } = createSession();
+    enemy.receiveDamage(enemy.maxHp - player.attackPower);
     session.clickHex({ q: 0, r: 0 });
     session.clickHex({ q: 1, r: 0 });
     expect(session.timelinePresentation).toMatchObject({
@@ -1735,28 +1841,16 @@ describe("GameSession", () => {
       attackerId: "player",
       targetId: "enemy",
       damage: 20,
-      targetCurrentHp: 80,
-      targetDefeated: false,
+      targetCurrentHp: 0,
+      targetDefeated: true,
     });
-    expect(session.eventTimeline.getNextReadyAt(player.id)).toBe(
-      baseTimelineRecoveryDelay,
-    );
     expect(session.timelinePresentation).toMatchObject({
-      currentTime: baseTimelineRecoveryDelay,
+      currentTime: 0,
       readyActorId: player.id,
+      readyActorActionPoints: actionPointsPerActivation
+        - TacticalActionPointCost.Move
+        - TacticalActionPointCost.Attack,
     });
-
-    for (let health = 60; health >= 0; health -= 20) {
-      expect(session.clickHex({ q: 2, r: 0 })).toMatchObject({
-        type: GameActionType.Attacked,
-        targetCurrentHp: health,
-        targetDefeated: health === 0,
-      });
-      if (health > 0) {
-        session.waitForMage();
-        session.endMageTurn();
-      }
-    }
 
     expect(enemy.isAlive).toBe(false);
     expect(session.getUnitAt({ q: 2, r: 0 })).toBeUndefined();
@@ -1789,11 +1883,13 @@ describe("GameSession", () => {
     expect(session.timelinePresentation).toMatchObject({
       currentTime: 0,
       readyActorId: mage.id,
-      readyActorActionPoints: TacticalActionPointCost.Move,
+      readyActorActionPoints: actionPointsPerActivation
+        - TacticalActionPointCost.Attack,
     });
     expect(session.previewHex(enemy.position)).toEqual({
-      type: GameActionPreviewType.OutOfRange,
-      reason: GameActionRejectionReason.InsufficientActionPoints,
+      type: GameActionPreviewType.ValidAttack,
+      attackerId: mage.id,
+      targetId: enemy.id,
     });
 
     expect(session.clickHex(retreatHex)).toEqual({
@@ -1803,9 +1899,11 @@ describe("GameSession", () => {
       to: retreatHex,
     });
     expect(session.timelinePresentation).toMatchObject({
-      currentTime: baseTimelineRecoveryDelay,
+      currentTime: 0,
       readyActorId: mage.id,
-      readyActorActionPoints: actionPointsPerActivation,
+      readyActorActionPoints: actionPointsPerActivation
+        - TacticalActionPointCost.Attack
+        - TacticalActionPointCost.Move,
     });
   });
 
@@ -1848,7 +1946,7 @@ describe("GameSession", () => {
     );
   });
 
-  it("attacks an adjacent visible hostile once during an Enemy activation", () => {
+  it("attacks an adjacent visible hostile twice during an Enemy activation", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const enemy = new Unit(
       "enemy",
@@ -1863,7 +1961,7 @@ describe("GameSession", () => {
 
     session.waitForMage();
 
-    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
+    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower * 2);
     expect(enemy.position).toEqual({ q: 1, r: 0 });
     expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
       baseTimelineRecoveryDelay,
@@ -1895,7 +1993,7 @@ describe("GameSession", () => {
     );
 
     session.waitForMage();
-    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower);
+    expect(mage.currentHp).toBe(mage.maxHp - enemy.attackPower * 2);
     expect(session.getEnemyLastKnownHostilePosition(enemy.id)).toEqual({
       q: 2,
       r: 0,
@@ -1904,6 +2002,7 @@ describe("GameSession", () => {
     session.clickHex(mage.position);
     session.clickHex({ q: 0, r: -1 });
 
+    session.endMageTurn();
     session.waitForMage();
 
     expect(enemy.position).toEqual({ q: 2, r: 0 });
@@ -1974,6 +2073,7 @@ describe("GameSession", () => {
       damage: 22,
       targetCurrentHp: 78,
     });
+    session.endMageTurn();
     expect(session.timelinePresentation.currentTime).toBe(98);
   });
 

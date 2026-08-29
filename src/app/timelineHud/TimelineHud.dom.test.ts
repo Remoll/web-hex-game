@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TimelinePresentation } from "@/game/eventTimeline/EventTimeline";
+import {
+  actionPointsPerActivation,
+  type TimelinePresentation,
+} from "@/game/eventTimeline/EventTimeline";
 import { TimelineHud } from "@/app/timelineHud/TimelineHud";
 
 const mageId = "mage";
@@ -16,8 +19,8 @@ function createPresentation(
   return {
     currentTime: 120,
     readyActorId: mageId,
-    readyActorActionPoints: 3,
-    actionPointsPerActivation: 3,
+    readyActorActionPoints: actionPointsPerActivation,
+    actionPointsPerActivation,
     readyActorHasWaited: false,
     readyActorRecoveryDelay: 100,
     ...overrides,
@@ -46,7 +49,7 @@ describe("TimelineHud", () => {
     expect(activationControls?.getAttribute("aria-label")).toBe("Mage activation controls");
     expect(root?.textContent).toContain("Time: 120");
     expect(root?.textContent).toContain("Ready: Mage");
-    expect(root?.textContent).toContain("AP: 3/3");
+    expect(root?.textContent).toContain(`AP: ${actionPointsPerActivation}/${actionPointsPerActivation}`);
     expect(root?.textContent).toContain("Move 1 AP (2 uphill)");
     expect(root?.textContent).toContain("Attack 2 AP");
     expect(root?.textContent).toContain("Command 1 AP");
@@ -70,7 +73,7 @@ describe("TimelineHud", () => {
     expect(waitButton?.disabled).toBe(true);
     expect(endTurnButton?.textContent).toBe("End Turn +100");
     expect(endTurnButton?.disabled).toBe(false);
-    expect(root?.textContent).toContain("AP: 0/3");
+    expect(root?.textContent).toContain(`AP: 0/${actionPointsPerActivation}`);
   });
 
   it("routes Mage Wait and End Turn separately, disables unavailable controls, and removes listeners on dispose", () => {

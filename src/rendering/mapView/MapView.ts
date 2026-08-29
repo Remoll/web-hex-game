@@ -11,6 +11,12 @@ import {
   getHexForInstance,
   type MapRenderModel,
 } from "@/rendering/mapView/MapRenderModel";
+import {
+  getFogMaterialPolicy,
+  opaqueFogOpacity,
+  type FogMaterialPolicy,
+  type FogSurfaceMaterialPolicy,
+} from "@/rendering/mapView/FogMaterialPolicy";
 import { AtlasInstancedMesh } from "@/rendering/customInstancedMesh/atlasInstancedMesh/AtlasInstancedMesh";
 import { CustomInstancedMesh } from "@/rendering/customInstancedMesh/CustomInstancedMesh";
 import type { RenderConfig } from "@/rendering/RenderConfig";
@@ -45,11 +51,17 @@ export class MapView {
     );
     this.undiscoveredFog = this.createFogMesh(
       config.undiscoveredFogColor,
-      1,
+      getRequiredFogMaterialPolicy(
+        FieldVisibility.Undiscovered,
+        config.discoveredFogOpacity,
+      ),
     );
     this.discoveredFog = this.createFogMesh(
       config.discoveredFogColor,
-      config.discoveredFogOpacity,
+      getRequiredFogMaterialPolicy(
+        FieldVisibility.Discovered,
+        config.discoveredFogOpacity,
+      ),
     );
 
     for (const cell of this.model.cells) {
@@ -109,20 +121,18 @@ export class MapView {
     this.discoveredFog.removeFromParent();
   }
 
-  private createFogMesh(color: number, opacity: number): THREE.InstancedMesh {
-    const geometry = Hex.createHexTopGeometry(
-      this.config.hexSize,
-      this.config.borderWidth,
-    );
-    const material = new THREE.MeshBasicMaterial({
-      color,
-      transparent: opacity < 1,
-      opacity,
-      depthWrite: false,
-    });
+  private createFogMesh(
+    color: number,
+    policy: FogMaterialPolicy,
+  ): THREE.InstancedMesh {
+    const geometry = Hex.createHexFogPrismGeometry(this.config.hexSize);
+    const materials = [
+      this.createFogMaterial(color, policy.sideWall),
+      this.createFogMaterial(color, policy.cap),
+    ];
     const mesh = new THREE.InstancedMesh(
       geometry,
-      material,
+      materials,
       this.model.cells.length,
     );
     mesh.frustumCulled = false;
@@ -130,21 +140,53 @@ export class MapView {
     return mesh;
   }
 
+  private createFogMaterial(
+    color: number,
+    policy: FogSurfaceMaterialPolicy,
+  ): THREE.MeshBasicMaterial {
+    return new THREE.MeshBasicMaterial({
+      color,
+      transparent: policy.opacity < opaqueFogOpacity,
+      opacity: policy.opacity,
+      depthTest: policy.depthTest,
+      depthWrite: policy.opacity === opaqueFogOpacity,
+      polygonOffset: policy.depthBias.polygonOffset,
+      polygonOffsetFactor: policy.depthBias.polygonOffsetFactor,
+      polygonOffsetUnits: policy.depthBias.polygonOffsetUnits,
+      side: THREE.DoubleSide,
+    });
+  }
+
   private setFogVisible(
     mesh: THREE.InstancedMesh,
     cell: MapRenderModel["cells"][number],
-    visible: boolean,
+    isLayerVisible: boolean,
   ): void {
     MapView.fogDummy.position.set(
-      visible ? cell.x : 0,
-      visible ? cell.y : 0,
-      visible ? cell.height + this.config.fogZOffset : 0,
+      isLayerVisible ? cell.x : 0,
+      isLayerVisible ? cell.y : 0,
+      0,
     );
-    MapView.fogDummy.scale.setScalar(visible ? 1 : 0);
+    MapView.fogDummy.scale.set(
+      isLayerVisible ? 1 : 0,
+      isLayerVisible ? 1 : 0,
+      isLayerVisible ? cell.fogPrismHeight : 0,
+    );
     MapView.fogDummy.rotation.set(0, 0, 0);
     MapView.fogDummy.updateMatrix();
     mesh.setMatrixAt(cell.instanceId, MapView.fogDummy.matrix);
   }
+}
+
+function getRequiredFogMaterialPolicy(
+  visibility: FieldVisibility,
+  discoveredFogOpacity: number,
+): FogMaterialPolicy {
+  const policy = getFogMaterialPolicy(visibility, discoveredFogOpacity);
+  if (!policy) {
+    throw new Error("Fog mesh requires a non-visible field visibility state");
+  }
+  return policy;
 }
 
 function disposeMaterials(material: THREE.Material | THREE.Material[]): void {

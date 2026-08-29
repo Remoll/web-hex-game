@@ -16,6 +16,10 @@ import {
 import { baseTacticalTempo } from "@/game/unit/tacticalAttributes/TacticalAttributes";
 
 const initialSimulationTime = 0;
+const expectedActionPointsPerActivation = 4;
+const expectedMoveActionPointCost = 1;
+const expectedAttackActionPointCost = 2;
+const expectedServantCommandActionPointCost = 1;
 const shallowWaterSameLevelOrDownhillActionPointCost = TacticalActionPointCost.Move
   * shallowWaterLeavingCostMultiplier;
 const shallowWaterUphillActionPointCost
@@ -42,6 +46,37 @@ class Participant implements TimelineParticipant {
 }
 
 describe("EventTimeline", () => {
+  it("initializes and resets every actor to four AP without changing action costs", () => {
+    const mage = new Participant("mage");
+    const servant = new Participant("servant");
+    const timeline = new EventTimeline([mage, servant]);
+
+    expect(actionPointsPerActivation).toBe(expectedActionPointsPerActivation);
+    expect(TacticalActionPointCost.Move).toBe(expectedMoveActionPointCost);
+    expect(TacticalActionPointCost.Attack).toBe(expectedAttackActionPointCost);
+    expect(TacticalActionPointCost.ServantStrategyCommand).toBe(
+      expectedServantCommandActionPointCost,
+    );
+    expect(timeline.getRemainingActionPoints(mage.id)).toBe(
+      expectedActionPointsPerActivation,
+    );
+    expect(timeline.getRemainingActionPoints(servant.id)).toBe(
+      expectedActionPointsPerActivation,
+    );
+
+    timeline.spendReadyActionPoints(mage.id, expectedActionPointsPerActivation);
+    timeline.endReadyActivation(mage.id);
+    timeline.spendReadyActionPoints(servant.id, expectedActionPointsPerActivation);
+    timeline.endReadyActivation(servant.id);
+
+    expect(timeline.getRemainingActionPoints(mage.id)).toBe(
+      expectedActionPointsPerActivation,
+    );
+    expect(timeline.getRemainingActionPoints(servant.id)).toBe(
+      expectedActionPointsPerActivation,
+    );
+  });
+
   it("keeps read projections side-effect free for externally defeated participants", () => {
     const participant = new Participant("participant");
     const timeline = new EventTimeline([participant]);
@@ -200,6 +235,10 @@ describe("EventTimeline", () => {
       actionPointsPerActivation
         - TacticalActionPointCost.Move
         - TacticalActionPointCost.Move,
+      actionPointsPerActivation
+        - TacticalActionPointCost.Move
+        - TacticalActionPointCost.Move
+        - TacticalActionPointCost.Move,
     ]);
     expect(timeline.getNextReadyAt(servant.id)).toBe(baseTimelineRecoveryDelay);
     expect(timeline.getRemainingActionPoints(servant.id)).toBe(actionPointsPerActivation);
@@ -264,6 +303,7 @@ describe("EventTimeline", () => {
 
     expect(shallowClimbActionPointSnapshots).toEqual([
       actionPointsPerActivation,
+      actionPointsPerActivation - shallowWaterUphillActionPointCost,
     ]);
     expect(shallowClimbTimeline.getNextReadyAt(shallowClimber.id)).toBe(
       baseTimelineRecoveryDelay,

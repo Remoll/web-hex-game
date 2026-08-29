@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-29
 
+- Increased every timeline activation to 4 AP while preserving movement,
+  attack, and servant-command costs.
+- Fixed non-visible fog to mask elevated terrain caps and side-wall geometry.
+- Added default event-driven behaviour for unordered Player servants to follow
+  the Mage when they perceive no hostile, without changing explicit orders or
+  target memory.
 - Expanded the radius-9 example encounter with deliberate Deep/Shallow Water
   river sections, passable Ground fords, and a small northern hill cluster.
 - Added passable **Shallow Water** with 2-AP Ground exits (3 AP uphill), while

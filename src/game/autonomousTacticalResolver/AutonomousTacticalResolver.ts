@@ -160,7 +160,7 @@ function resolveDefaultServantEngagement(
     servant.viewRange,
   );
   if (!firstPerceivedHostile) {
-    return waitDecision(directives);
+    return resolveUnorderedServantFollowMage(input, servant, directives);
   }
 
   directives.push({
@@ -173,6 +173,24 @@ function resolveDefaultServantEngagement(
     firstPerceivedHostile,
     directives,
   );
+}
+
+/** An unordered servant stays near its Mage only when it perceives no hostile. */
+function resolveUnorderedServantFollowMage(
+  input: AutonomousTacticalResolverInput,
+  servant: AutonomousUnitSnapshot,
+  memoryDirectives: readonly AutonomousMemoryDirective[],
+): AutonomousTacticalDecision {
+  const mage = getUnit(input, input.mageId);
+  if (!mage
+    || !mage.isAlive
+    || mage.tacticalRole !== UnitTacticalRole.Mage
+    || input.gameMap.getHexDistance(servant.position, mage.position)
+      <= adjacentHexDistance) {
+    return waitDecision(memoryDirectives);
+  }
+
+  return moveServantTowardHex(input, servant, mage.position, memoryDirectives);
 }
 
 function resolveHoldServantStrategy(
@@ -505,11 +523,12 @@ function moveServantTowardHex(
   input: AutonomousTacticalResolverInput,
   servant: AutonomousUnitSnapshot,
   targetHex: HexCoord,
+  memoryDirectives: readonly AutonomousMemoryDirective[] = [],
 ): AutonomousTacticalDecision {
   const path = findShortestApproachPath(input, servant, targetHex);
   return path && path.steps.length > 0
-    ? resolveAutonomousMovement(input, servant, path.steps[0])
-    : waitDecision();
+    ? resolveAutonomousMovement(input, servant, path.steps[0], memoryDirectives)
+    : waitDecision(memoryDirectives);
 }
 
 function canUnitOccupy(

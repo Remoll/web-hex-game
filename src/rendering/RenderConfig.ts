@@ -15,7 +15,7 @@ export interface RenderConfig {
   readonly remainsSize: number;
   readonly tacticalHighlightZOffset: number;
   readonly remainsZOffset: number;
-  /** Fog planes render above terrain and below tactical objects. */
+  /** Fog prisms extend just above terrain caps and mask vertical terrain walls. */
   readonly fogZOffset: number;
   readonly undiscoveredFogColor: number;
   readonly discoveredFogColor: number;
