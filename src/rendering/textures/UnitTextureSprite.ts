@@ -4,6 +4,7 @@ import { UnitSprite } from "@/rendering/textures/UnitSprite";
 const unitTextureSprites: Readonly<Record<UnitTexture, UnitSprite>> = {
   [UnitTexture.PlayerIdle]: UnitSprite.PlayerIdle,
   [UnitTexture.EnemyIdle]: UnitSprite.EnemyIdle,
+  [UnitTexture.AllyIdle]: UnitSprite.AllyIdle,
 };
 
 /** Converts a domain visual key into a renderer-specific atlas sprite. */

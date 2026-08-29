@@ -17,6 +17,7 @@ import {
  */
 export enum UnitTexture {
   PlayerIdle = "player-idle",
+  AllyIdle = "ally-idle",
   EnemyIdle = "enemy-idle",
 }
 

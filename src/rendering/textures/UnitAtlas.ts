@@ -12,7 +12,8 @@ export const unitAtlas = new TextureAtlas<UnitSprite>(
   8,
   4,
   new Map([
-    [UnitSprite.PlayerIdle, 27],
-    [UnitSprite.EnemyIdle, 31],
+    [UnitSprite.PlayerIdle, 26],
+    [UnitSprite.EnemyIdle, 27],
+    [UnitSprite.AllyIdle, 20]
   ]),
 );

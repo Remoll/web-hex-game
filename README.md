@@ -15,16 +15,17 @@ The development server starts at the address printed by Vite. Press `C` to toggl
 
 ## Tactical prototype controls
 
-The current example level contains a Mage, an additional Player-faction unit,
-an Enemy, and a Neutral unit. Every unit has base 100 maximum HP, 20 melee
-damage, Ground movement, and a movement range of three hexes before tactical
-attributes are derived.
+The current example level contains a Mage, two nearby Player-faction servants,
+and seven Enemies distributed across the encounter. Every unit has base 100
+maximum HP, 20 melee damage, Ground movement, and a movement range of three
+hexes before tactical attributes are derived.
 
 ### Mage vision and exploration
 
-The encounter is a radius-6 hex map (127 fields). Its original radius-2
-terrain layout, including terrain and elevation values, is preserved at the
-centre; the additional outer rings are exploration space.
+The encounter is a radius-9 hex map (271 fields). Its original radius-6
+topology, including the central radius-2 terrain and elevation layout, is
+preserved; the three additional outer rings add exploration space, passable
+hills, and a river with Ground crossings.
 
 The Mage is the only current source of player sight and has a base view range
 of four hexes. Visibility is recalculated only when relevant game state changes
