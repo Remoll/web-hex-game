@@ -17,7 +17,6 @@ export interface TimelineParticipant {
 /** Stable action names shared by autonomous-resolution callers. */
 export enum TimelineAction {
   Move = "move",
-  MoveUphill = "move-uphill",
   Attack = "attack",
   Wait = "wait",
 }
@@ -38,13 +37,24 @@ export const actionPointsPerActivation = 3;
 export const baseTimelineRecoveryDelay = 100;
 export const minimumTimelineRecoveryDelay = 1;
 
-/** Returns the AP spent by a resolved tactical action. */
-export function getTacticalActionPointCost(action: TimelineAction): number {
-  switch (action) {
+/** One authoritative autonomous result with an exact resolved move cost. */
+export type ResolvedAutonomousTimelineAction =
+  | { readonly action: TimelineAction.Move; readonly actionPointCost: number }
+  | { readonly action: TimelineAction.Attack }
+  | { readonly action: TimelineAction.Wait };
+
+/** Returns the AP spent by a resolved autonomous tactical action. */
+export function getTacticalActionPointCost(
+  resolvedAction: ResolvedAutonomousTimelineAction,
+): number {
+  switch (resolvedAction.action) {
     case TimelineAction.Move:
-      return TacticalActionPointCost.Move;
-    case TimelineAction.MoveUphill:
-      return TacticalActionPointCost.MoveUphill;
+      if (!Number.isInteger(resolvedAction.actionPointCost)
+        || resolvedAction.actionPointCost <= TacticalActionPointCost.Wait) {
+        throw new Error("Autonomous Move action point cost must be a positive integer");
+      }
+
+      return resolvedAction.actionPointCost;
     case TimelineAction.Attack:
       return TacticalActionPointCost.Attack;
     case TimelineAction.Wait:
@@ -96,7 +106,7 @@ export interface EventTimelineReader {
 export type ResolveAutonomousTimelineAction = (
   participant: TimelineParticipant,
   remainingActionPoints: number,
-) => TimelineAction;
+) => ResolvedAutonomousTimelineAction;
 
 interface TimelineEntry {
   readonly participant: TimelineParticipant;

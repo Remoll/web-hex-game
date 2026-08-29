@@ -6,11 +6,31 @@ import {
   getTimelineRecoveryDelay,
   TacticalActionPointCost,
   TimelineAction,
+  type ResolvedAutonomousTimelineAction,
   type TimelineParticipant,
 } from "@/game/eventTimeline/EventTimeline";
+import {
+  groundUphillAdditionalActionPointCost,
+  shallowWaterLeavingCostMultiplier,
+} from "@/game/movement/GroundMovementRules";
 import { baseTacticalTempo } from "@/game/unit/tacticalAttributes/TacticalAttributes";
 
 const initialSimulationTime = 0;
+const shallowWaterSameLevelOrDownhillActionPointCost = TacticalActionPointCost.Move
+  * shallowWaterLeavingCostMultiplier;
+const shallowWaterUphillActionPointCost
+  = shallowWaterSameLevelOrDownhillActionPointCost
+    + groundUphillAdditionalActionPointCost;
+
+function createResolvedAutonomousMoveAction(
+  actionPointCost: number,
+): ResolvedAutonomousTimelineAction {
+  return { action: TimelineAction.Move, actionPointCost };
+}
+
+function createResolvedAutonomousWaitAction(): ResolvedAutonomousTimelineAction {
+  return { action: TimelineAction.Wait };
+}
 
 class Participant implements TimelineParticipant {
   public isAlive = true;
@@ -115,7 +135,7 @@ describe("EventTimeline", () => {
       mage.id,
       (participant) => {
         resolvedActorIds.push(participant.id);
-        return TimelineAction.Wait;
+        return createResolvedAutonomousWaitAction();
       },
     )).toEqual({
       unitId: mage.id,
@@ -168,7 +188,7 @@ describe("EventTimeline", () => {
       mage.id,
       (_participant, remainingActionPoints) => {
         actionPointSnapshots.push(remainingActionPoints);
-        return TimelineAction.Move;
+        return createResolvedAutonomousMoveAction(TacticalActionPointCost.Move);
       },
     )).toEqual({
       unitId: mage.id,
@@ -185,7 +205,7 @@ describe("EventTimeline", () => {
     expect(timeline.getRemainingActionPoints(servant.id)).toBe(actionPointsPerActivation);
   });
 
-  it("charges an autonomous uphill movement at its explicit higher AP cost", () => {
+  it("charges an autonomous move at its exact resolved uphill AP cost", () => {
     const climber = new Participant("climber");
     const mage = new Participant("mage");
     const timeline = new EventTimeline([climber, mage]);
@@ -196,8 +216,8 @@ describe("EventTimeline", () => {
       (_participant, remainingActionPoints) => {
         actionPointSnapshots.push(remainingActionPoints);
         return actionPointSnapshots.length === 1
-          ? TimelineAction.MoveUphill
-          : TimelineAction.Wait;
+          ? createResolvedAutonomousMoveAction(TacticalActionPointCost.MoveUphill)
+          : createResolvedAutonomousWaitAction();
       },
     );
 
@@ -205,6 +225,49 @@ describe("EventTimeline", () => {
       actionPointsPerActivation,
       actionPointsPerActivation - TacticalActionPointCost.MoveUphill,
     ]);
+  });
+
+  it("charges autonomous Shallow Water moves with their exact resolved AP costs", () => {
+    const shallowWalker = new Participant("shallow-walker");
+    const mage = new Participant("mage");
+    const shallowWalkTimeline = new EventTimeline([shallowWalker, mage]);
+    const shallowWalkActionPointSnapshots: number[] = [];
+
+    shallowWalkTimeline.advanceAutonomousUnitsToMageDecision(
+      mage.id,
+      (_participant, remainingActionPoints) => {
+        shallowWalkActionPointSnapshots.push(remainingActionPoints);
+        return shallowWalkActionPointSnapshots.length === 1
+          ? createResolvedAutonomousMoveAction(
+            shallowWaterSameLevelOrDownhillActionPointCost,
+          )
+          : createResolvedAutonomousWaitAction();
+      },
+    );
+
+    expect(shallowWalkActionPointSnapshots).toEqual([
+      actionPointsPerActivation,
+      actionPointsPerActivation - shallowWaterSameLevelOrDownhillActionPointCost,
+    ]);
+
+    const shallowClimber = new Participant("shallow-climber");
+    const shallowClimbTimeline = new EventTimeline([shallowClimber, mage]);
+    const shallowClimbActionPointSnapshots: number[] = [];
+
+    shallowClimbTimeline.advanceAutonomousUnitsToMageDecision(
+      mage.id,
+      (_participant, remainingActionPoints) => {
+        shallowClimbActionPointSnapshots.push(remainingActionPoints);
+        return createResolvedAutonomousMoveAction(shallowWaterUphillActionPointCost);
+      },
+    );
+
+    expect(shallowClimbActionPointSnapshots).toEqual([
+      actionPointsPerActivation,
+    ]);
+    expect(shallowClimbTimeline.getNextReadyAt(shallowClimber.id)).toBe(
+      baseTimelineRecoveryDelay,
+    );
   });
 
   it("invalidates defeated participants before they can act", () => {

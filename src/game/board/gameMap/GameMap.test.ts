@@ -2,9 +2,18 @@ import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import {
   baseMovementActionPointCost,
+  groundUphillAdditionalActionPointCost,
   groundUphillMovementActionPointCost,
+  shallowWaterLeavingCostMultiplier,
+  singleGroundUphillElevationDifference,
 } from "@/game/movement/GroundMovementRules";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
+
+const standardLeavingCostMultiplier = 1;
+const shallowWaterBaseTraversalCost = baseMovementActionPointCost
+  * shallowWaterLeavingCostMultiplier;
+const shallowWaterUphillTraversalCost = shallowWaterBaseTraversalCost
+  + groundUphillAdditionalActionPointCost;
 
 const mapData: MapArray = [
   {
@@ -62,7 +71,7 @@ describe("GameMap", () => {
           terrainType: TerrainType.Grass,
           allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
           groundLevel: 0,
-          leavingCostMultiplier: 99,
+          leavingCostMultiplier: standardLeavingCostMultiplier,
         },
       },
       {
@@ -82,7 +91,7 @@ describe("GameMap", () => {
           terrainType: TerrainType.Grass,
           allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
           groundLevel: 0,
-          leavingCostMultiplier: 50,
+          leavingCostMultiplier: standardLeavingCostMultiplier,
         },
       },
       {
@@ -211,6 +220,66 @@ describe("GameMap", () => {
     )).toBe(baseMovementActionPointCost);
   });
 
+  it("applies Shallow Water outgoing Ground costs while keeping deep Water blocked", () => {
+    const shallowWaterGroundLevel = 1;
+    const oneLevelLowerGroundLevel = shallowWaterGroundLevel
+      - singleGroundUphillElevationDifference;
+    const oneLevelHigherGroundLevel = shallowWaterGroundLevel
+      + singleGroundUphillElevationDifference;
+    const shallowWaterOrigin = { q: 0, r: 0 };
+    const sameLevelDestination = { q: 1, r: 0 };
+    const downhillDestination = { q: 0, r: 1 };
+    const uphillDestination = { q: -1, r: 1 };
+    const deepWaterDestination = { q: -1, r: 0 };
+    const shallowWaterMap = new GameMap([
+      mapItem(0, 0, shallowWaterGroundLevel, {
+        terrainType: TerrainType.ShallowWater,
+        permitsGroundMovement: true,
+        leavingCostMultiplier: shallowWaterLeavingCostMultiplier,
+      }),
+      mapItem(1, 0, shallowWaterGroundLevel),
+      mapItem(0, 1, oneLevelLowerGroundLevel),
+      mapItem(-1, 1, oneLevelHigherGroundLevel),
+      mapItem(-1, 0, shallowWaterGroundLevel, {
+        terrainType: TerrainType.Water,
+        permitsGroundMovement: false,
+      }),
+    ]);
+
+    expect(TerrainType.ShallowWater).toBe("shallow-water");
+    expect(shallowWaterMap.getTraversalCost(
+      shallowWaterOrigin,
+      sameLevelDestination,
+      MovementType.Ground,
+    )).toBe(shallowWaterBaseTraversalCost);
+    expect(shallowWaterMap.getTraversalCost(
+      shallowWaterOrigin,
+      downhillDestination,
+      MovementType.Ground,
+    )).toBe(shallowWaterBaseTraversalCost);
+    expect(shallowWaterMap.getTraversalCost(
+      shallowWaterOrigin,
+      uphillDestination,
+      MovementType.Ground,
+    )).toBe(shallowWaterUphillTraversalCost);
+    expect(shallowWaterMap.findShortestPath(
+      shallowWaterOrigin,
+      uphillDestination,
+      MovementType.Ground,
+      shallowWaterBaseTraversalCost,
+    )).toBeUndefined();
+    expect(shallowWaterMap.getTraversalCost(
+      shallowWaterOrigin,
+      deepWaterDestination,
+      MovementType.Ground,
+    )).toBeUndefined();
+    expect(shallowWaterMap.getTraversalCost(
+      shallowWaterOrigin,
+      deepWaterDestination,
+      MovementType.Flying,
+    )).toBe(baseMovementActionPointCost);
+  });
+
   it("chooses the lower-AP route and rejects paths over the available budget", () => {
     const elevationMap = new GameMap([
       mapItem(0, 0, 0),
@@ -236,15 +305,30 @@ describe("GameMap", () => {
   });
 });
 
-function mapItem(q: number, r: number, groundLevel: number) {
+interface MapItemOptions {
+  readonly terrainType?: TerrainType;
+  readonly permitsGroundMovement?: boolean;
+  readonly leavingCostMultiplier?: number;
+}
+
+function mapItem(
+  q: number,
+  r: number,
+  groundLevel: number,
+  options: MapItemOptions = {},
+) {
   return {
     q,
     r,
     fieldAttrs: {
-      terrainType: TerrainType.Grass,
-      allowedMovements: { [MovementType.Ground]: true, [MovementType.Flying]: true },
+      terrainType: options.terrainType ?? TerrainType.Grass,
+      allowedMovements: {
+        [MovementType.Ground]: options.permitsGroundMovement ?? true,
+        [MovementType.Flying]: true,
+      },
       groundLevel,
-      leavingCostMultiplier: 1,
+      leavingCostMultiplier: options.leavingCostMultiplier
+        ?? standardLeavingCostMultiplier,
     },
   };
 }

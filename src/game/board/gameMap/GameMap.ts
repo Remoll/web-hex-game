@@ -5,9 +5,8 @@ import {
 } from "@/game/board/hexCoord/HexCoord";
 import {
   baseMovementActionPointCost,
-  groundUphillMovementActionPointCost,
+  calculateGroundTraversalActionPointCost,
   maximumGroundElevationDifference,
-  singleGroundUphillElevationDifference,
 } from "@/game/movement/GroundMovementRules";
 import {
   type FieldsMap,
@@ -127,9 +126,10 @@ export class GameMap {
       return undefined;
     }
 
-    return elevationDifference === singleGroundUphillElevationDifference
-      ? groundUphillMovementActionPointCost
-      : baseMovementActionPointCost;
+    return calculateGroundTraversalActionPointCost(
+      originField.getLeavingCostMultiplier(),
+      elevationDifference,
+    );
   }
 
   /**

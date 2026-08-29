@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-29
 
+- Added passable **Shallow Water** with 2-AP Ground exits (3 AP uphill), while
+  preserving deep-Water blocking and existing Flying traversal.
 - Added persistent, separate Mage **Wait** and **End Turn** controls: Wait
   disables after its one activation use, while End Turn remains available.
 

@@ -143,11 +143,15 @@ its current map position.
 - After selection, reachable Ground hexes are highlighted in green. Click one
   to move there along a valid path that fits both the unit's current movement
   range and remaining AP. Ground units may cross only an elevation difference
-  of one level per entered edge: level or downhill movement costs 1 AP, while
-  climbing exactly one level costs 2 AP. A difference greater than one in
-  either direction is impassable. Highlights, clicks, and autonomous paths use
-  the same deterministic lowest-AP legal path; living units block paths and
-  destinations. Terrain-type multipliers remain deferred.
+  of one level per entered edge. A legal Ground edge costs the base 1 AP times
+  its origin field's `leavingCostMultiplier`, plus 1 AP for a one-level climb.
+  A passable **Shallow Water** field uses multiplier 2: exiting it at the same
+  level or downhill costs 2 AP, while climbing one level costs 3 AP. Deep
+  **Water** remains impassable to Ground. Flying continues to use its existing
+  1-AP edge cost where the destination permits Flying. A difference greater
+  than one level in either direction is impassable to Ground. Highlights,
+  clicks, and autonomous paths use the same deterministic lowest-AP legal
+  path; living units block paths and destinations.
 - Each resolved movement path is presented as a smooth, ordered walk through
   every entered hex. Simulation still resolves the legal destination, AP,
   occupancy, timeline, AI, and fog immediately; while its visual queue catches

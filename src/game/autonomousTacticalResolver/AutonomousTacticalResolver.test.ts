@@ -8,10 +8,19 @@ import {
 } from "@/game/autonomousTacticalResolver/AutonomousTacticalResolver";
 import { getHexCoordKey } from "@/game/board/hexCoord/HexCoord";
 import { Faction } from "@/game/faction/Faction";
-import { TimelineAction } from "@/game/eventTimeline/EventTimeline";
+import {
+  TacticalActionPointCost,
+  TimelineAction,
+} from "@/game/eventTimeline/EventTimeline";
+import {
+  groundUphillAdditionalActionPointCost,
+  shallowWaterLeavingCostMultiplier,
+} from "@/game/movement/GroundMovementRules";
 import { ServantStrategyType } from "@/game/unit/servantStrategy/ServantStrategy";
 import { UnitTacticalRole } from "@/game/unit/Unit";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
+
+const standardLeavingCostMultiplier = 1;
 
 const mapData: MapArray = [-1, 0, 1, 2, 3].map((q) => ({
   q,
@@ -23,7 +32,7 @@ const mapData: MapArray = [-1, 0, 1, 2, 3].map((q) => ({
       [MovementType.Flying]: true,
     },
     groundLevel: 0,
-    leavingCostMultiplier: 1,
+    leavingCostMultiplier: standardLeavingCostMultiplier,
   },
 }));
 
@@ -56,9 +65,10 @@ function input(
     AutonomousTacticalResolverInput,
     "gameMap" | "actorId" | "units"
   >> = {},
+  tacticalGameMap: GameMap = gameMap,
 ): AutonomousTacticalResolverInput {
   return {
-    gameMap,
+    gameMap: tacticalGameMap,
     units,
     unitsById: new Map(units.map((unit) => [unit.id, unit])),
     livingUnitIdByHex: new Map(units
@@ -75,6 +85,82 @@ function input(
 }
 
 describe("AutonomousTacticalResolver", () => {
+  it("derives an exact Shallow Water uphill cost for a semantic Move", () => {
+    const shallowWaterGroundLevel = 0;
+    const uphillGroundLevel = 1;
+    const shallowWaterUphillActionPointCost = TacticalActionPointCost.Move
+      * shallowWaterLeavingCostMultiplier
+      + groundUphillAdditionalActionPointCost;
+    const shallowWaterMap = new GameMap([
+      {
+        q: 0,
+        r: 0,
+        fieldAttrs: {
+          terrainType: TerrainType.ShallowWater,
+          allowedMovements: {
+            [MovementType.Ground]: true,
+            [MovementType.Flying]: true,
+          },
+          groundLevel: shallowWaterGroundLevel,
+          leavingCostMultiplier: shallowWaterLeavingCostMultiplier,
+        },
+      },
+      {
+        q: 1,
+        r: 0,
+        fieldAttrs: {
+          terrainType: TerrainType.Grass,
+          allowedMovements: {
+            [MovementType.Ground]: true,
+            [MovementType.Flying]: true,
+          },
+          groundLevel: uphillGroundLevel,
+          leavingCostMultiplier: standardLeavingCostMultiplier,
+        },
+      },
+      {
+        q: 2,
+        r: 0,
+        fieldAttrs: {
+          terrainType: TerrainType.Grass,
+          allowedMovements: {
+            [MovementType.Ground]: true,
+            [MovementType.Flying]: true,
+          },
+          groundLevel: uphillGroundLevel,
+          leavingCostMultiplier: standardLeavingCostMultiplier,
+        },
+      },
+    ]);
+    const enemy = unit("enemy", Faction.Enemy, 0);
+    const mage = unit(
+      "mage",
+      Faction.Player,
+      2,
+      { tacticalRole: UnitTacticalRole.Mage },
+    );
+
+    expect(resolveAutonomousTacticalDecision(input(
+      enemy.id,
+      [enemy, mage],
+      {},
+      shallowWaterMap,
+    ))).toMatchObject({
+      action: TimelineAction.Move,
+      destination: { q: 1, r: 0 },
+      actionPointCost: shallowWaterUphillActionPointCost,
+    });
+    expect(resolveAutonomousTacticalDecision(input(
+      enemy.id,
+      [enemy, mage],
+      {
+        remainingActionPoints: shallowWaterUphillActionPointCost
+          - TacticalActionPointCost.Move,
+      },
+      shallowWaterMap,
+    ))).toMatchObject({ action: TimelineAction.Wait });
+  });
+
   it("uses unit registration order to break an Enemy's equally near hostile tie", () => {
     const enemy = unit("enemy", Faction.Enemy, 0);
     const mage = unit(
@@ -121,6 +207,7 @@ describe("AutonomousTacticalResolver", () => {
     expect(decision).toEqual({
       action: TimelineAction.Move,
       destination: { q: 1, r: 0 },
+      actionPointCost: TacticalActionPointCost.Move,
       memoryDirectives: [],
       clearServantStrategy: false,
     });
@@ -145,6 +232,7 @@ describe("AutonomousTacticalResolver", () => {
     expect(decision).toEqual({
       action: TimelineAction.Move,
       destination: { q: 1, r: 0 },
+      actionPointCost: TacticalActionPointCost.Move,
       memoryDirectives: [
         { type: AutonomousMemoryDirectiveType.ClearServantDefaultTarget },
         {
@@ -233,6 +321,7 @@ describe("AutonomousTacticalResolver", () => {
     expect(decision).toMatchObject({
       action: TimelineAction.Move,
       destination: { q: 1, r: 0 },
+      actionPointCost: TacticalActionPointCost.Move,
     });
   });
 

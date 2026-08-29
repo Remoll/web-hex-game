@@ -15,7 +15,10 @@ import {
   baseTimelineRecoveryDelay,
   TacticalActionPointCost,
 } from "@/game/eventTimeline/EventTimeline";
-import { groundUphillMovementActionPointCost } from "@/game/movement/GroundMovementRules";
+import {
+  groundUphillMovementActionPointCost,
+  shallowWaterLeavingCostMultiplier,
+} from "@/game/movement/GroundMovementRules";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 import { ServantStrategyType } from "@/game/unit/servantStrategy/ServantStrategy";
@@ -27,6 +30,8 @@ import {
   type MapArray,
 } from "@/game/types";
 import { FieldVisibility } from "@/game/visibility/MageVisibility";
+
+const standardLeavingCostMultiplier = 1;
 
 const mapData: MapArray = [
   { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass) },
@@ -44,6 +49,7 @@ function field(
   terrainType: TerrainType,
   ground = true,
   groundLevel = 0,
+  leavingCostMultiplier = standardLeavingCostMultiplier,
 ) {
   return {
     terrainType,
@@ -52,7 +58,7 @@ function field(
       [MovementType.Flying]: true,
     },
     groundLevel,
-    leavingCostMultiplier: 1,
+    leavingCostMultiplier,
   };
 }
 
@@ -100,6 +106,65 @@ function createSession(): {
 }
 
 describe("GameSession", () => {
+  it("derives Mage Shallow Water highlights and rejects an uphill exit beyond remaining AP", () => {
+    const mageStart = { q: 0, r: 0 };
+    const shallowWaterHex = { q: 1, r: 0 };
+    const uphillDestination = { q: 2, r: 0 };
+    const deepWaterHex = { q: 1, r: 1 };
+    const mage = new Player("mage", mageStart, UnitTexture.PlayerIdle);
+    const session = new GameSession(
+      new GameMap([
+        { ...mageStart, fieldAttrs: field(TerrainType.Grass) },
+        {
+          ...shallowWaterHex,
+          fieldAttrs: field(
+            TerrainType.ShallowWater,
+            true,
+            0,
+            shallowWaterLeavingCostMultiplier,
+          ),
+        },
+        { ...uphillDestination, fieldAttrs: field(TerrainType.Grass, true, 1) },
+        { ...deepWaterHex, fieldAttrs: field(TerrainType.Water, false) },
+      ]),
+      [mage],
+    );
+
+    expect(session.clickHex(mageStart)).toEqual({
+      type: GameActionType.Selected,
+      unitId: mage.id,
+    });
+    expect(session.getReachableHexes()).toEqual(expect.arrayContaining([
+      { coord: shallowWaterHex, cost: TacticalActionPointCost.Move },
+    ]));
+    expect(session.previewHex(shallowWaterHex)).toEqual({
+      type: GameActionPreviewType.ValidMove,
+      unitId: mage.id,
+      destination: shallowWaterHex,
+      path: {
+        cost: TacticalActionPointCost.Move,
+        steps: [shallowWaterHex],
+      },
+    });
+    expect(session.clickHex(shallowWaterHex)).toEqual({
+      type: GameActionType.Moved,
+      unitId: mage.id,
+      from: mageStart,
+      to: shallowWaterHex,
+    });
+    expect(session.getReachableHexes()).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ coord: uphillDestination }),
+    ]));
+    expect(session.previewHex(uphillDestination)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.OutOfRange,
+    });
+    expect(session.previewHex(deepWaterHex)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.OutOfRange,
+    });
+  });
+
   it("uses weighted Ground elevation paths consistently for highlights and Mage AP", () => {
     const mage = new Player("mage", { q: 0, r: 0 }, UnitTexture.PlayerIdle);
     const climbHex = { q: 1, r: 0 };
@@ -152,6 +217,139 @@ describe("GameSession", () => {
         { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
         { q: 1, r: 0, fieldAttrs: field(TerrainType.Grass, true, 1) },
         { q: 2, r: 0, fieldAttrs: field(TerrainType.Grass, true, 1) },
+      ]),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+    expect(mage.currentHp).toBe(mage.maxHp);
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
+      baseTimelineRecoveryDelay,
+    );
+  });
+
+  it("charges an autonomous Ground unit two AP when it exits Shallow Water at the same level", () => {
+    const enemy = new Unit("enemy", { q: 0, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const mage = new Player("mage", { q: 2, r: 0 }, UnitTexture.PlayerIdle);
+    const session = new GameSession(
+      new GameMap([
+        {
+          q: 0,
+          r: 0,
+          fieldAttrs: field(
+            TerrainType.ShallowWater,
+            true,
+            0,
+            shallowWaterLeavingCostMultiplier,
+          ),
+        },
+        { q: 1, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+        { q: 2, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+      ]),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+    expect(mage.currentHp).toBe(mage.maxHp);
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
+      baseTimelineRecoveryDelay,
+    );
+  });
+
+  it("charges an autonomous Ground unit two AP when it exits Shallow Water downhill", () => {
+    const shallowWaterGroundLevel = 1;
+    const downhillGroundLevel = 0;
+    const enemy = new Unit("enemy", { q: 0, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const mage = new Player("mage", { q: 2, r: 0 }, UnitTexture.PlayerIdle);
+    const session = new GameSession(
+      new GameMap([
+        {
+          q: 0,
+          r: 0,
+          fieldAttrs: field(
+            TerrainType.ShallowWater,
+            true,
+            shallowWaterGroundLevel,
+            shallowWaterLeavingCostMultiplier,
+          ),
+        },
+        { q: 1, r: 0, fieldAttrs: field(TerrainType.Grass, true, downhillGroundLevel) },
+        { q: 2, r: 0, fieldAttrs: field(TerrainType.Grass, true, downhillGroundLevel) },
+      ]),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+    expect(mage.currentHp).toBe(mage.maxHp);
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
+      baseTimelineRecoveryDelay,
+    );
+  });
+
+  it("charges an autonomous Ground unit three AP when it exits Shallow Water uphill", () => {
+    const shallowWaterGroundLevel = 0;
+    const uphillGroundLevel = 1;
+    const enemy = new Unit("enemy", { q: 0, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const mage = new Player("mage", { q: 2, r: 0 }, UnitTexture.PlayerIdle);
+    const session = new GameSession(
+      new GameMap([
+        {
+          q: 0,
+          r: 0,
+          fieldAttrs: field(
+            TerrainType.ShallowWater,
+            true,
+            shallowWaterGroundLevel,
+            shallowWaterLeavingCostMultiplier,
+          ),
+        },
+        { q: 1, r: 0, fieldAttrs: field(TerrainType.Grass, true, uphillGroundLevel) },
+        { q: 2, r: 0, fieldAttrs: field(TerrainType.Grass, true, uphillGroundLevel) },
+      ]),
+      [mage, enemy],
+    );
+
+    session.waitForMage();
+
+    expect(enemy.position).toEqual({ q: 1, r: 0 });
+    expect(mage.currentHp).toBe(mage.maxHp);
+    expect(session.eventTimeline.getNextReadyAt(enemy.id)).toBe(
+      baseTimelineRecoveryDelay,
+    );
+  });
+
+  it("makes an autonomous Ground unit wait when remaining AP cannot exit Shallow Water uphill", () => {
+    const enemy = new Unit("enemy", { q: 0, r: 0 }, UnitTexture.EnemyIdle, {
+      faction: Faction.Enemy,
+    });
+    const mage = new Player("mage", { q: 3, r: 0 }, UnitTexture.PlayerIdle);
+    const session = new GameSession(
+      new GameMap([
+        { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass, true, 0) },
+        {
+          q: 1,
+          r: 0,
+          fieldAttrs: field(
+            TerrainType.ShallowWater,
+            true,
+            0,
+            shallowWaterLeavingCostMultiplier,
+          ),
+        },
+        { q: 2, r: 0, fieldAttrs: field(TerrainType.Grass, true, 1) },
+        { q: 3, r: 0, fieldAttrs: field(TerrainType.Grass, true, 1) },
       ]),
       [mage, enemy],
     );

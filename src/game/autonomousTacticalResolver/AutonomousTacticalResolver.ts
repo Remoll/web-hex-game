@@ -93,8 +93,10 @@ export type AutonomousTacticalDecision =
     readonly targetId: string;
   })
   | (AutonomousDecisionBase & {
-    readonly action: TimelineAction.Move | TimelineAction.MoveUphill;
+    readonly action: TimelineAction.Move;
     readonly destination: HexCoord;
+    /** Exact cost from GameMap for this one legal movement edge. */
+    readonly actionPointCost: number;
   });
 
 /**
@@ -537,14 +539,7 @@ function resolveAutonomousMovement(
     return waitDecision(memoryDirectives);
   }
 
-  switch (traversalCost) {
-    case TacticalActionPointCost.Move:
-      return moveDecision(TimelineAction.Move, destination, memoryDirectives);
-    case TacticalActionPointCost.MoveUphill:
-      return moveDecision(TimelineAction.MoveUphill, destination, memoryDirectives);
-    default:
-      throw new Error(`Unsupported autonomous movement cost: ${traversalCost}`);
-  }
+  return moveDecision(destination, traversalCost, memoryDirectives);
 }
 
 function getUnit(
@@ -593,13 +588,14 @@ function attackDecision(
 }
 
 function moveDecision(
-  action: TimelineAction.Move | TimelineAction.MoveUphill,
   destination: HexCoord,
+  actionPointCost: number,
   memoryDirectives: readonly AutonomousMemoryDirective[] = [],
 ): AutonomousTacticalDecision {
   return {
-    action,
+    action: TimelineAction.Move,
     destination: { ...destination },
+    actionPointCost,
     memoryDirectives,
     clearServantStrategy: false,
   };

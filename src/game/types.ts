@@ -14,6 +14,7 @@ export interface PlaneCoord {
 
 export enum TerrainType {
   Grass = "grass",
+  ShallowWater = "shallow-water",
   Water = "water",
 }
 

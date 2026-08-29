@@ -20,6 +20,7 @@ import {
   TacticalActionPointCost,
   TimelineAction,
   type EventTimelineReader,
+  type ResolvedAutonomousTimelineAction,
   type TimelinePresentation,
 } from "@/game/eventTimeline/EventTimeline";
 import { EnemyTacticalMemory } from "@/game/enemyAi/EnemyTacticalMemory";
@@ -1384,10 +1385,10 @@ export class GameSession {
   private resolveAutonomousAction(
     unitId: string,
     remainingActionPoints: number,
-  ): TimelineAction {
+  ): ResolvedAutonomousTimelineAction {
     const unit = this.unitsById.get(unitId);
     if (!unit) {
-      return TimelineAction.Wait;
+      return { action: TimelineAction.Wait };
     }
 
     const snapshots = this.getAutonomousUnitSnapshots();
@@ -1441,7 +1442,7 @@ export class GameSession {
     unit: Unit,
     remainingActionPoints: number,
     decision: AutonomousTacticalDecision,
-  ): TimelineAction {
+  ): ResolvedAutonomousTimelineAction {
     this.applyAutonomousMemoryDirectives(unit.id, decision.memoryDirectives);
     if (decision.clearServantStrategy) {
       this.servantStrategiesByUnitId.delete(unit.id);
@@ -1449,7 +1450,7 @@ export class GameSession {
 
     switch (decision.action) {
       case TimelineAction.Wait:
-        return TimelineAction.Wait;
+        return { action: TimelineAction.Wait };
       case TimelineAction.Attack: {
         const target = this.unitsById.get(decision.targetId);
         if (!target || !this.canApplyAutonomousAttack(
@@ -1457,14 +1458,13 @@ export class GameSession {
           target,
           remainingActionPoints,
         )) {
-          return TimelineAction.Wait;
+          return { action: TimelineAction.Wait };
         }
 
         this.applyMeleeDamage(unit, target);
-        return TimelineAction.Attack;
+        return { action: TimelineAction.Attack };
       }
       case TimelineAction.Move:
-      case TimelineAction.MoveUphill:
         return this.applyAutonomousMovementDecision(
           unit,
           remainingActionPoints,
@@ -1478,9 +1478,9 @@ export class GameSession {
     remainingActionPoints: number,
     decision: Extract<
       AutonomousTacticalDecision,
-      { action: TimelineAction.Move | TimelineAction.MoveUphill }
+      { action: TimelineAction.Move }
     >,
-  ): TimelineAction {
+  ): ResolvedAutonomousTimelineAction {
     const traversalCost = this.gameMap.getTraversalCost(
       unit.position,
       decision.destination,
@@ -1489,15 +1489,15 @@ export class GameSession {
     if (traversalCost === undefined
       || traversalCost > remainingActionPoints
       || this.getUnitAt(decision.destination) !== undefined
-      || (traversalCost === TacticalActionPointCost.Move
-        && decision.action !== TimelineAction.Move)
-      || (traversalCost === TacticalActionPointCost.MoveUphill
-        && decision.action !== TimelineAction.MoveUphill)) {
-      return TimelineAction.Wait;
+      || decision.actionPointCost !== traversalCost) {
+      return { action: TimelineAction.Wait };
     }
 
     this.moveAutonomousUnit(unit, decision.destination);
-    return decision.action;
+    return {
+      action: TimelineAction.Move,
+      actionPointCost: traversalCost,
+    };
   }
 
   /** The resolver proposes attacks; GameSession owns their final legality. */
