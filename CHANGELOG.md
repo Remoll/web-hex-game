@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-29
 
+- Expanded the radius-9 example encounter with deliberate Deep/Shallow Water
+  river sections, passable Ground fords, and a small northern hill cluster.
 - Added passable **Shallow Water** with 2-AP Ground exits (3 AP uphill), while
   preserving deep-Water blocking and existing Flying traversal.
 - Added persistent, separate Mage **Wait** and **End Turn** controls: Wait

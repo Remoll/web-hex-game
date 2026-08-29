@@ -27,6 +27,11 @@ topology, including the central radius-2 terrain and elevation layout, is
 preserved; the three additional outer rings add exploration space, passable
 hills, and a river with Ground crossings.
 
+The demo river uses impassable Deep Water plus intentional **Shallow Water**
+fords on its west, north, and south routes. Ground can cross a ford, paying its
+standard 2-AP exit cost (3 AP for an uphill edge), while the surrounding Deep
+Water remains Flying-only.
+
 The Mage is the only current source of player sight and has a base view range
 of four hexes. Visibility is recalculated only when relevant game state changes
 (currently session setup and Mage movement), never by the render loop.

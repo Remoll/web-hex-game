@@ -303,9 +303,9 @@
       "q": -6,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -407,9 +407,9 @@
       "q": -5,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -524,13 +524,13 @@
       "q": -4,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "shallow-water",
         "allowedMovements": {
           "ground": true,
           "flying": true
         },
         "groundLevel": 0,
-        "leavingCostMultiplier": 1
+        "leavingCostMultiplier": 2
       }
     },
     {
@@ -654,9 +654,9 @@
       "q": -3,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -758,9 +758,9 @@
       "q": -2,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -862,9 +862,9 @@
       "q": -1,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -966,9 +966,9 @@
       "q": 0,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -1083,13 +1083,13 @@
       "q": 1,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "shallow-water",
         "allowedMovements": {
           "ground": true,
           "flying": true
         },
         "groundLevel": 0,
-        "leavingCostMultiplier": 1
+        "leavingCostMultiplier": 2
       }
     },
     {
@@ -1200,9 +1200,9 @@
       "q": 2,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -1244,7 +1244,7 @@
           "ground": true,
           "flying": true
         },
-        "groundLevel": 0,
+        "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
     },
@@ -1257,7 +1257,7 @@
           "ground": true,
           "flying": true
         },
-        "groundLevel": 0,
+        "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
     },
@@ -1361,7 +1361,7 @@
           "ground": true,
           "flying": true
         },
-        "groundLevel": 0,
+        "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
     },
@@ -1374,7 +1374,7 @@
           "ground": true,
           "flying": true
         },
-        "groundLevel": 0,
+        "groundLevel": 2,
         "leavingCostMultiplier": 1
       }
     },
@@ -1387,7 +1387,7 @@
           "ground": true,
           "flying": true
         },
-        "groundLevel": 0,
+        "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
     },
@@ -1478,7 +1478,7 @@
           "ground": true,
           "flying": true
         },
-        "groundLevel": 0,
+        "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
     },
@@ -1491,7 +1491,7 @@
           "ground": true,
           "flying": true
         },
-        "groundLevel": 0,
+        "groundLevel": 1,
         "leavingCostMultiplier": 1
       }
     },
@@ -1707,9 +1707,9 @@
       "q": -9,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -1798,13 +1798,13 @@
       "q": -8,
       "r": 0,
       "fieldAttrs": {
-        "terrainType": "water",
+        "terrainType": "shallow-water",
         "allowedMovements": {
-          "ground": false,
+          "ground": true,
           "flying": true
         },
         "groundLevel": 0,
-        "leavingCostMultiplier": 1
+        "leavingCostMultiplier": 2
       }
     },
     {
@@ -1850,12 +1850,12 @@
       "q": -8,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
-        "groundLevel": 1,
+        "groundLevel": 0,
         "leavingCostMultiplier": 1
       }
     },
@@ -1954,13 +1954,13 @@
       "q": -7,
       "r": 0,
       "fieldAttrs": {
-        "terrainType": "water",
+        "terrainType": "shallow-water",
         "allowedMovements": {
           "ground": true,
           "flying": true
         },
         "groundLevel": 0,
-        "leavingCostMultiplier": 1
+        "leavingCostMultiplier": 2
       }
     },
     {
@@ -1993,22 +1993,22 @@
       "q": -7,
       "r": 3,
       "fieldAttrs": {
-        "terrainType": "water",
+        "terrainType": "shallow-water",
         "allowedMovements": {
           "ground": true,
           "flying": true
         },
         "groundLevel": 0,
-        "leavingCostMultiplier": 1
+        "leavingCostMultiplier": 2
       }
     },
     {
       "q": -7,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2019,22 +2019,9 @@
       "q": -7,
       "r": 5,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
-          "flying": true
-        },
-        "groundLevel": 1,
-        "leavingCostMultiplier": 1
-      }
-    },
-    {
-      "q": -7,
-      "r": 6,
-      "fieldAttrs": {
-        "terrainType": "grass",
-        "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2043,11 +2030,24 @@
     },
     {
       "q": -7,
-      "r": 7,
+      "r": 6,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "shallow-water",
         "allowedMovements": {
           "ground": true,
+          "flying": true
+        },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 2
+      }
+    },
+    {
+      "q": -7,
+      "r": 7,
+      "fieldAttrs": {
+        "terrainType": "water",
+        "allowedMovements": {
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2058,9 +2058,9 @@
       "q": -7,
       "r": 8,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2071,9 +2071,9 @@
       "q": -7,
       "r": 9,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2396,9 +2396,9 @@
       "q": -2,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2487,9 +2487,9 @@
       "q": -1,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2578,9 +2578,9 @@
       "q": 0,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2656,13 +2656,13 @@
       "q": 1,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "shallow-water",
         "allowedMovements": {
           "ground": true,
           "flying": true
         },
         "groundLevel": 0,
-        "leavingCostMultiplier": 1
+        "leavingCostMultiplier": 2
       }
     },
     {
@@ -2734,9 +2734,9 @@
       "q": 2,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2812,9 +2812,9 @@
       "q": 3,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2825,9 +2825,9 @@
       "q": 3,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2890,9 +2890,9 @@
       "q": 4,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2916,9 +2916,9 @@
       "q": 4,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -2968,9 +2968,9 @@
       "q": 5,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -3007,9 +3007,9 @@
       "q": 5,
       "r": 4,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -3046,13 +3046,13 @@
       "q": 6,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "shallow-water",
         "allowedMovements": {
           "ground": true,
           "flying": true
         },
         "groundLevel": 0,
-        "leavingCostMultiplier": 1
+        "leavingCostMultiplier": 2
       }
     },
     {
@@ -3124,9 +3124,9 @@
       "q": 7,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -3280,9 +3280,9 @@
       "q": 8,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,
@@ -3423,9 +3423,9 @@
       "q": 9,
       "r": -7,
       "fieldAttrs": {
-        "terrainType": "grass",
+        "terrainType": "water",
         "allowedMovements": {
-          "ground": true,
+          "ground": false,
           "flying": true
         },
         "groundLevel": 0,

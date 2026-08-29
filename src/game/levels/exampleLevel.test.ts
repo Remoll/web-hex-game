@@ -1,16 +1,131 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { getHexCoordKey } from "@/game/board/hexCoord/HexCoord";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import { Faction } from "@/game/faction/Faction";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
-import { MovementType, TerrainType } from "@/game/types";
+import {
+  baseMovementActionPointCost,
+  groundUphillAdditionalActionPointCost,
+  shallowWaterLeavingCostMultiplier,
+} from "@/game/movement/GroundMovementRules";
+import {
+  type FieldAttrs,
+  type HexCoord,
+  MovementType,
+  TerrainType,
+} from "@/game/types";
 import { UnitTacticalRole, UnitTexture } from "@/game/unit/Unit";
 import { TacticalAttribute } from "@/game/unit/tacticalAttributes/TacticalAttributes";
 
 const exampleLevelPath = fileURLToPath(
   new URL("../../../public/levels/example.json", import.meta.url),
 );
+
+const expectedExampleMapFieldCount = 271;
+const expectedExampleMapRadius = 9;
+const radiusSixMapFieldCount = 127;
+const firstMapRadius = 0;
+const lastMapRadius = expectedExampleMapRadius;
+const shallowWaterGroundLevel = 0;
+const grassHillGroundLevel = 1;
+const centralGrassHillGroundLevel = 2;
+const shallowWaterRouteActionPointCost = baseMovementActionPointCost
+  + baseMovementActionPointCost * shallowWaterLeavingCostMultiplier;
+const shallowWaterUphillRouteActionPointCost = shallowWaterRouteActionPointCost
+  + groundUphillAdditionalActionPointCost;
+const insufficientShallowWaterRouteActionPointBudget = baseMovementActionPointCost
+  * shallowWaterLeavingCostMultiplier;
+
+const passableMovementTypes = {
+  [MovementType.Ground]: true,
+  [MovementType.Flying]: true,
+} as const;
+
+const shallowWaterFieldAttrs: FieldAttrs = {
+  terrainType: TerrainType.ShallowWater,
+  allowedMovements: passableMovementTypes,
+  groundLevel: shallowWaterGroundLevel,
+  leavingCostMultiplier: shallowWaterLeavingCostMultiplier,
+};
+
+const deepWaterFieldAttrs: FieldAttrs = {
+  terrainType: TerrainType.Water,
+  allowedMovements: {
+    [MovementType.Ground]: false,
+    [MovementType.Flying]: true,
+  },
+  groundLevel: shallowWaterGroundLevel,
+  leavingCostMultiplier: baseMovementActionPointCost,
+};
+
+const shallowWaterCoordinates: readonly HexCoord[] = [
+  { q: -8, r: 0 },
+  { q: -7, r: 0 },
+  { q: -7, r: 3 },
+  { q: -7, r: 6 },
+  { q: -4, r: 4 },
+  { q: 1, r: -7 },
+  { q: 1, r: 4 },
+  { q: 6, r: -7 },
+];
+
+const existingDeepWaterCoordinates: readonly HexCoord[] = [
+  { q: -9, r: 0 },
+  { q: -9, r: 3 },
+  { q: -8, r: 3 },
+  { q: -7, r: -2 },
+  { q: -7, r: -1 },
+  { q: -7, r: 1 },
+  { q: -7, r: 2 },
+  { q: -1, r: 1 },
+  { q: 0, r: -1 },
+  { q: 1, r: -1 },
+];
+
+const addedDeepWaterCoordinates: readonly HexCoord[] = [
+  { q: -9, r: 4 },
+  { q: -8, r: 4 },
+  { q: -7, r: 4 },
+  { q: -7, r: 5 },
+  { q: -7, r: 7 },
+  { q: -7, r: 8 },
+  { q: -7, r: 9 },
+  { q: -6, r: 4 },
+  { q: -5, r: 4 },
+  { q: -3, r: 4 },
+  { q: -2, r: -7 },
+  { q: -2, r: 4 },
+  { q: -1, r: -7 },
+  { q: -1, r: 4 },
+  { q: 0, r: -7 },
+  { q: 0, r: 4 },
+  { q: 2, r: -7 },
+  { q: 2, r: 4 },
+  { q: 3, r: -7 },
+  { q: 3, r: 4 },
+  { q: 4, r: -7 },
+  { q: 4, r: 4 },
+  { q: 5, r: -7 },
+  { q: 5, r: 4 },
+  { q: 7, r: -7 },
+  { q: 8, r: -7 },
+  { q: 9, r: -7 },
+];
+
+const grassHillFields: readonly {
+  readonly coordinate: HexCoord;
+  readonly groundLevel: number;
+}[] = [
+  { coordinate: { q: 3, r: -4 }, groundLevel: grassHillGroundLevel },
+  { coordinate: { q: 3, r: -3 }, groundLevel: grassHillGroundLevel },
+  { coordinate: { q: 4, r: -5 }, groundLevel: grassHillGroundLevel },
+  { coordinate: { q: 4, r: -4 }, groundLevel: centralGrassHillGroundLevel },
+  { coordinate: { q: 4, r: -3 }, groundLevel: grassHillGroundLevel },
+  { coordinate: { q: 5, r: -5 }, groundLevel: grassHillGroundLevel },
+  { coordinate: { q: 5, r: -4 }, groundLevel: grassHillGroundLevel },
+];
 
 function hexDistance(
   first: { q: number; r: number },
@@ -21,6 +136,53 @@ function hexDistance(
     Math.abs(first.r - second.r),
     Math.abs(first.q + first.r - second.q - second.r),
   );
+}
+
+function getFixtureField(
+  level: LevelDefinition,
+  coordinate: HexCoord,
+): { readonly q: number; readonly r: number; readonly fieldAttrs: FieldAttrs } {
+  const field = level.map.find(({ q, r }) => q === coordinate.q && r === coordinate.r);
+  if (!field) {
+    throw new Error(`The example fixture has no field at ${coordinate.q},${coordinate.r}`);
+  }
+
+  return field;
+}
+
+function sortCoordinates(coordinates: readonly HexCoord[]): HexCoord[] {
+  return [...coordinates].sort((first, second) => first.q - second.q || first.r - second.r);
+}
+
+function getGroundConnectedCoordinates(
+  gameMap: GameMap,
+  origin: HexCoord,
+): ReadonlySet<string> {
+  const reachableCoordinateKeys = new Set<string>([getHexCoordKey(origin)]);
+  const pendingCoordinates: HexCoord[] = [{ ...origin }];
+  let nextPendingCoordinateIndex = 0;
+
+  while (nextPendingCoordinateIndex < pendingCoordinates.length) {
+    const currentCoordinate = pendingCoordinates[nextPendingCoordinateIndex];
+    nextPendingCoordinateIndex += 1;
+
+    for (const neighbour of gameMap.getNeighbours(currentCoordinate)) {
+      const neighbourKey = getHexCoordKey(neighbour);
+      if (reachableCoordinateKeys.has(neighbourKey)
+        || gameMap.getTraversalCost(
+          currentCoordinate,
+          neighbour,
+          MovementType.Ground,
+        ) === undefined) {
+        continue;
+      }
+
+      reachableCoordinateKeys.add(neighbourKey);
+      pendingCoordinates.push(neighbour);
+    }
+  }
+
+  return reachableCoordinateKeys;
 }
 
 describe("example level", () => {
@@ -76,40 +238,115 @@ describe("example level", () => {
       { q: -1, r: 2, terrainType: TerrainType.Grass, groundLevel: 1 },
       { q: 0, r: 2, terrainType: TerrainType.Grass, groundLevel: 1 },
     ]);
-    expect(level.map).toHaveLength(271);
+    expect(level.map).toHaveLength(expectedExampleMapFieldCount);
     expect(Math.max(
       ...level.map.map((cell) => hexDistance(cell, { q: 0, r: 0 })),
-    )).toBe(9);
+    )).toBe(expectedExampleMapRadius);
     expect(
-      Array.from({ length: 10 }, (_, radius) => level.map.filter(
+      Array.from({ length: lastMapRadius - firstMapRadius + 1 }, (_, radius) => level.map.filter(
         (cell) => hexDistance(cell, { q: 0, r: 0 }) === radius,
       ).length),
     ).toEqual([1, 6, 12, 18, 24, 30, 36, 42, 48, 54]);
     expect(level.map.filter(
       (cell) => hexDistance(cell, { q: 0, r: 0 }) <= 6,
-    )).toHaveLength(127);
-    expect(level.map.filter((field) => !field.fieldAttrs.allowedMovements.ground))
-      .toHaveLength(11);
-    expect(level.map.filter((field) => field.fieldAttrs.terrainType === TerrainType.Water
-      && field.fieldAttrs.allowedMovements.ground)).toEqual([
-      expect.objectContaining({ q: -7, r: 0 }),
-      expect.objectContaining({ q: -7, r: 3 }),
-    ]);
-    expect(level.map.filter((field) => field.fieldAttrs.groundLevel === 1))
-      .toEqual(expect.arrayContaining([
-        expect.objectContaining({ q: -8, r: 1 }),
-        expect.objectContaining({ q: -8, r: 4 }),
-        expect.objectContaining({ q: 4, r: -8 }),
-        expect.objectContaining({ q: 8, r: -6 }),
-      ]));
+    )).toHaveLength(radiusSixMapFieldCount);
+
+    const deepWaterFields = level.map.filter(
+      (field) => field.fieldAttrs.terrainType === TerrainType.Water,
+    );
+    const expectedDeepWaterCoordinates = [
+      ...existingDeepWaterCoordinates,
+      ...addedDeepWaterCoordinates,
+    ];
+    expect(sortCoordinates(deepWaterFields.map(({ q, r }) => ({ q, r })))).toEqual(
+      sortCoordinates(expectedDeepWaterCoordinates),
+    );
+    expect(deepWaterFields.map((field) => field.fieldAttrs)).toEqual(
+      expectedDeepWaterCoordinates.map(() => deepWaterFieldAttrs),
+    );
+    expect(deepWaterFields.every(
+      (field) => !field.fieldAttrs.allowedMovements[MovementType.Ground],
+    )).toBe(true);
+
+    const shallowWaterFields = level.map.filter(
+      (field) => field.fieldAttrs.terrainType === TerrainType.ShallowWater,
+    );
+    expect(sortCoordinates(shallowWaterFields.map(({ q, r }) => ({ q, r })))).toEqual(
+      sortCoordinates(shallowWaterCoordinates),
+    );
+    expect(shallowWaterCoordinates.map(
+      (coordinate) => getFixtureField(level, coordinate).fieldAttrs,
+    )).toEqual(shallowWaterCoordinates.map(() => shallowWaterFieldAttrs));
+
+    expect(grassHillFields.map(({ coordinate, groundLevel }) => ({
+      coordinate,
+      fieldAttrs: getFixtureField(level, coordinate).fieldAttrs,
+      groundLevel,
+    }))).toEqual(grassHillFields.map(({ coordinate, groundLevel }) => ({
+      coordinate,
+      fieldAttrs: {
+        terrainType: TerrainType.Grass,
+        allowedMovements: passableMovementTypes,
+        groundLevel,
+        leavingCostMultiplier: baseMovementActionPointCost,
+      },
+      groundLevel,
+    })));
+
     const gameMap = new GameMap(level.map);
+    const groundTraversableCoordinateKeys = new Set(level.map
+      .filter((field) => field.fieldAttrs.allowedMovements[MovementType.Ground])
+      .map(getHexCoordKey));
+    expect(getGroundConnectedCoordinates(gameMap, level.player.position)).toEqual(
+      groundTraversableCoordinateKeys,
+    );
+
+    const shallowWaterCrossingRoutes: readonly {
+      readonly origin: HexCoord;
+      readonly destination: HexCoord;
+      readonly expectedSteps: readonly HexCoord[];
+    }[] = [
+      {
+        origin: { q: -6, r: 6 },
+        destination: { q: -8, r: 6 },
+        expectedSteps: [{ q: -7, r: 6 }, { q: -8, r: 6 }],
+      },
+      {
+        origin: { q: 1, r: -8 },
+        destination: { q: 1, r: -6 },
+        expectedSteps: [{ q: 1, r: -7 }, { q: 1, r: -6 }],
+      },
+      {
+        origin: { q: 1, r: 3 },
+        destination: { q: 1, r: 5 },
+        expectedSteps: [{ q: 1, r: 4 }, { q: 1, r: 5 }],
+      },
+    ];
+    for (const route of shallowWaterCrossingRoutes) {
+      expect(gameMap.findShortestPath(
+        route.origin,
+        route.destination,
+        MovementType.Ground,
+        shallowWaterRouteActionPointCost,
+      )).toEqual({
+        cost: shallowWaterRouteActionPointCost,
+        steps: route.expectedSteps,
+      });
+      expect(gameMap.findShortestPath(
+        route.origin,
+        route.destination,
+        MovementType.Ground,
+        insufficientShallowWaterRouteActionPointBudget,
+      )).toBeUndefined();
+    }
+
     expect(gameMap.findShortestPath(
       level.player.position,
       { q: -8, r: 1 },
       MovementType.Ground,
-      3,
+      shallowWaterUphillRouteActionPointCost,
     )).toEqual({
-      cost: 3,
+      cost: shallowWaterUphillRouteActionPointCost,
       steps: [{ q: -7, r: 0 }, { q: -8, r: 1 }],
     });
     for (const definition of [level.player, ...level.units]) {
