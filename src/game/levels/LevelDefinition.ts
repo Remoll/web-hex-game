@@ -12,6 +12,8 @@ export interface UnitDefinition {
   readonly faction?: Faction;
   readonly movementType?: MovementType;
   readonly movementRange?: number;
+  /** Runtime campaign state may restore a living unit below its maximum HP. */
+  readonly currentHp?: number;
   readonly attackPower?: number;
   readonly tacticalRole?: UnitTacticalRole;
   readonly viewRange?: number;

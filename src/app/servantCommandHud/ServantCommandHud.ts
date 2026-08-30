@@ -100,6 +100,10 @@ export class ServantCommandHud {
       : getActionPointCommandLabel(servantCommandText.ClearStrategy);
   }
 
+  setVisible(isVisible: boolean): void {
+    this.root.hidden = !isVisible;
+  }
+
   dispose(): void {
     this.assignHoldButton.removeEventListener("click", this.handleAssignHold);
     this.assignProtectButton.removeEventListener("click", this.handleAssignProtect);

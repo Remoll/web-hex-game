@@ -82,6 +82,33 @@ describe("MageVisibility", () => {
     );
   });
 
+  it("restores historical discovery without overwriting current Mage sight", () => {
+    const mage = new Player(
+      "mage",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+      { viewRange: 1 },
+    );
+    const gameMap = new GameMap(mapData);
+    const originalVisibility = new MageVisibility(gameMap);
+    originalVisibility.recalculate(mage);
+    mage.moveTo({ q: 2, r: 0 });
+    originalVisibility.recalculate(mage);
+
+    const restoredVisibility = new MageVisibility(gameMap);
+    restoredVisibility.recalculate(mage);
+    restoredVisibility.restoreDiscoverySnapshot(
+      originalVisibility.getDiscoverySnapshot(),
+    );
+
+    expect(restoredVisibility.getFieldVisibility({ q: 0, r: 0 })).toBe(
+      FieldVisibility.Discovered,
+    );
+    expect(restoredVisibility.getFieldVisibility({ q: 2, r: 0 })).toBe(
+      FieldVisibility.Visible,
+    );
+  });
+
   it("keeps a steep blocker visible while retaining previously explored terrain behind it", () => {
     const mage = new Player(
       "mage",

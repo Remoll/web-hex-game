@@ -37,6 +37,7 @@ import {
 import type { HexCoord } from "@/game/types";
 import {
   FieldVisibility,
+  type MageDiscoverySnapshot,
   MageVisibility,
   type FieldVisibilityReader,
 } from "@/game/visibility/MageVisibility";
@@ -258,6 +259,15 @@ export interface ServantCommandPresentation {
   readonly targetSelection: ServantStrategyTargetSelection | undefined;
 }
 
+/**
+ * Domain-only state used by CampaignSession while moving a living party between
+ * maps. Presentation adapters must continue using fog-safe projections.
+ */
+export interface PersistentPlayerServantStrategy {
+  readonly servantId: string;
+  readonly strategy: ServantStrategy;
+}
+
 /** Owns mutable game state without depending on rendering or browser APIs. */
 export class GameSession {
   private readonly unitsById = new Map<string, Unit>();
@@ -365,6 +375,40 @@ export class GameSession {
     return this.servantStrategiesByUnitId.get(servantId)?.type;
   }
 
+  /** Captures living Player-servant orders without granting UI access to them. */
+  getPersistentPlayerServantStrategies(): readonly PersistentPlayerServantStrategy[] {
+    const strategies: PersistentPlayerServantStrategy[] = [];
+    for (const [servantId, strategy] of this.servantStrategiesByUnitId) {
+      const servant = this.unitsById.get(servantId);
+      if (servant && this.isPlayerFactionServant(servant)) {
+        strategies.push(Object.freeze({
+          servantId,
+          strategy: cloneServantStrategy(strategy),
+        }));
+      }
+    }
+    return Object.freeze(strategies);
+  }
+
+  /** Restores campaign-owned Player-servant orders without spending Mage AP. */
+  restorePersistentPlayerServantStrategies(
+    strategies: readonly PersistentPlayerServantStrategy[],
+  ): void {
+    const restoredServantIds = new Set<string>();
+    for (const { servantId, strategy } of strategies) {
+      const servant = this.unitsById.get(servantId);
+      if (!servant || !this.isPlayerFactionServant(servant)) {
+        throw new Error(`Cannot restore a persistent strategy for ${servantId}`);
+      }
+      if (restoredServantIds.has(servantId)) {
+        throw new Error(`Persistent strategy for ${servantId} is duplicated`);
+      }
+
+      restoredServantIds.add(servantId);
+      this.servantStrategiesByUnitId.set(servantId, cloneServantStrategy(strategy));
+    }
+  }
+
   /**
    * Simulation state for tests and future AI orchestration. Player-facing
    * presentation must not render this private Enemy memory outside Mage sight.
@@ -401,6 +445,16 @@ export class GameSession {
   /** Stable read-only visibility API for app and rendering adapters. */
   get visibility(): FieldVisibilityReader {
     return this.mageVisibility;
+  }
+
+  /** Campaign-only persistent fog data; current sight remains session-owned. */
+  getMageDiscoverySnapshot(): MageDiscoverySnapshot {
+    return this.mageVisibility.getDiscoverySnapshot();
+  }
+
+  /** Restores only past discovery after a CampaignSession recreates this map. */
+  restoreMageDiscoverySnapshot(snapshot: MageDiscoverySnapshot): void {
+    this.mageVisibility.restoreDiscoverySnapshot(snapshot);
   }
 
   /** Read-only timeline state for HUDs and future turn orchestration. */
@@ -1723,6 +1777,19 @@ function getInitiativeQueueActorLabel(unit: Unit): InitiativeQueueActorLabel {
       return InitiativeQueueActorLabel.Enemy;
     case Faction.Neutral:
       return InitiativeQueueActorLabel.Neutral;
+  }
+}
+
+function cloneServantStrategy(strategy: ServantStrategy): ServantStrategy {
+  switch (strategy.type) {
+    case ServantStrategyType.Hold:
+      return holdServantStrategy;
+    case ServantStrategyType.ProtectMage:
+      return protectMageServantStrategy;
+    case ServantStrategyType.PursueDesignatedEnemy:
+      return pursueDesignatedEnemyStrategy(strategy.targetEnemyId);
+    case ServantStrategyType.SecureDesignatedHex:
+      return secureDesignatedHexStrategy(strategy.targetHex);
   }
 }
 

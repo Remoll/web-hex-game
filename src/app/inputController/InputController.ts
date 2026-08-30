@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { GameController } from "@/app/gameController/GameController";
+import type { MapInteractionController } from "@/app/inputController/MapInteractionController";
 import type { GameCamera } from "@/rendering/gameCamera/GameCamera";
 import {
   normalizePointer,
@@ -17,12 +17,13 @@ export class InputController {
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
   private readonly intersections: THREE.Intersection[] = [];
+  private isEnabled = true;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly gameCamera: GameCamera,
     private readonly mapView: MapView,
-    private readonly gameController: GameController,
+    private readonly mapInteractionController: MapInteractionController,
   ) {
     this.canvas.style.cursor = getTacticalCursorStyle(
       TacticalCursor.Unavailable,
@@ -40,16 +41,31 @@ export class InputController {
     this.canvas.removeEventListener("mouseleave", this.handlePointerLeave);
   }
 
+  /** Disables map input during an atomic presentation transition. */
+  setEnabled(isEnabled: boolean): void {
+    this.isEnabled = isEnabled;
+    if (!isEnabled) {
+      this.mapInteractionController.clearPreview();
+      this.canvas.style.cursor = getTacticalCursorStyle(TacticalCursor.Unavailable);
+    }
+  }
+
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (!this.isEnabled) {
+      return;
+    }
     if (event.key.toLowerCase() === "c") {
       this.gameCamera.toggleMode();
     }
   };
 
   private readonly handleClick = (event: MouseEvent): void => {
+    if (!this.isEnabled) {
+      return;
+    }
     const clickedHex = this.resolveHex(event);
     if (clickedHex) {
-      this.gameController.clickHex(clickedHex);
+      this.mapInteractionController.clickHex(clickedHex);
       this.updateTacticalCursor(clickedHex);
       return;
     }
@@ -58,11 +74,14 @@ export class InputController {
   };
 
   private readonly handlePointerMove = (event: MouseEvent): void => {
+    if (!this.isEnabled) {
+      return;
+    }
     this.updateTacticalCursor(this.resolveHex(event));
   };
 
   private readonly handlePointerLeave = (): void => {
-    this.gameController.clearPreview();
+    this.mapInteractionController.clearPreview();
     this.canvas.style.cursor = getTacticalCursorStyle(
       TacticalCursor.Unavailable,
     );
@@ -70,7 +89,7 @@ export class InputController {
 
   private updateTacticalCursor(hoveredHex?: HexCoord): void {
     const preview = hoveredHex
-      ? this.gameController.previewHex(hoveredHex)
+      ? this.mapInteractionController.previewHex(hoveredHex)
       : undefined;
     this.canvas.style.cursor = getTacticalCursorStyle(
       getTacticalCursor(preview),

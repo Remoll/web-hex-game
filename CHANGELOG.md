@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-30
+
+- Added a persistent campaign roundtrip between a radius-4 Strategic Map and
+  the existing tactical encounter, with explicit accessible entry, reduced-
+  motion-safe transition locking, deterministic party entry formation, and
+  per-area tactical/fog persistence.
+
 ## 2026-08-29
 
 - Increased every timeline activation to 4 AP while preserving movement,

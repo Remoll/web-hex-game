@@ -13,6 +13,25 @@ npm run dev
 
 The development server starts at the address printed by Vite. Press `C` to toggle the camera mode.
 
+## Campaign travel
+
+The demo now starts on a navigation-only radius-4 Strategic Map. A persistent
+gold route glow marks every public entrance or exit: move the single Mage party
+marker to the highlighted entrance, then use the accessible **Enter Existing
+Tactical Map** control. The tactical return exit stays highlighted alongside
+selection, movement, and attack feedback, and its **Return** control remains
+disabled until the Mage reaches it. Transitions briefly lock input and respect
+`prefers-reduced-motion`.
+
+The campaign owns the Mage and living Player-servant state, including HP and
+servant orders. Leaving and re-entering the existing tactical area also restores
+that area's local unit positions, HP, defeated-unit remains, and discovered fog;
+only its selection, activation AP, timeline, and presentation queue restart.
+The tactical destination always begins with the Mage ready at 4 AP. Strategic
+areas intentionally have no fog, combat, AI, AP, or timeline simulation yet.
+The route's explicit tactical entry direction places the Mage on the endpoint,
+then places servants in a stable direction-relative neighbouring sequence.
+
 ## Tactical prototype controls
 
 The current example level contains a Mage, two nearby Player-faction servants,

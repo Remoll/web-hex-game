@@ -5,17 +5,12 @@ import {
   buildMapHighlightRenderStates,
   tacticalHighlightKinds,
   type TacticalHighlight,
-  TacticalHighlightKind,
+  type TacticalHighlightKind,
 } from "@/rendering/mapHighlightView/MapHighlightRenderModel";
+import {
+  getMapHighlightMaterialPolicy,
+} from "@/rendering/mapHighlightView/MapHighlightMaterialPolicy";
 import type { RenderConfig } from "@/rendering/RenderConfig";
-
-const highlightColors: Readonly<Record<TacticalHighlightKind, number>> = {
-  [TacticalHighlightKind.Selected]: 0x28c7fa,
-  [TacticalHighlightKind.Command]: 0xe4bd49,
-  [TacticalHighlightKind.Move]: 0x45df79,
-  [TacticalHighlightKind.Attack]: 0xf04f55,
-  [TacticalHighlightKind.Initiative]: 0xa46df4,
-};
 
 /** Efficient static preview overlay. It receives semantic state, never rules. */
 export class MapHighlightView {
@@ -78,21 +73,23 @@ export class MapHighlightView {
     kind: TacticalHighlightKind,
     capacity: number,
   ): THREE.InstancedMesh {
+    const materialPolicy = getMapHighlightMaterialPolicy(kind);
     const geometry = Hex.createHexTopGeometry(
       this.config.hexSize * 0.9,
       Math.max(this.config.borderWidth, 3),
     );
     const material = new THREE.MeshBasicMaterial({
-      color: highlightColors[kind],
+      color: materialPolicy.color,
       transparent: true,
-      opacity: 0.35,
+      opacity: materialPolicy.opacity,
+      depthTest: materialPolicy.depthTest,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.InstancedMesh(geometry, material, capacity);
     mesh.count = 0;
     mesh.frustumCulled = false;
-    mesh.renderOrder = 1;
+    mesh.renderOrder = materialPolicy.renderOrder;
     return mesh;
   }
 }

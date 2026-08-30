@@ -5,6 +5,7 @@ import type { RenderConfig } from "@/rendering/RenderConfig";
 
 /** Semantic overlays shared by input feedback and the renderer. */
 export enum TacticalHighlightKind {
+  CampaignRoute = "campaign-route",
   Selected = "selected",
   Command = "command",
   Move = "move",
@@ -13,6 +14,7 @@ export enum TacticalHighlightKind {
 }
 
 export const tacticalHighlightKinds: readonly TacticalHighlightKind[] = [
+  TacticalHighlightKind.CampaignRoute,
   TacticalHighlightKind.Selected,
   TacticalHighlightKind.Command,
   TacticalHighlightKind.Move,

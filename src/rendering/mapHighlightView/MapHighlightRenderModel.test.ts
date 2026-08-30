@@ -49,4 +49,22 @@ describe("buildMapHighlightRenderStates", () => {
       }),
     ]);
   });
+
+  it("keeps campaign-route feedback as a distinct semantic render state", () => {
+    const highlights: TacticalHighlight[] = [{
+      kind: TacticalHighlightKind.CampaignRoute,
+      coord: { q: 0, r: 0 },
+    }];
+
+    expect(buildMapHighlightRenderStates(
+      highlights,
+      new GameMap(map),
+      defaultRenderConfig,
+    )).toEqual([
+      expect.objectContaining({
+        kind: TacticalHighlightKind.CampaignRoute,
+        coord: { q: 0, r: 0 },
+      }),
+    ]);
+  });
 });

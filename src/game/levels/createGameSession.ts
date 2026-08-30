@@ -65,6 +65,7 @@ function getUnitConfig(
     faction: definition.faction ?? fallbackFaction,
     movementType: definition.movementType ?? defaultUnitConfig.movementType,
     movementRange: definition.movementRange ?? defaultUnitConfig.movementRange,
+    currentHp: definition.currentHp,
     attackPower: definition.attackPower ?? defaultUnitConfig.attackPower,
     tacticalRole,
     viewRange: definition.viewRange ?? defaultUnitConfig.viewRange,
@@ -78,6 +79,7 @@ function withoutFaction(
   return {
     movementType: config.movementType,
     movementRange: config.movementRange,
+    currentHp: config.currentHp,
     attackPower: config.attackPower,
     viewRange: config.viewRange,
     attributes: config.attributes,

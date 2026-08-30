@@ -19,6 +19,11 @@ export interface FieldVisibilityReader {
   getFieldVisibility(coord: HexCoord): FieldVisibility | undefined;
 }
 
+/** Persistent discovery state for one map; current sight is always recalculated. */
+export interface MageDiscoverySnapshot {
+  readonly discoveredCoordinates: readonly HexCoord[];
+}
+
 /**
  * Maintains historical discovery and current Mage vision without depending on
  * presentation state. Recalculation is invoked only by resolved game events.
@@ -37,6 +42,32 @@ export class MageVisibility implements FieldVisibilityReader {
 
   getFieldVisibility(coord: HexCoord): FieldVisibility | undefined {
     return this.visibilityByHex.get(getHexCoordKey(coord));
+  }
+
+  /** Captures known fields without exposing the internal visibility map. */
+  getDiscoverySnapshot(): MageDiscoverySnapshot {
+    const discoveredCoordinates: HexCoord[] = [];
+    this.gameMap.forEachField((q, r) => {
+      const coordinate = { q, r };
+      if (this.getFieldVisibility(coordinate) !== FieldVisibility.Undiscovered) {
+        discoveredCoordinates.push(coordinate);
+      }
+    });
+    return { discoveredCoordinates: Object.freeze(discoveredCoordinates) };
+  }
+
+  /** Restores historical knowledge, while preserving fields currently visible. */
+  restoreDiscoverySnapshot(snapshot: MageDiscoverySnapshot): void {
+    for (const coordinate of snapshot.discoveredCoordinates) {
+      const key = getHexCoordKey(coordinate);
+      const currentVisibility = this.visibilityByHex.get(key);
+      if (currentVisibility === undefined) {
+        throw new Error(`Cannot restore discovery outside the map at ${coordinate.q},${coordinate.r}`);
+      }
+      if (currentVisibility !== FieldVisibility.Visible) {
+        this.visibilityByHex.set(key, FieldVisibility.Discovered);
+      }
+    }
   }
 
   recalculate(mage: Unit): void {

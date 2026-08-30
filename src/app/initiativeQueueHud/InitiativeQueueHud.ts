@@ -122,6 +122,10 @@ export class InitiativeQueueHud {
     }
   }
 
+  setVisible(isVisible: boolean): void {
+    this.root.hidden = !isVisible;
+  }
+
   dispose(): void {
     this.cards.removeEventListener(
       initiativeQueueEventType.PointerOver,

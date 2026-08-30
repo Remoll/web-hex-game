@@ -77,6 +77,10 @@ export class TimelineHud {
     this.endTurnButton.setAttribute("aria-label", this.endTurnButton.textContent);
   }
 
+  setVisible(isVisible: boolean): void {
+    this.root.hidden = !isVisible;
+  }
+
   dispose(): void {
     this.waitButton.removeEventListener("click", this.handleWait);
     this.endTurnButton.removeEventListener("click", this.handleEndTurn);
