@@ -1,4 +1,6 @@
 import { GameMap, type MovementPath } from "@/game/board/gameMap/GameMap";
+import { TacticalDoorState } from "@/game/board/structure/TacticalDoorState";
+import { DoorBlockInitialState } from "@/game/board/structure/TacticalHexStructure";
 import {
   getHexCoordKey,
   isSameHexCoord,
@@ -34,7 +36,7 @@ import {
   ServantStrategyType,
   type ServantStrategy,
 } from "@/game/unit/servantStrategy/ServantStrategy";
-import type { HexCoord } from "@/game/types";
+import { MovementType, type HexCoord } from "@/game/types";
 import {
   FieldVisibility,
   type MageDiscoverySnapshot,
@@ -52,6 +54,7 @@ export enum GameActionType {
   SecureTargetSelectionCancelled = "secure-target-selection-cancelled",
   Moved = "moved",
   Attacked = "attacked",
+  DoorToggled = "door-toggled",
   StrategyAssigned = "strategy-assigned",
   StrategyCleared = "strategy-cleared",
   Waited = "waited",
@@ -66,6 +69,7 @@ export enum GameActionPreviewType {
   SecureTargetSelection = "secure-target-selection",
   ValidMove = "valid-move",
   ValidAttack = "valid-attack",
+  ValidDoorInteraction = "valid-door-interaction",
   OutOfRange = "out-of-range",
 }
 
@@ -107,6 +111,13 @@ export type GameAction =
     damage: number;
     targetCurrentHp: number;
     targetDefeated: boolean;
+  }
+  | {
+    type: GameActionType.DoorToggled;
+    mageId: string;
+    doorBlockId: string;
+    previousState: DoorBlockInitialState;
+    nextState: DoorBlockInitialState;
   }
   | {
     type: GameActionType.StrategyAssigned;
@@ -161,6 +172,12 @@ export type GameActionPreview =
     type: GameActionPreviewType.ValidAttack;
     attackerId: string;
     targetId: string;
+  }
+  | {
+    type: GameActionPreviewType.ValidDoorInteraction;
+    mageId: string;
+    doorBlockId: string;
+    currentState: DoorBlockInitialState;
   }
   | {
     type: GameActionPreviewType.OutOfRange;
@@ -264,6 +281,7 @@ export class GameSession {
   private readonly unitsById = new Map<string, Unit>();
   private readonly livingUnitIdsByHex = new Map<string, string>();
   private readonly mageId: string;
+  private readonly tacticalDoorState: TacticalDoorState;
   private readonly mageVisibility: MageVisibility;
   private readonly timeline: EventTimeline;
   private readonly enemyTacticalMemory = new EnemyTacticalMemory();
@@ -301,7 +319,11 @@ export class GameSession {
     }
 
     this.mageId = mages[0].id;
-    this.mageVisibility = new MageVisibility(this.gameMap);
+    this.tacticalDoorState = new TacticalDoorState(this.gameMap);
+    this.mageVisibility = new MageVisibility(
+      this.gameMap,
+      (coord) => this.tacticalDoorState.isSightBlocked(coord),
+    );
     this.timeline = new EventTimeline(this.unitsById.values());
     this.resolveAutonomousActivations();
     this.recalculateMageVisibility();
@@ -594,6 +616,16 @@ export class GameSession {
       };
     }
 
+    if (!clickedUnit) {
+      const doorInteractionPreview = this.getDoorInteractionPreview(
+        selectedUnit,
+        coord,
+      );
+      if (doorInteractionPreview) {
+        return doorInteractionPreview;
+      }
+    }
+
     if (clickedUnit && this.isMage(clickedUnit)) {
       return {
         type: GameActionPreviewType.Selection,
@@ -715,6 +747,8 @@ export class GameSession {
         return this.moveSelectedUnit(preview);
       case GameActionPreviewType.ValidAttack:
         return this.attack(preview);
+      case GameActionPreviewType.ValidDoorInteraction:
+        return this.toggleDoorBlock(preview);
       case GameActionPreviewType.OutOfRange:
         if (!selectedUnit && !this.getUnitAt(coord)) {
           return {
@@ -1154,6 +1188,111 @@ export class GameSession {
     };
   }
 
+  private getDoorInteractionPreview(
+    mage: Unit,
+    coord: HexCoord,
+  ): Extract<GameActionPreview, { type: GameActionPreviewType.ValidDoorInteraction }>
+    | Extract<GameActionPreview, { type: GameActionPreviewType.OutOfRange }>
+    | undefined {
+    const doorBlockId = this.tacticalDoorState.getDoorBlockIdAt(coord);
+    if (!doorBlockId) {
+      return undefined;
+    }
+
+    const currentState = this.tacticalDoorState.getState(doorBlockId);
+    if (currentState === undefined) {
+      return {
+        type: GameActionPreviewType.OutOfRange,
+        reason: GameActionRejectionReason.OutOfRange,
+      };
+    }
+
+    if (this.getFieldVisibility(coord) !== FieldVisibility.Visible) {
+      return {
+        type: GameActionPreviewType.OutOfRange,
+        reason: GameActionRejectionReason.NotVisible,
+      };
+    }
+
+    if (this.gameMap.getHexDistance(mage.position, coord) !== 1) {
+      return {
+        type: GameActionPreviewType.OutOfRange,
+        reason: GameActionRejectionReason.OutOfRange,
+      };
+    }
+
+    if (!this.hasActionPointAvailability(
+      mage,
+      TacticalActionPointCost.DoorInteraction,
+    )) {
+      return {
+        type: GameActionPreviewType.OutOfRange,
+        reason: this.getAvailabilityRejectionReason(
+          mage,
+          TacticalActionPointCost.DoorInteraction,
+        ),
+      };
+    }
+
+    return {
+      type: GameActionPreviewType.ValidDoorInteraction,
+      mageId: mage.id,
+      doorBlockId,
+      currentState,
+    };
+  }
+
+  private toggleDoorBlock(
+    preview: Extract<
+      GameActionPreview,
+      { type: GameActionPreviewType.ValidDoorInteraction }
+    >,
+  ): GameAction {
+    const mage = this.unitsById.get(preview.mageId);
+    if (!mage || !mage.isAlive || !this.isMage(mage) || !this.isMageReady()) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NotReady,
+      };
+    }
+
+    if (!this.hasActionPointAvailability(mage, TacticalActionPointCost.DoorInteraction)) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.InsufficientActionPoints,
+      };
+    }
+
+    const previousState = this.tacticalDoorState.getState(preview.doorBlockId);
+    const nextState = this.tacticalDoorState.toggle(preview.doorBlockId);
+    if (previousState === undefined || nextState === undefined) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.OutOfRange,
+      };
+    }
+
+    const remainingActionPoints = this.timeline.spendReadyActionPoints(
+      mage.id,
+      TacticalActionPointCost.DoorInteraction,
+    );
+    this.recalculateMageVisibility();
+    this.requiresTacticalVisibilitySync = true;
+    this.clearServantCommandTarget();
+    this.resolveAutonomousActivationsIfActivationEnded(
+      mage.id,
+      remainingActionPoints,
+    );
+
+    return {
+      type: GameActionType.DoorToggled,
+      mageId: mage.id,
+      doorBlockId: preview.doorBlockId,
+      previousState,
+      nextState,
+    };
+  }
+
   private getSelectedControllableUnit(): Unit | undefined {
     const selectedUnit = this.getSelectedMage();
 
@@ -1180,9 +1319,18 @@ export class GameSession {
       unit.position,
       unit.movementType,
       this.getRemainingMovementActionPoints(unit),
-      (coord) => this.getUnitAt(coord) !== undefined,
+      (coord) => this.getUnitAt(coord) !== undefined
+        || this.isGroundEntryBlockedByTacticalState(unit, coord),
       unit.movementRange,
     );
+  }
+
+  private isGroundEntryBlockedByTacticalState(
+    unit: Unit | AutonomousUnitSnapshot,
+    coord: HexCoord,
+  ): boolean {
+    return unit.movementType === MovementType.Ground
+      && this.tacticalDoorState.isGroundEntryBlocked(coord);
   }
 
   private hasMovementAvailability(unit: Unit): boolean {
@@ -1408,6 +1556,9 @@ export class GameSession {
       units: snapshots.units,
       unitsById: snapshots.unitsById,
       livingUnitIdByHex: this.livingUnitIdsByHex,
+      isGroundEntryBlocked: (coord) =>
+        this.tacticalDoorState.isGroundEntryBlocked(coord),
+      isSightLineBlocked: (coord) => this.tacticalDoorState.isSightBlocked(coord),
       actorId: unit.id,
       mageId: this.mageId,
       remainingActionPoints,
@@ -1498,6 +1649,7 @@ export class GameSession {
       unit.movementType,
     );
     if (traversalCost === undefined
+      || this.isGroundEntryBlockedByTacticalState(unit, decision.destination)
       || traversalCost > remainingActionPoints
       || this.getUnitAt(decision.destination) !== undefined
       || decision.actionPointCost !== traversalCost) {

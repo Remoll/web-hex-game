@@ -9,6 +9,11 @@ import {
 } from "@/app/gameController/GameController";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import {
+  DoorBlockInitialState,
+  TacticalHexAxis,
+  TacticalHexStructureType,
+} from "@/game/board/structure/TacticalHexStructure";
+import {
   GameActionType,
   GameActionPreviewType,
   GameActionRejectionReason,
@@ -64,6 +69,7 @@ const pursuitMapData: MapArray = [
     },
   },
 ];
+const controllerDoorBlockId = "controller-door";
 
 function createTacticalPresentationPresenter(): TacticalPresentationPresenter {
   return {
@@ -73,6 +79,37 @@ function createTacticalPresentationPresenter(): TacticalPresentationPresenter {
 }
 
 describe("GameController", () => {
+  it("synchronizes a DoorBlock visibility update without tactical motion events", () => {
+    const player = new Player(
+      "player",
+      { q: 0, r: 0 },
+      UnitTexture.PlayerIdle,
+    );
+    const session = new GameSession(new GameMap(mapData, [{
+      id: controllerDoorBlockId,
+      q: 1,
+      r: 0,
+      structure: {
+        type: TacticalHexStructureType.DoorBlock,
+        axis: TacticalHexAxis.Q,
+        initialState: DoorBlockInitialState.Closed,
+      },
+    }]), [player]);
+    const presenter = createTacticalPresentationPresenter();
+    const controller = new GameController(session, presenter);
+
+    controller.clickHex(player.position);
+
+    expect(controller.clickHex({ q: 1, r: 0 })).toEqual({
+      type: GameActionType.DoorToggled,
+      mageId: player.id,
+      doorBlockId: controllerDoorBlockId,
+      previousState: DoorBlockInitialState.Closed,
+      nextState: DoorBlockInitialState.Open,
+    });
+    expect(presenter.sync).toHaveBeenCalledWith([], true);
+  });
+
   it("syncs and safely clears an initiative-queue map highlight", () => {
     const player = new Player(
       "player",

@@ -5,6 +5,9 @@ import {
   getTacticalCursorStyle,
 } from "@/app/inputController/TacticalCursor";
 import {
+  DoorBlockInitialState,
+} from "@/game/board/structure/TacticalHexStructure";
+import {
   GameActionPreviewType,
   GameActionRejectionReason,
 } from "@/game/gameSession/GameSession";
@@ -50,6 +53,12 @@ describe("getTacticalCursor", () => {
         },
       ),
     ).toBe(TacticalCursor.Attack);
+    expect(getTacticalCursor({
+      type: GameActionPreviewType.ValidDoorInteraction,
+      mageId: "player",
+      doorBlockId: "door",
+      currentState: DoorBlockInitialState.Closed,
+    })).toBe(TacticalCursor.Select);
     expect(
       getTacticalCursor(
         {

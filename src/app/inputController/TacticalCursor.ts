@@ -45,6 +45,7 @@ export function getTacticalCursor(
     case GameActionPreviewType.ServantCommandSelection:
     case GameActionPreviewType.PursuitTargetSelection:
     case GameActionPreviewType.SecureTargetSelection:
+    case GameActionPreviewType.ValidDoorInteraction:
       return TacticalCursor.Select;
     case GameActionPreviewType.ValidMove:
       return TacticalCursor.Move;

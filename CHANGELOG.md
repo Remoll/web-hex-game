@@ -16,6 +16,8 @@ All notable changes to this project are documented in this file.
   placement ids for future tactical maps.
 - Added WallBlock and Tree Ground-movement and line-of-sight blocking, while
   preserving the deferred DoorBlock and WindowBlock behaviour.
+- Added Mage-controlled adjacent DoorBlock toggling for 1 AP, with runtime
+  closed-door movement and sight blocking.
 
 ## 2026-08-29
 

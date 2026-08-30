@@ -56,8 +56,11 @@ beyond their own field; the solid field itself remains visible. The same rule
 therefore applies to Mage movement previews, pathfinding, autonomous Ground
 movement, and fog of war. Flying remains unaffected. `door-block` and
 `window-block` retain no collision or sight effect until their dedicated
-interaction and axis-sight stories. No structure renderer or door UI exists
-yet.
+axis-sight story. A selected ready Mage may click an adjacent visible
+`door-block` to toggle it for 1 AP: closed doors block Ground entry and sight,
+while open doors allow both. The initial door state remains authored in JSON;
+each tactical session owns its current state. No structure renderer or door UI
+exists yet.
 
 The opposite highlighted Strategic entrance leads to the safe, enemy-free
 **Cobblestone Tower Ground Floor**. Its compact passable Cobblestone room uses

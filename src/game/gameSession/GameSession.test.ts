@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import {
+  DoorBlockInitialState,
+  TacticalHexAxis,
   TacticalHexStructureType,
   WallBlockSideMaterial,
 } from "@/game/board/structure/TacticalHexStructure";
@@ -45,6 +47,12 @@ const structureBlockingField = { q: 1, r: 0 };
 const structureBlockedEnemyField = { q: 2, r: 0 };
 const structureBlockingWallId = "session-blocking-wall";
 const structureBlockedEnemyId = "structure-blocked-enemy";
+const doorMageStart = { q: 0, r: 0 };
+const doorField = { q: 1, r: 0 };
+const doorBlockedEnemyField = { q: 2, r: 0 };
+const doorBlockId = "session-door";
+const doorBlockedEnemyId = "door-blocked-enemy";
+const distantDoorField = { q: 2, r: 0 };
 
 const mapData: MapArray = [
   { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass) },
@@ -176,6 +184,156 @@ describe("GameSession", () => {
         canHighlight: false,
       }),
     ]));
+  });
+
+  it("toggles an adjacent DoorBlock for one Mage AP and updates movement and fog", () => {
+    const mage = new Player(
+      "mage",
+      doorMageStart,
+      UnitTexture.PlayerIdle,
+      { viewRange: 3 },
+    );
+    const hiddenEnemy = new Unit(
+      doorBlockedEnemyId,
+      doorBlockedEnemyField,
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(new GameMap(
+      createGrassMap([doorMageStart, doorField, doorBlockedEnemyField]),
+      [{
+        id: doorBlockId,
+        ...doorField,
+        structure: {
+          type: TacticalHexStructureType.DoorBlock,
+          axis: TacticalHexAxis.Q,
+          initialState: DoorBlockInitialState.Closed,
+        },
+      }],
+    ), [mage, hiddenEnemy]);
+
+    expect(session.getFieldVisibility(doorBlockedEnemyField)).toBe(
+      FieldVisibility.Undiscovered,
+    );
+    expect(session.clickHex(doorMageStart)).toEqual({
+      type: GameActionType.Selected,
+      unitId: mage.id,
+    });
+    expect(session.getReachableHexes()).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ coord: doorField }),
+    ]));
+    expect(session.previewHex(doorField)).toEqual({
+      type: GameActionPreviewType.ValidDoorInteraction,
+      mageId: mage.id,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Closed,
+    });
+
+    expect(session.clickHex(doorField)).toEqual({
+      type: GameActionType.DoorToggled,
+      mageId: mage.id,
+      doorBlockId,
+      previousState: DoorBlockInitialState.Closed,
+      nextState: DoorBlockInitialState.Open,
+    });
+    expect(session.eventTimeline.getRemainingActionPoints(mage.id)).toBe(
+      actionPointsPerActivation - TacticalActionPointCost.DoorInteraction,
+    );
+    expect(session.getReachableHexes()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ coord: doorField }),
+    ]));
+    expect(session.getFieldVisibility(doorBlockedEnemyField)).toBe(
+      FieldVisibility.Visible,
+    );
+    expect(session.isUnitVisible(hiddenEnemy)).toBe(true);
+
+    expect(session.clickHex(doorField)).toEqual({
+      type: GameActionType.DoorToggled,
+      mageId: mage.id,
+      doorBlockId,
+      previousState: DoorBlockInitialState.Open,
+      nextState: DoorBlockInitialState.Closed,
+    });
+    expect(session.eventTimeline.getRemainingActionPoints(mage.id)).toBe(
+      actionPointsPerActivation - (TacticalActionPointCost.DoorInteraction * 2),
+    );
+    expect(session.getReachableHexes()).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ coord: doorField }),
+    ]));
+    expect(session.getFieldVisibility(doorBlockedEnemyField)).toBe(
+      FieldVisibility.Discovered,
+    );
+    expect(session.isUnitVisible(hiddenEnemy)).toBe(false);
+  });
+
+  it("rejects a non-adjacent DoorBlock interaction without spending Mage AP", () => {
+    const mage = new Player("mage", doorMageStart, UnitTexture.PlayerIdle, {
+      viewRange: 3,
+    });
+    const session = new GameSession(new GameMap(
+      createGrassMap([
+        doorMageStart,
+        doorField,
+        distantDoorField,
+      ]),
+      [{
+        id: doorBlockId,
+        ...distantDoorField,
+        structure: {
+          type: TacticalHexStructureType.DoorBlock,
+          axis: TacticalHexAxis.R,
+          initialState: DoorBlockInitialState.Closed,
+        },
+      }],
+    ), [mage]);
+
+    session.clickHex(doorMageStart);
+
+    expect(session.previewHex(distantDoorField)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.OutOfRange,
+    });
+    expect(session.clickHex(distantDoorField)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.OutOfRange,
+    });
+    expect(session.eventTimeline.getRemainingActionPoints(mage.id)).toBe(
+      actionPointsPerActivation,
+    );
+  });
+
+  it("lets autonomous Ground units perceive and cross a DoorBlock only after the Mage opens it", () => {
+    const mage = new Player(
+      "mage",
+      doorMageStart,
+      UnitTexture.PlayerIdle,
+      { viewRange: 3 },
+    );
+    const enemy = new Unit(
+      doorBlockedEnemyId,
+      doorBlockedEnemyField,
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(new GameMap(
+      createGrassMap([doorMageStart, doorField, doorBlockedEnemyField]),
+      [{
+        id: doorBlockId,
+        ...doorField,
+        structure: {
+          type: TacticalHexStructureType.DoorBlock,
+          axis: TacticalHexAxis.S,
+          initialState: DoorBlockInitialState.Closed,
+        },
+      }],
+    ), [mage, enemy]);
+
+    expect(enemy.position).toEqual(doorBlockedEnemyField);
+    session.clickHex(doorMageStart);
+    session.clickHex(doorField);
+    session.endMageTurn();
+
+    expect(enemy.position).toEqual(doorField);
   });
 
   it("derives Mage Shallow Water highlights including a legal uphill exit", () => {

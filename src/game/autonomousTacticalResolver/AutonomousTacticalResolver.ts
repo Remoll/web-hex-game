@@ -20,7 +20,10 @@ import {
 } from "@/game/unit/servantStrategy/ServantStrategy";
 import { UnitTacticalRole } from "@/game/unit/Unit";
 import { MovementType, type HexCoord } from "@/game/types";
-import { hasElevationLineOfSight } from "@/game/visibility/ElevationLineOfSight";
+import {
+  hasElevationLineOfSight,
+  type IsSightLineBlocked,
+} from "@/game/visibility/ElevationLineOfSight";
 
 const adjacentHexDistance = 1;
 
@@ -52,6 +55,10 @@ export interface AutonomousTacticalResolverInput {
   readonly unitsById: ReadonlyMap<string, AutonomousUnitSnapshot>;
   /** O(1) living occupancy lookup for autonomous pathfinding. */
   readonly livingUnitIdByHex: ReadonlyMap<string, string>;
+  /** Session-owned blockers such as closed DoorBlocks. */
+  readonly isGroundEntryBlocked?: (coord: HexCoord) => boolean;
+  /** Session-owned sight blockers such as closed DoorBlocks. */
+  readonly isSightLineBlocked?: IsSightLineBlocked;
   readonly actorId: string;
   readonly mageId: string;
   readonly remainingActionPoints: number;
@@ -460,6 +467,7 @@ function isPerceivedHostile(
       input.gameMap,
       observer.position,
       candidate.position,
+      input.isSightLineBlocked,
     );
 }
 
@@ -480,6 +488,7 @@ function moveEnemyToward(
       ),
     }))
     .filter((entry) => entry.traversalCost !== undefined)
+    .filter((entry) => !isGroundEntryBlocked(input, enemy, entry.coord))
     .filter((entry) => getLivingUnitAt(input, entry.coord) === undefined)
     .filter((entry) => input.gameMap.getHexDistance(entry.coord, destination)
       < currentDistance)
@@ -515,7 +524,8 @@ function findShortestApproachPath(
     servant.position,
     servant.movementType,
     (coord) => approachHexKeys.has(getHexCoordKey(coord)),
-    (coord) => getLivingUnitAt(input, coord) !== undefined,
+    (coord) => getLivingUnitAt(input, coord) !== undefined
+      || isGroundEntryBlocked(input, servant, coord),
   );
 }
 
@@ -539,8 +549,7 @@ function canUnitOccupy(
   const field = input.gameMap.getField(coord.q, coord.r);
   return field !== undefined
     && field.getAllowedMovements()[unit.movementType]
-    && (unit.movementType !== MovementType.Ground
-      || !input.gameMap.isGroundEntryBlockedByStructure(coord))
+    && !isGroundEntryBlocked(input, unit, coord)
     && getLivingUnitAt(input, coord) === undefined;
 }
 
@@ -556,11 +565,21 @@ function resolveAutonomousMovement(
     unit.movementType,
   );
   if (traversalCost === undefined
+    || isGroundEntryBlocked(input, unit, destination)
     || !canAffordAction(input.remainingActionPoints, traversalCost)) {
     return waitDecision(memoryDirectives);
   }
 
   return moveDecision(destination, traversalCost, memoryDirectives);
+}
+
+function isGroundEntryBlocked(
+  input: AutonomousTacticalResolverInput,
+  unit: AutonomousUnitSnapshot,
+  coord: HexCoord,
+): boolean {
+  return unit.movementType === MovementType.Ground
+    && (input.isGroundEntryBlocked?.(coord) ?? false);
 }
 
 function getUnit(

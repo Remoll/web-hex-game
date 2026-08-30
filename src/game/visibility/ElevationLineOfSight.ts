@@ -10,6 +10,9 @@ export const steepElevationVisionBlockerDifference = 2;
 
 const sightLineDistanceDecrement = 1;
 
+/** Runtime state can extend map-authored solid structures, for example doors. */
+export type IsSightLineBlocked = (coord: HexCoord) => boolean;
+
 /**
  * Evaluates elevation- and structure-aware tactical sight without consulting
  * presentation state. A target is visible when at least one shortest hex line
@@ -22,6 +25,8 @@ export function hasElevationLineOfSight(
   gameMap: GameMap,
   observer: HexCoord,
   target: HexCoord,
+  isSightLineBlocked: IsSightLineBlocked = (coord) =>
+    gameMap.isSightBlockedByStructure(coord),
 ): boolean {
   const observerField = gameMap.getField(observer.q, observer.r);
   const targetField = gameMap.getField(target.q, target.r);
@@ -34,6 +39,7 @@ export function hasElevationLineOfSight(
     observer,
     target,
     observerField.getGroundLevel(),
+    isSightLineBlocked,
     new Map<string, boolean>(),
   );
 }
@@ -49,6 +55,7 @@ function hasUnblockedShortestSightLine(
   current: HexCoord,
   target: HexCoord,
   observerGroundLevel: number,
+  isSightLineBlocked: IsSightLineBlocked,
   visibilityByCoordKey: Map<string, boolean>,
 ): boolean {
   if (isSameHexCoord(current, target)) {
@@ -75,7 +82,7 @@ function hasUnblockedShortestSightLine(
 
     const nextField = gameMap.getField(next.q, next.r);
     if (!nextField
-      || gameMap.isSightBlockedByStructure(next)
+      || isSightLineBlocked(next)
       || isSteepVisionBlocker(nextField.getGroundLevel(), observerGroundLevel)) {
       continue;
     }
@@ -85,6 +92,7 @@ function hasUnblockedShortestSightLine(
       next,
       target,
       observerGroundLevel,
+      isSightLineBlocked,
       visibilityByCoordKey,
     )) {
       visibilityByCoordKey.set(currentKey, true);

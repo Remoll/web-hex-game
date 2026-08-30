@@ -5,7 +5,10 @@ import {
   UnitTacticalRole,
 } from "@/game/unit/Unit";
 import type { HexCoord } from "@/game/types";
-import { hasElevationLineOfSight } from "@/game/visibility/ElevationLineOfSight";
+import {
+  hasElevationLineOfSight,
+  type IsSightLineBlocked,
+} from "@/game/visibility/ElevationLineOfSight";
 
 /** Serializable tactical fog states, ordered from no knowledge to full sight. */
 export enum FieldVisibility {
@@ -31,7 +34,11 @@ export interface MageDiscoverySnapshot {
 export class MageVisibility implements FieldVisibilityReader {
   private readonly visibilityByHex = new Map<string, FieldVisibility>();
 
-  constructor(private readonly gameMap: GameMap) {
+  constructor(
+    private readonly gameMap: GameMap,
+    private readonly isSightLineBlocked: IsSightLineBlocked = (coord) =>
+      gameMap.isSightBlockedByStructure(coord),
+  ) {
     this.gameMap.forEachField((q, r) => {
       this.visibilityByHex.set(
         getHexCoordKey({ q, r }),
@@ -81,7 +88,12 @@ export class MageVisibility implements FieldVisibilityReader {
       const previous = this.visibilityByHex.get(key) ?? FieldVisibility.Undiscovered;
       const isVisible = hasMageVision
         && this.gameMap.getHexDistance(magePosition, coord) <= mage.viewRange
-        && hasElevationLineOfSight(this.gameMap, magePosition, coord);
+        && hasElevationLineOfSight(
+          this.gameMap,
+          magePosition,
+          coord,
+          this.isSightLineBlocked,
+        );
 
       this.visibilityByHex.set(
         key,

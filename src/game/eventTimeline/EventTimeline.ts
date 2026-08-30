@@ -23,12 +23,15 @@ export enum TimelineAction {
 
 /** Current AP cost of assigning, replacing, or clearing a servant standing order. */
 export const servantStrategyCommandActionPointCost = 1;
+/** Current AP cost of toggling one adjacent DoorBlock. */
+export const doorInteractionActionPointCost = 1;
 
 /** Current tactical actions use AP; they do not set separate Timeline delays. */
 export enum TacticalActionPointCost {
   Move = baseMovementActionPointCost,
   MoveUphill = groundUphillMovementActionPointCost,
   Attack = 2,
+  DoorInteraction = doorInteractionActionPointCost,
   ServantStrategyCommand = servantStrategyCommandActionPointCost,
   Wait = 0,
 }
