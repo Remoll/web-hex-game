@@ -6,12 +6,15 @@ import "@/style.css";
 
 async function startGame(): Promise<void> {
   try {
-    const [level, towerGroundLevel] = await Promise.all([
+    const [level, towerGroundLevel, towerUpperLevel] = await Promise.all([
       loadLevel("/levels/example.json"),
       loadLevel("/levels/tower-ground.json"),
+      loadLevel("/levels/tower-upper.json"),
     ]);
     initGameApp({
-      campaign: new CampaignSession(createExampleCampaign(level, towerGroundLevel)),
+      campaign: new CampaignSession(
+        createExampleCampaign(level, towerGroundLevel, towerUpperLevel),
+      ),
       container: document.body,
     });
   } catch (error) {

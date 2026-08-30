@@ -562,8 +562,12 @@ function getTravelGuidance(
   if (!nextRoute) {
     return "No campaign route is available from this area.";
   }
-  const destination = campaign.getAreaDefinition(nextRoute.to.areaId);
   const actorLabel = activeAreaKind === CampaignAreaKind.Strategic ? "party" : "Mage";
+  if (outboundRoutes.length > 1) {
+    return `Move the ${actorLabel} to a highlighted ${endpointLabel} to choose a destination.`;
+  }
+
+  const destination = campaign.getAreaDefinition(nextRoute.to.areaId);
   const travelVerb = destination.kind === CampaignAreaKind.Tactical
     ? `enter ${destination.displayName}`
     : `return to ${destination.displayName}`;

@@ -10,6 +10,8 @@ All notable changes to this project are documented in this file.
   per-area tactical/fog persistence.
 - Added a reciprocal Cobblestone Tower Ground Floor route with a safe passable
   tactical entry and persistent party return.
+- Added a reciprocal Cobblestone Tower Upper Floor tactical-to-tactical stair
+  route with persistent party transfer.
 
 ## 2026-08-29
 

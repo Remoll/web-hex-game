@@ -36,10 +36,14 @@ then places servants in a stable direction-relative neighbouring sequence.
 
 The opposite highlighted Strategic entrance leads to the safe, enemy-free
 **Cobblestone Tower Ground Floor**. Its compact passable Cobblestone room uses
-the same party persistence and fresh 4-AP Mage entry as the existing encounter;
-the highlighted return exit leads back to the tower entrance. The authored
-floor layout is stored separately in `public/levels/tower-ground.json`. Upper
-tower floors and tower-specific gameplay are not part of this prototype yet.
+the same party persistence and fresh 4-AP Mage entry as the existing encounter.
+One highlighted exit returns to the tower entrance on the Strategic Map; the
+other leads to the **Cobblestone Tower Upper Floor**. Its highlighted stair exit
+returns to the Ground Floor. Both compact passable Cobblestone layouts are
+authored separately in `public/levels/tower-ground.json` and
+`public/levels/tower-upper.json`. This uses the same generic Tactical-to-
+Tactical campaign routes as any future room or interior connection; tower
+gameplay beyond traversal is still deferred.
 
 ## Tactical prototype controls
 

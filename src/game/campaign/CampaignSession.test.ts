@@ -25,6 +25,9 @@ const exampleLevelPath = fileURLToPath(
 const towerGroundLevelPath = fileURLToPath(
   new URL("../../../public/levels/tower-ground.json", import.meta.url),
 );
+const towerUpperLevelPath = fileURLToPath(
+  new URL("../../../public/levels/tower-upper.json", import.meta.url),
+);
 const partyDamage = 20;
 const localEnemyDamage = 20;
 const strategicStepsToExistingTacticalMap = strategicMapRadius;
@@ -37,11 +40,14 @@ const sourceBlockedRouteCoordinate = { q: 1, r: 0 };
 const blockedEntryCoordinate = { q: 0, r: 0 };
 
 async function createCampaignSession(): Promise<CampaignSession> {
-  const [tacticalLevel, towerGroundLevel] = await Promise.all([
+  const [tacticalLevel, towerGroundLevel, towerUpperLevel] = await Promise.all([
     loadLevelFixture(exampleLevelPath),
     loadLevelFixture(towerGroundLevelPath),
+    loadLevelFixture(towerUpperLevelPath),
   ]);
-  return new CampaignSession(createExampleCampaign(tacticalLevel, towerGroundLevel));
+  return new CampaignSession(
+    createExampleCampaign(tacticalLevel, towerGroundLevel, towerUpperLevel),
+  );
 }
 
 async function loadLevelFixture(levelPath: string): Promise<LevelDefinition> {

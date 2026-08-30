@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   CampaignAreaKind,
+  TacticalEntryDirection,
   validateCampaignDefinition,
   type CampaignDefinition,
 } from "@/game/campaign/CampaignDefinition";
@@ -16,6 +17,9 @@ import {
   strategicTowerGroundRouteId,
   towerGroundAreaId,
   towerGroundStrategicRouteId,
+  towerGroundUpperRouteId,
+  towerUpperAreaId,
+  towerUpperGroundRouteId,
 } from "@/game/campaign/createExampleCampaign";
 import { actionPointsPerActivation } from "@/game/eventTimeline/EventTimeline";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
@@ -27,29 +31,50 @@ const exampleLevelPath = fileURLToPath(
 const towerGroundLevelPath = fileURLToPath(
   new URL("../../../public/levels/tower-ground.json", import.meta.url),
 );
+const towerUpperLevelPath = fileURLToPath(
+  new URL("../../../public/levels/tower-upper.json", import.meta.url),
+);
 const strategicTowerTravelStepCount = strategicMapRadius;
 const playerMageId = "player";
 const firstServantId = "friendly-1";
 const secondServantId = "friendly-2";
 const expectedFirstServantTowerEntryPosition = { q: 1, r: 0 };
 const expectedSecondServantTowerEntryPosition = { q: 0, r: 1 };
+const towerGroundUpperStairCoordinate = { q: 1, r: -1 };
+const towerUpperGroundStairCoordinate = { q: -1, r: 0 };
+const expectedFirstServantTowerUpperEntryPosition = { q: 0, r: 0 };
+const expectedSecondServantTowerUpperEntryPosition = { q: -1, r: 1 };
+const expectedFirstServantTowerGroundReturnPosition = { q: 0, r: -1 };
+const expectedSecondServantTowerGroundReturnPosition = { q: 0, r: 0 };
 const towerSecureTargetHex = { q: 0, r: -1 };
 const partyDamage = 20;
 const invalidTowerEntranceCoordinate = { q: -(strategicMapRadius + 1), r: 0 };
 
+interface ExampleCampaignLevels {
+  readonly tactical: LevelDefinition;
+  readonly towerGround: LevelDefinition;
+  readonly towerUpper: LevelDefinition;
+}
+
 async function loadExampleCampaign(): Promise<CampaignDefinition> {
-  const [tacticalLevel, towerGroundLevel] = await Promise.all([
+  const levels = await loadExampleCampaignLevels();
+  return createExampleCampaign(levels.tactical, levels.towerGround, levels.towerUpper);
+}
+
+async function loadExampleCampaignLevels(): Promise<ExampleCampaignLevels> {
+  const [tactical, towerGround, towerUpper] = await Promise.all([
     loadLevelFixture(exampleLevelPath),
     loadLevelFixture(towerGroundLevelPath),
+    loadLevelFixture(towerUpperLevelPath),
   ]);
-  return createExampleCampaign(tacticalLevel, towerGroundLevel);
+  return { tactical, towerGround, towerUpper };
 }
 
 async function loadLevelFixture(levelPath: string): Promise<LevelDefinition> {
   return JSON.parse(await readFile(levelPath, "utf8")) as LevelDefinition;
 }
 
-describe("createExampleCampaign tower ground floor", () => {
+describe("createExampleCampaign tower routes", () => {
   it("enters the safe ground floor in deterministic party formation and returns intact", async () => {
     const campaign = new CampaignSession(await loadExampleCampaign());
     const strategicArea = campaign.activeArea;
@@ -82,6 +107,7 @@ describe("createExampleCampaign tower ground floor", () => {
     );
     expect(campaign.getOutboundRoutes().map((route) => route.id)).toEqual([
       towerGroundStrategicRouteId,
+      towerGroundUpperRouteId,
     ]);
 
     const mage = towerGroundArea.session.getUnit(playerMageId);
@@ -99,6 +125,109 @@ describe("createExampleCampaign tower ground floor", () => {
     );
     expect(campaign.party.find((member) => member.definition.id === playerMageId)
       ?.definition.currentHp).toBe(mage.maxHp - partyDamage);
+  });
+
+  it("uses reciprocal Tactical-to-Tactical stair routes with persistent party state", async () => {
+    const campaign = new CampaignSession(await loadExampleCampaign());
+    const strategicArea = campaign.activeArea;
+    if (strategicArea.kind !== CampaignAreaKind.Strategic) {
+      throw new Error("The example campaign must start on the strategic map");
+    }
+
+    for (let step = 1; step <= strategicTowerTravelStepCount; step += 1) {
+      expect(strategicArea.session.moveTo({ q: -step, r: 0 })).toBe(true);
+    }
+
+    const towerGroundArea = campaign.travelAvailableRoute().activeArea;
+    if (towerGroundArea.kind !== CampaignAreaKind.Tactical) {
+      throw new Error("The strategic tower route must enter a tactical ground floor");
+    }
+    const groundMage = towerGroundArea.session.getUnit(playerMageId);
+    if (!groundMage) {
+      throw new Error("The tower ground floor must contain the Mage");
+    }
+    groundMage.receiveDamage(partyDamage);
+    expect(towerGroundArea.session.assignSecureDesignatedHexStrategyToServant(
+      firstServantId,
+      towerSecureTargetHex,
+    )).toMatchObject({ strategyType: ServantStrategyType.SecureDesignatedHex });
+    expect(towerGroundArea.session.clickHex(groundMage.position)).toMatchObject({
+      unitId: playerMageId,
+    });
+    expect(towerGroundArea.session.clickHex(towerGroundUpperStairCoordinate)).toMatchObject({
+      unitId: playerMageId,
+      to: towerGroundUpperStairCoordinate,
+    });
+    expect(campaign.getAvailableRoute()?.id).toBe(towerGroundUpperRouteId);
+    expect(campaign.getAvailableRoute()).toMatchObject({
+      from: {
+        coordinate: towerGroundUpperStairCoordinate,
+        tacticalEntryDirection: TacticalEntryDirection.West,
+      },
+      to: {
+        areaId: towerUpperAreaId,
+        coordinate: towerUpperGroundStairCoordinate,
+        tacticalEntryDirection: TacticalEntryDirection.East,
+      },
+    });
+
+    const towerUpperArea = campaign.travelAvailableRoute().activeArea;
+    if (towerUpperArea.kind !== CampaignAreaKind.Tactical) {
+      throw new Error("The tower stair route must enter a tactical upper floor");
+    }
+    expect(towerUpperArea.definition.id).toBe(towerUpperAreaId);
+    expect(towerUpperArea.session.timelinePresentation).toMatchObject({
+      readyActorId: playerMageId,
+      readyActorActionPoints: actionPointsPerActivation,
+    });
+    expect(towerUpperArea.session.getUnit(playerMageId)?.position).toEqual(
+      towerUpperGroundStairCoordinate,
+    );
+    expect(towerUpperArea.session.getUnit(firstServantId)?.position).toEqual(
+      expectedFirstServantTowerUpperEntryPosition,
+    );
+    expect(towerUpperArea.session.getUnit(secondServantId)?.position).toEqual(
+      expectedSecondServantTowerUpperEntryPosition,
+    );
+    expect(towerUpperArea.session.getUnit(playerMageId)?.currentHp).toBe(
+      groundMage.maxHp - partyDamage,
+    );
+    expect(towerUpperArea.session.getServantStrategyType(firstServantId)).toBeUndefined();
+    expect(campaign.getAvailableRoute()?.id).toBe(towerUpperGroundRouteId);
+    expect(campaign.getAvailableRoute()).toMatchObject({
+      from: {
+        coordinate: towerUpperGroundStairCoordinate,
+        tacticalEntryDirection: TacticalEntryDirection.East,
+      },
+      to: {
+        areaId: towerGroundAreaId,
+        coordinate: towerGroundUpperStairCoordinate,
+        tacticalEntryDirection: TacticalEntryDirection.West,
+      },
+    });
+
+    const returnedTowerGroundArea = campaign.travelAvailableRoute().activeArea;
+    if (returnedTowerGroundArea.kind !== CampaignAreaKind.Tactical) {
+      throw new Error("The upper stair route must return to a tactical ground floor");
+    }
+    expect(returnedTowerGroundArea.definition.id).toBe(towerGroundAreaId);
+    expect(returnedTowerGroundArea.session.timelinePresentation).toMatchObject({
+      readyActorId: playerMageId,
+      readyActorActionPoints: actionPointsPerActivation,
+    });
+    expect(returnedTowerGroundArea.session.getUnit(playerMageId)?.position).toEqual(
+      towerGroundUpperStairCoordinate,
+    );
+    expect(returnedTowerGroundArea.session.getUnit(firstServantId)?.position).toEqual(
+      expectedFirstServantTowerGroundReturnPosition,
+    );
+    expect(returnedTowerGroundArea.session.getUnit(secondServantId)?.position).toEqual(
+      expectedSecondServantTowerGroundReturnPosition,
+    );
+    expect(returnedTowerGroundArea.session.getUnit(playerMageId)?.currentHp).toBe(
+      groundMage.maxHp - partyDamage,
+    );
+    expect(returnedTowerGroundArea.session.getServantStrategyType(firstServantId)).toBeUndefined();
   });
 
   it("clears a map-local Secure order before the party enters another tactical area", async () => {

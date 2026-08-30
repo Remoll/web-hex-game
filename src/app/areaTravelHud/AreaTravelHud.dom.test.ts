@@ -46,6 +46,18 @@ describe("AreaTravelHud", () => {
     expect(button?.disabled).toBe(true);
     expect(button?.textContent).toBe("Return to Strategic Map");
 
+    hud.sync({
+      areaName: "Cobblestone Tower Ground Floor",
+      guidance: "At the highlighted exit.",
+      actionLabel: "Enter Cobblestone Tower Upper Floor",
+      canTravel: true,
+      isInputLocked: false,
+    });
+    expect(button?.disabled).toBe(false);
+    expect(button?.getAttribute("aria-label")).toBe(
+      "Enter Cobblestone Tower Upper Floor",
+    );
+
     hud.dispose();
   });
 });
