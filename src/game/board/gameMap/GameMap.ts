@@ -1,5 +1,11 @@
 import { Field } from "@/game/board/field/Field";
 import {
+  createTacticalHexStructurePlacementProjection,
+  type TacticalHexStructurePlacementDefinition,
+  type TacticalHexStructurePlacementProjection,
+  type TacticalHexStructureProjection,
+} from "@/game/board/structure/TacticalHexStructure";
+import {
   getHexCoordKey,
   getHexDistance,
 } from "@/game/board/hexCoord/HexCoord";
@@ -40,6 +46,9 @@ export interface MovementPath {
 
 export type IsHexBlocked = (coord: HexCoord) => boolean;
 export type IsDestinationHex = (coord: HexCoord) => boolean;
+export type ForEachTacticalHexStructure = (
+  placement: TacticalHexStructurePlacementProjection,
+) => void;
 
 interface WeightedPathNode {
   readonly coord: HexCoord;
@@ -57,9 +66,17 @@ interface WeightedPathSearchResult {
 
 export class GameMap {
   private readonly fieldsMap: FieldsMap = new Map();
+  private readonly structurePlacementsByCoordKey = new Map<
+    string,
+    TacticalHexStructurePlacementProjection
+  >();
+  private readonly structurePlacementsById = new Map<string, TacticalHexStructurePlacementProjection>();
   private readonly _radiusInHex;
 
-  constructor(mapArray: MapArray) {
+  constructor(
+    mapArray: MapArray,
+    structurePlacements: readonly TacticalHexStructurePlacementDefinition[] = [],
+  ) {
     mapArray.forEach(({ q, r, fieldAttrs }) => {
       if (!this.fieldsMap.has(q)) {
         this.fieldsMap.set(q, new Map());
@@ -73,6 +90,7 @@ export class GameMap {
       column.set(r, new Field(fieldAttrs));
     });
 
+    this.indexTacticalHexStructures(structurePlacements);
     this._radiusInHex = this.getRadiusInHex();
   }
 
@@ -86,6 +104,35 @@ export class GameMap {
 
   getField(q: Q, r: R): Field | undefined {
     return this.fieldsMap.get(q)?.get(r);
+  }
+
+  /** Returns the immutable, authored structure projection for one map field. */
+  getStructure(q: Q, r: R): TacticalHexStructureProjection | undefined {
+    return this.getStructurePlacement(q, r)?.structure;
+  }
+
+  /** Returns one immutable placement by its stable authored identity. */
+  getStructurePlacementById(id: string): TacticalHexStructurePlacementProjection | undefined {
+    return this.structurePlacementsById.get(id);
+  }
+
+  /** Returns one immutable placement by its map coordinate. */
+  getStructurePlacement(
+    q: Q,
+    r: R,
+  ): TacticalHexStructurePlacementProjection | undefined {
+    return this.structurePlacementsByCoordKey.get(getHexCoordKey({ q, r }));
+  }
+
+  /** Iterates authored structures in their stable level-data registration order. */
+  forEachStructure(callback: ForEachTacticalHexStructure): void {
+    for (const placement of this.structurePlacementsByCoordKey.values()) {
+      callback(placement);
+    }
+  }
+
+  get structureCount(): number {
+    return this.structurePlacementsByCoordKey.size;
   }
 
   getNeighbours(coord: HexCoord): readonly HexCoord[] {
@@ -222,6 +269,33 @@ export class GameMap {
 
   private hasField(coord: HexCoord): boolean {
     return this.getField(coord.q, coord.r) !== undefined;
+  }
+
+  private indexTacticalHexStructures(
+    structurePlacements: readonly TacticalHexStructurePlacementDefinition[],
+  ): void {
+    for (const placement of structurePlacements) {
+      const coordinate = { q: placement.q, r: placement.r };
+      const coordinateKey = getHexCoordKey(coordinate);
+      if (!this.hasField(coordinate)) {
+        throw new Error(
+          `Tactical structure at ${coordinateKey} must reference an existing map field`,
+        );
+      }
+      if (this.structurePlacementsByCoordKey.has(coordinateKey)) {
+        throw new Error(`The map contains duplicate tactical structures at ${coordinateKey}`);
+      }
+      if (this.structurePlacementsById.has(placement.id)) {
+        throw new Error(`The map contains duplicate tactical structure id ${placement.id}`);
+      }
+
+      const structurePlacement = createTacticalHexStructurePlacementProjection(placement);
+      this.structurePlacementsByCoordKey.set(
+        coordinateKey,
+        structurePlacement,
+      );
+      this.structurePlacementsById.set(structurePlacement.id, structurePlacement);
+    }
   }
 
   private findWeightedPaths(

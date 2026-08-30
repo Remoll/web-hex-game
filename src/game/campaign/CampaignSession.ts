@@ -196,7 +196,7 @@ export class CampaignSession {
     const localUnits = runtimeSnapshot?.localUnitDefinitions
       ?? baseLevel.units.filter((unit) => !this.campaignPartyMemberIds.has(unit.id));
     const formation = createTacticalEntryFormation(
-      new GameMap(baseLevel.map),
+      new GameMap(baseLevel.map, baseLevel.structures),
       entryCoordinate,
       entryDirection,
       partyMemberIds,
@@ -306,6 +306,7 @@ function createCampaignTacticalLevel(
 
   return {
     map: baseLevel.map,
+    ...(baseLevel.structures === undefined ? {} : { structures: baseLevel.structures }),
     player: mage,
     units: [
       ...partyDefinitions.filter((member) => member.id !== mage.id),

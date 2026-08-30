@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import {
+  TacticalHexStructureType,
+  WallBlockSideMaterial,
+  WallBlockTopCapPresentation,
+} from "@/game/board/structure/TacticalHexStructure";
 import { Faction } from "@/game/faction/Faction";
 import { createGameSession } from "@/game/levels/createGameSession";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
@@ -6,6 +11,8 @@ import { MovementType, TerrainType } from "@/game/types";
 import { Unit, UnitTexture } from "@/game/unit/Unit";
 import { Player } from "@/game/unit/player/Player";
 import { TacticalAttribute } from "@/game/unit/tacticalAttributes/TacticalAttributes";
+
+const sessionWallStructureId = "session-wall";
 
 const level: LevelDefinition = {
   map: [
@@ -36,6 +43,15 @@ const level: LevelDefinition = {
       },
     },
   ],
+  structures: [{
+    id: sessionWallStructureId,
+    q: 2,
+    r: 0,
+    structure: {
+      type: TacticalHexStructureType.WallBlock,
+      sideMaterial: WallBlockSideMaterial.Stone,
+    },
+  }],
   player: {
     id: "player",
     position: { q: 0, r: 0 },
@@ -74,6 +90,15 @@ describe("createGameSession", () => {
     expect(enemy?.faction).toBe(Faction.Enemy);
     expect(enemy?.currentHp).toBe(enemy?.maxHp);
     expect(session.gameMap.getField(2, 0)?.getGroundLevel()).toBe(1);
+    expect(session.gameMap.getStructurePlacementById(sessionWallStructureId)).toEqual({
+      id: sessionWallStructureId,
+      coordinate: { q: 2, r: 0 },
+      structure: {
+        type: TacticalHexStructureType.WallBlock,
+        sideMaterial: WallBlockSideMaterial.Stone,
+        topCapPresentation: WallBlockTopCapPresentation.Dark,
+      },
+    });
   });
 
   it("rejects a level that assigns the player an unsupported faction", () => {

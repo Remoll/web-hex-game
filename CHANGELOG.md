@@ -12,6 +12,8 @@ All notable changes to this project are documented in this file.
   tactical entry and persistent party return.
 - Added a reciprocal Cobblestone Tower Upper Floor tactical-to-tactical stair
   route with persistent party transfer.
+- Added strict data-driven full-hex structure definitions with validated stable
+  placement ids for future tactical maps.
 
 ## 2026-08-29
 

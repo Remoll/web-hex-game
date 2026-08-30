@@ -34,6 +34,26 @@ areas intentionally have no fog, combat, AI, AP, or timeline simulation yet.
 The route's explicit tactical entry direction places the Mage on the endpoint,
 then places servants in a stable direction-relative neighbouring sequence.
 
+### Tactical hex structure data
+
+Level JSON may optionally declare full-hex structures through a top-level
+`structures` array. Legacy maps may omit the array. Every placement has one
+stable non-empty `id`, one `q`/`r` map coordinate, and one type-specific
+`structure`; ids and coordinates must each be unique and every coordinate must
+exist in that level's `map`.
+
+- `wall-block` requires `sideMaterial` of `stone` or `timber`; its top-cap
+  presentation is always the standard dark cap.
+- `door-block` requires `axis` of `q`, `r`, or `s`, plus `initialState` of
+  `open` or `closed`.
+- `window-block` requires only `axis` of `q`, `r`, or `s`.
+- `tree` accepts no material, axis, or door state.
+
+The loader validates these explicit values before a tactical session begins.
+The GameMap exposes immutable, deterministic lookups by coordinate and stable
+placement id. Structures currently define data only: they do not yet alter
+movement, line of sight, rendering, UI, or door state.
+
 The opposite highlighted Strategic entrance leads to the safe, enemy-free
 **Cobblestone Tower Ground Floor**. Its compact passable Cobblestone room uses
 the same party persistence and fresh 4-AP Mage entry as the existing encounter.

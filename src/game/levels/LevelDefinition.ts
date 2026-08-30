@@ -1,4 +1,5 @@
 import type { Faction } from "@/game/faction/Faction";
+import type { TacticalHexStructurePlacementDefinition } from "@/game/board/structure/TacticalHexStructure";
 import type { HexCoord, MapArray } from "@/game/types";
 import type { UnitTacticalRole, UnitTexture } from "@/game/unit/Unit";
 import type { MovementType } from "@/game/types";
@@ -23,6 +24,8 @@ export interface UnitDefinition {
 /** Serializable data needed to create one playable level. */
 export interface LevelDefinition {
   readonly map: MapArray;
+  /** Optional authored full-hex structures. Legacy levels may omit this array. */
+  readonly structures?: readonly TacticalHexStructurePlacementDefinition[];
   readonly player: UnitDefinition;
   readonly units: readonly UnitDefinition[];
 }

@@ -23,7 +23,7 @@ describe("loadLevel", () => {
 
     await expect(
       loadLevel("/levels/example.json", request as typeof fetch),
-    ).resolves.toBe(level);
+    ).resolves.toEqual(level);
     expect(request).toHaveBeenCalledWith("/levels/example.json");
   });
 

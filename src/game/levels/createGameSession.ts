@@ -49,7 +49,7 @@ export function createGameSession(level: LevelDefinition): LevelSession {
   );
 
   return {
-    session: new GameSession(new GameMap(level.map), [player, ...units]),
+    session: new GameSession(new GameMap(level.map, level.structures), [player, ...units]),
     player,
   };
 }

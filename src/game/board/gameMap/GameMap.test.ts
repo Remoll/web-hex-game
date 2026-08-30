@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import {
+  DoorBlockInitialState,
+  TacticalHexAxis,
+  TacticalHexStructureType,
+  WallBlockSideMaterial,
+  WallBlockTopCapPresentation,
+  type TacticalHexStructurePlacementDefinition,
+} from "@/game/board/structure/TacticalHexStructure";
+import {
   baseMovementActionPointCost,
   groundUphillAdditionalActionPointCost,
   groundUphillMovementActionPointCost,
@@ -14,6 +22,13 @@ const shallowWaterBaseTraversalCost = baseMovementActionPointCost
   * shallowWaterLeavingCostMultiplier;
 const shallowWaterUphillTraversalCost = shallowWaterBaseTraversalCost
   + groundUphillAdditionalActionPointCost;
+const wallStructureId = "wall-0-0";
+const doorStructureId = "door-1-0";
+const treeStructureId = "tree-1-0";
+const missingFieldStructureId = "missing-field";
+const unknownStructureId = "unknown-structure";
+const duplicateStructureCoordinate = { q: 0, r: 0 };
+const missingStructureCoordinate = { q: 9, r: 9 };
 
 const mapData: MapArray = [
   {
@@ -60,6 +75,96 @@ describe("GameMap", () => {
     expect(() => new GameMap([mapData[0], mapData[0]])).toThrow(
       "The map contains duplicate field coordinates at 0,0",
     );
+  });
+
+  it("indexes immutable structure projections by coordinate and stable placement id", () => {
+    const structureMap = new GameMap([
+      mapItem(0, 0, 0),
+      mapItem(1, 0, 0),
+    ], [
+      {
+        id: wallStructureId,
+        q: 0,
+        r: 0,
+        structure: {
+          type: TacticalHexStructureType.WallBlock,
+          sideMaterial: WallBlockSideMaterial.Stone,
+        },
+      },
+      {
+        id: doorStructureId,
+        q: 1,
+        r: 0,
+        structure: {
+          type: TacticalHexStructureType.DoorBlock,
+          axis: TacticalHexAxis.R,
+          initialState: DoorBlockInitialState.Closed,
+        },
+      },
+    ]);
+
+    const wallPlacement = structureMap.getStructurePlacementById(wallStructureId);
+    expect(structureMap.structureCount).toBe(2);
+    expect(structureMap.getStructure(0, 0)).toBe(wallPlacement?.structure);
+    expect(wallPlacement).toEqual({
+      id: wallStructureId,
+      coordinate: { q: 0, r: 0 },
+      structure: {
+        type: TacticalHexStructureType.WallBlock,
+        sideMaterial: WallBlockSideMaterial.Stone,
+        topCapPresentation: WallBlockTopCapPresentation.Dark,
+      },
+    });
+    expect(Object.isFrozen(wallPlacement)).toBe(true);
+    expect(Object.isFrozen(wallPlacement?.coordinate)).toBe(true);
+    expect(Object.isFrozen(wallPlacement?.structure)).toBe(true);
+
+    const registeredPlacementIds: string[] = [];
+    structureMap.forEachStructure((placement) => registeredPlacementIds.push(placement.id));
+    expect(registeredPlacementIds).toEqual([wallStructureId, doorStructureId]);
+    expect(structureMap.getStructurePlacement(9, 9)).toBeUndefined();
+    expect(structureMap.getStructurePlacementById(unknownStructureId)).toBeUndefined();
+
+    expect(structureMap.getTraversalCost(
+      { q: 0, r: 0 },
+      { q: 1, r: 0 },
+      MovementType.Ground,
+    )).toBe(baseMovementActionPointCost);
+  });
+
+  it("rejects duplicate and off-map structure placements predictably", () => {
+    const twoFieldMap = [mapItem(0, 0, 0), mapItem(1, 0, 0)];
+    const wallPlacement: TacticalHexStructurePlacementDefinition = {
+      id: wallStructureId,
+      ...duplicateStructureCoordinate,
+      structure: {
+        type: TacticalHexStructureType.WallBlock,
+        sideMaterial: WallBlockSideMaterial.Timber,
+      },
+    };
+
+    expect(() => new GameMap(twoFieldMap, [
+      wallPlacement,
+      {
+        id: treeStructureId,
+        ...duplicateStructureCoordinate,
+        structure: { type: TacticalHexStructureType.Tree },
+      },
+    ])).toThrow("The map contains duplicate tactical structures at 0,0");
+    expect(() => new GameMap(twoFieldMap, [
+      wallPlacement,
+      {
+        id: wallStructureId,
+        q: 1,
+        r: 0,
+        structure: { type: TacticalHexStructureType.Tree },
+      },
+    ])).toThrow(`The map contains duplicate tactical structure id ${wallStructureId}`);
+    expect(() => new GameMap(twoFieldMap, [{
+      id: missingFieldStructureId,
+      ...missingStructureCoordinate,
+      structure: { type: TacticalHexStructureType.Tree },
+    }])).toThrow("Tactical structure at 9,9 must reference an existing map field");
   });
 
   it("finds passable shortest paths and excludes occupied or impassable hexes", () => {
