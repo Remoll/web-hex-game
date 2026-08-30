@@ -3,6 +3,7 @@ import {
   createTacticalHexStructurePlacementProjection,
   isGroundMovementBlockingTacticalHexStructure,
   isSightBlockingTacticalHexStructure,
+  isSightTraversalBlockedByTacticalHexStructure,
   type TacticalHexStructurePlacementDefinition,
   type TacticalHexStructurePlacementProjection,
   type TacticalHexStructureProjection,
@@ -137,6 +138,20 @@ export class GameMap {
   isSightBlockedByStructure(coord: HexCoord): boolean {
     return isSightBlockingTacticalHexStructure(
       this.getStructure(coord.q, coord.r),
+    );
+  }
+
+  /** True when one authored structure blocks a directional sight transition. */
+  isSightTraversalBlockedByStructure(
+    entry: HexCoord,
+    through: HexCoord,
+    exit: HexCoord,
+  ): boolean {
+    return isSightTraversalBlockedByTacticalHexStructure(
+      this.getStructure(through.q, through.r),
+      entry,
+      through,
+      exit,
     );
   }
 

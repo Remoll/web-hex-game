@@ -53,6 +53,8 @@ const doorBlockedEnemyField = { q: 2, r: 0 };
 const doorBlockId = "session-door";
 const doorBlockedEnemyId = "door-blocked-enemy";
 const distantDoorField = { q: 2, r: 0 };
+const windowBlockId = "session-window";
+const windowBlockedEnemyId = "window-blocked-enemy";
 
 const mapData: MapArray = [
   { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass) },
@@ -334,6 +336,81 @@ describe("GameSession", () => {
     session.endMageTurn();
 
     expect(enemy.position).toEqual(doorField);
+  });
+
+  it("blocks Ground movement at a WindowBlock while applying its sight axis", () => {
+    const alignedMage = new Player(
+      "aligned-mage",
+      doorMageStart,
+      UnitTexture.PlayerIdle,
+      { viewRange: 3 },
+    );
+    const alignedEnemy = new Unit(
+      windowBlockedEnemyId,
+      doorBlockedEnemyField,
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const alignedSession = new GameSession(new GameMap(
+      createGrassMap([doorMageStart, doorField, doorBlockedEnemyField]),
+      [{
+        id: windowBlockId,
+        ...doorField,
+        structure: {
+          type: TacticalHexStructureType.WindowBlock,
+          axis: TacticalHexAxis.Q,
+        },
+      }],
+    ), [alignedMage, alignedEnemy]);
+
+    expect(alignedSession.getFieldVisibility(doorBlockedEnemyField)).toBe(
+      FieldVisibility.Visible,
+    );
+    alignedSession.clickHex(doorMageStart);
+    expect(alignedSession.getReachableHexes()).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ coord: doorField }),
+    ]));
+    expect(alignedSession.previewHex(doorField)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.OutOfRange,
+    });
+
+    const crossAxisMage = new Player(
+      "cross-axis-mage",
+      doorMageStart,
+      UnitTexture.PlayerIdle,
+      { viewRange: 3 },
+    );
+    const crossAxisEnemy = new Unit(
+      windowBlockedEnemyId,
+      doorBlockedEnemyField,
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const crossAxisSession = new GameSession(new GameMap(
+      createGrassMap([doorMageStart, doorField, doorBlockedEnemyField]),
+      [{
+        id: windowBlockId,
+        ...doorField,
+        structure: {
+          type: TacticalHexStructureType.WindowBlock,
+          axis: TacticalHexAxis.R,
+        },
+      }],
+    ), [crossAxisMage, crossAxisEnemy]);
+
+    expect(crossAxisSession.getFieldVisibility(doorBlockedEnemyField)).toBe(
+      FieldVisibility.Undiscovered,
+    );
+    expect(crossAxisSession.initiativeQueuePresentation.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          state: InitiativeQueueCardState.Unknown,
+          unitId: undefined,
+          canHighlight: false,
+        }),
+      ]),
+    );
   });
 
   it("derives Mage Shallow Water highlights including a legal uphill exit", () => {

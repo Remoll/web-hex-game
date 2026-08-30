@@ -67,4 +67,16 @@ export class TacticalDoorState {
     return doorBlockId !== undefined
       && this.getState(doorBlockId) === DoorBlockInitialState.Closed;
   }
+
+  isSightTraversalBlocked(
+    entry: HexCoord,
+    through: HexCoord,
+    exit: HexCoord,
+  ): boolean {
+    return this.gameMap.isSightTraversalBlockedByStructure(
+      entry,
+      through,
+      exit,
+    );
+  }
 }

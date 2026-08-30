@@ -323,6 +323,11 @@ export class GameSession {
     this.mageVisibility = new MageVisibility(
       this.gameMap,
       (coord) => this.tacticalDoorState.isSightBlocked(coord),
+      (entry, through, exit) => this.tacticalDoorState.isSightTraversalBlocked(
+        entry,
+        through,
+        exit,
+      ),
     );
     this.timeline = new EventTimeline(this.unitsById.values());
     this.resolveAutonomousActivations();
@@ -1559,6 +1564,8 @@ export class GameSession {
       isGroundEntryBlocked: (coord) =>
         this.tacticalDoorState.isGroundEntryBlocked(coord),
       isSightLineBlocked: (coord) => this.tacticalDoorState.isSightBlocked(coord),
+      isSightTraversalBlocked: (entry, through, exit) =>
+        this.tacticalDoorState.isSightTraversalBlocked(entry, through, exit),
       actorId: unit.id,
       mageId: this.mageId,
       remainingActionPoints,

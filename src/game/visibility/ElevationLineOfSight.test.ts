@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
 import {
-  DoorBlockInitialState,
   TacticalHexAxis,
   TacticalHexStructureType,
   WallBlockSideMaterial,
@@ -17,7 +16,6 @@ const solidStructureCoordinate = { q: 1, r: 0 };
 const targetBeyondSolidStructureCoordinate = { q: 2, r: 0 };
 const wallStructureId = "sight-wall";
 const treeStructureId = "sight-tree";
-const doorStructureId = "sight-door";
 const windowStructureId = "sight-window";
 
 describe("hasElevationLineOfSight", () => {
@@ -139,37 +137,35 @@ describe("hasElevationLineOfSight", () => {
     )).toBe(false);
   });
 
-  it("keeps sight through DoorBlocks and WindowBlocks until their later rules exist", () => {
-    const doorMap = new GameMap(createElevationMap([0, 0, 0]), [{
-      id: doorStructureId,
-      ...solidStructureCoordinate,
-      structure: {
-        type: TacticalHexStructureType.DoorBlock,
-        axis: TacticalHexAxis.R,
-        initialState: DoorBlockInitialState.Closed,
-      },
-    }]);
-    const windowMap = new GameMap(createElevationMap([0, 0, 0]), [{
+  it("permits aligned WindowBlock sight while blocking a cross-axis sight line", () => {
+    const alignedWindowMap = new GameMap(createElevationMap([0, 0, 0]), [{
       id: windowStructureId,
       ...solidStructureCoordinate,
       structure: {
         type: TacticalHexStructureType.WindowBlock,
-        axis: TacticalHexAxis.S,
+        axis: TacticalHexAxis.Q,
+      },
+    }]);
+    const crossAxisWindowMap = new GameMap(createElevationMap([0, 0, 0]), [{
+      id: windowStructureId,
+      ...solidStructureCoordinate,
+      structure: {
+        type: TacticalHexStructureType.WindowBlock,
+        axis: TacticalHexAxis.R,
       },
     }]);
 
-    expect(doorMap.isSightBlockedByStructure(solidStructureCoordinate)).toBe(false);
-    expect(windowMap.isSightBlockedByStructure(solidStructureCoordinate)).toBe(false);
+    expect(alignedWindowMap.isSightBlockedByStructure(solidStructureCoordinate)).toBe(false);
     expect(hasElevationLineOfSight(
-      doorMap,
+      alignedWindowMap,
       observerCoordinate,
       targetBeyondSolidStructureCoordinate,
     )).toBe(true);
     expect(hasElevationLineOfSight(
-      windowMap,
+      crossAxisWindowMap,
       observerCoordinate,
       targetBeyondSolidStructureCoordinate,
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it("blocks a target only when every equally direct sight line crosses a solid structure", () => {

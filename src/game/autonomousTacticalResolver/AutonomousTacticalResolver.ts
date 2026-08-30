@@ -23,6 +23,7 @@ import { MovementType, type HexCoord } from "@/game/types";
 import {
   hasElevationLineOfSight,
   type IsSightLineBlocked,
+  type IsSightTraversalBlocked,
 } from "@/game/visibility/ElevationLineOfSight";
 
 const adjacentHexDistance = 1;
@@ -59,6 +60,8 @@ export interface AutonomousTacticalResolverInput {
   readonly isGroundEntryBlocked?: (coord: HexCoord) => boolean;
   /** Session-owned sight blockers such as closed DoorBlocks. */
   readonly isSightLineBlocked?: IsSightLineBlocked;
+  /** Session-owned directional sight rules such as WindowBlocks. */
+  readonly isSightTraversalBlocked?: IsSightTraversalBlocked;
   readonly actorId: string;
   readonly mageId: string;
   readonly remainingActionPoints: number;
@@ -468,6 +471,7 @@ function isPerceivedHostile(
       observer.position,
       candidate.position,
       input.isSightLineBlocked,
+      input.isSightTraversalBlocked,
     );
 }
 

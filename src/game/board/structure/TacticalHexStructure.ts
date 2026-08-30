@@ -1,3 +1,4 @@
+import { getHexDistance } from "@/game/board/hexCoord/HexCoord";
 import type { HexCoord } from "@/game/types";
 
 /** Stable serialized identifiers for one full-hex tactical structure. */
@@ -21,7 +22,7 @@ export enum TacticalHexAxis {
   S = "s",
 }
 
-/** Initial data only; Door state changes belong to a later gameplay story. */
+/** Serialized initial value; TacticalDoorState owns its mutable runtime state. */
 export enum DoorBlockInitialState {
   Open = "open",
   Closed = "closed",
@@ -102,6 +103,8 @@ const windowBlockPropertyNames = [
   orientedStructureAxisPropertyName,
 ] as const;
 const treePropertyNames = [structureTypePropertyName] as const;
+const adjacentHexDistance = 1;
+const opposingHexCoordinateFactor = 2;
 
 /**
  * Validates and clones one JSON-safe structure declaration. The returned
@@ -196,19 +199,63 @@ export function createTacticalHexStructurePlacementProjection(
   });
 }
 
-/** WallBlocks and Trees are the current full-hex solid cover types. */
+/** WallBlocks, WindowBlocks, and Trees prevent Ground entry. */
 export function isGroundMovementBlockingTacticalHexStructure(
+  structure: TacticalHexStructureProjection | undefined,
+): boolean {
+  return structure?.type === TacticalHexStructureType.WallBlock
+    || structure?.type === TacticalHexStructureType.WindowBlock
+    || structure?.type === TacticalHexStructureType.Tree;
+}
+
+/** Windows are directional; solid full-hex types block sight on every axis. */
+export function isSightBlockingTacticalHexStructure(
   structure: TacticalHexStructureProjection | undefined,
 ): boolean {
   return structure?.type === TacticalHexStructureType.WallBlock
     || structure?.type === TacticalHexStructureType.Tree;
 }
 
-/** Door and Window behavior is intentionally deferred and therefore transparent. */
-export function isSightBlockingTacticalHexStructure(
+/**
+ * True when a window blocks one sight transition through its own hex. A window
+ * only admits a ray that enters and exits through its two opposite faces on
+ * its authored full-hex axis.
+ */
+export function isSightTraversalBlockedByTacticalHexStructure(
   structure: TacticalHexStructureProjection | undefined,
+  entry: HexCoord,
+  through: HexCoord,
+  exit: HexCoord,
 ): boolean {
-  return isGroundMovementBlockingTacticalHexStructure(structure);
+  return structure?.type === TacticalHexStructureType.WindowBlock
+    && !isTacticalHexAxisTraversal(structure.axis, entry, through, exit);
+}
+
+/**
+ * Verifies an adjacent, opposite-face transition against one authored hex
+ * axis. It is shared by visibility and later ritual line-of-effect rules.
+ */
+export function isTacticalHexAxisTraversal(
+  axis: TacticalHexAxis,
+  entry: HexCoord,
+  through: HexCoord,
+  exit: HexCoord,
+): boolean {
+  if (getHexDistance(entry, through) !== adjacentHexDistance
+    || getHexDistance(through, exit) !== adjacentHexDistance
+    || entry.q + exit.q !== through.q * opposingHexCoordinateFactor
+    || entry.r + exit.r !== through.r * opposingHexCoordinateFactor) {
+    return false;
+  }
+
+  switch (axis) {
+    case TacticalHexAxis.Q:
+      return entry.r === through.r;
+    case TacticalHexAxis.R:
+      return entry.q === through.q;
+    case TacticalHexAxis.S:
+      return entry.q + entry.r === through.q + through.r;
+  }
 }
 
 function requireRecord(value: unknown, context: string): Readonly<Record<string, unknown>> {

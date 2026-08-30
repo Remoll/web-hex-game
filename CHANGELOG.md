@@ -18,6 +18,7 @@ All notable changes to this project are documented in this file.
   preserving the deferred DoorBlock and WindowBlock behaviour.
 - Added Mage-controlled adjacent DoorBlock toggling for 1 AP, with runtime
   closed-door movement and sight blocking.
+- Added WindowBlock Ground-movement blocking and axis-aligned tactical sight.
 
 ## 2026-08-29
 

@@ -178,7 +178,7 @@ describe("GameMap", () => {
     }])).toThrow("Tactical structure at 9,9 must reference an existing map field");
   });
 
-  it("blocks Ground entry and pathfinding through WallBlocks and Trees only", () => {
+  it("blocks Ground entry and pathfinding through WallBlocks, WindowBlocks, and Trees", () => {
     const structureMap = new GameMap([
       mapItem(movementOrigin.q, movementOrigin.r, 0),
       mapItem(wallBlockerCoordinate.q, wallBlockerCoordinate.r, 1),
@@ -221,7 +221,7 @@ describe("GameMap", () => {
 
     expect(structureMap.isGroundEntryBlockedByStructure(wallBlockerCoordinate)).toBe(true);
     expect(structureMap.isGroundEntryBlockedByStructure(treeBlockerCoordinate)).toBe(true);
-    expect(structureMap.isGroundEntryBlockedByStructure(windowCoordinate)).toBe(false);
+    expect(structureMap.isGroundEntryBlockedByStructure(windowCoordinate)).toBe(true);
     expect(structureMap.isGroundEntryBlockedByStructure(doorCoordinate)).toBe(false);
     expect(structureMap.getTraversalCost(
       movementOrigin,
@@ -242,7 +242,7 @@ describe("GameMap", () => {
       movementOrigin,
       windowCoordinate,
       MovementType.Ground,
-    )).toBe(baseMovementActionPointCost);
+    )).toBeUndefined();
     expect(structureMap.getTraversalCost(
       movementOrigin,
       doorCoordinate,
@@ -262,7 +262,7 @@ describe("GameMap", () => {
     );
     expect(reachablePaths.has(getHexCoordKey(wallBlockerCoordinate))).toBe(false);
     expect(reachablePaths.has(getHexCoordKey(treeBlockerCoordinate))).toBe(false);
-    expect(reachablePaths.has(getHexCoordKey(windowCoordinate))).toBe(true);
+    expect(reachablePaths.has(getHexCoordKey(windowCoordinate))).toBe(false);
     expect(reachablePaths.has(getHexCoordKey(doorCoordinate))).toBe(true);
   });
 
