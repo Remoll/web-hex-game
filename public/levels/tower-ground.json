@@ -1,0 +1,92 @@
+{
+  "map": [
+    {
+      "q": -1,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "cobblestone",
+        "allowedMovements": { "ground": true, "flying": true },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": -1,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "cobblestone",
+        "allowedMovements": { "ground": true, "flying": true },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "cobblestone",
+        "allowedMovements": { "ground": true, "flying": true },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "cobblestone",
+        "allowedMovements": { "ground": true, "flying": true },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 0,
+      "r": 1,
+      "fieldAttrs": {
+        "terrainType": "cobblestone",
+        "allowedMovements": { "ground": true, "flying": true },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": -1,
+      "fieldAttrs": {
+        "terrainType": "cobblestone",
+        "allowedMovements": { "ground": true, "flying": true },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    },
+    {
+      "q": 1,
+      "r": 0,
+      "fieldAttrs": {
+        "terrainType": "cobblestone",
+        "allowedMovements": { "ground": true, "flying": true },
+        "groundLevel": 0,
+        "leavingCostMultiplier": 1
+      }
+    }
+  ],
+  "player": {
+    "id": "player",
+    "position": { "q": 0, "r": 0 },
+    "texture": "player-idle",
+    "faction": "player",
+    "movementType": "ground",
+    "movementRange": 3,
+    "attackPower": 20,
+    "tacticalRole": "mage",
+    "viewRange": 4,
+    "attributes": {
+      "might": 12,
+      "finesse": 12,
+      "vitality": 12,
+      "insight": 12
+    }
+  },
+  "units": []
+}

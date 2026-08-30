@@ -14,14 +14,12 @@ import {
 } from "@/game/gameSession/GameSession";
 import type { LevelDefinition, UnitDefinition } from "@/game/levels/LevelDefinition";
 import { createGameSession } from "@/game/levels/createGameSession";
-import type { ServantStrategy } from "@/game/unit/servantStrategy/ServantStrategy";
 import type { HexCoord } from "@/game/types";
 import { StrategicSession } from "@/game/strategicSession/StrategicSession";
 import type { MageDiscoverySnapshot } from "@/game/visibility/MageVisibility";
 
 export interface PersistentPartyMember {
   readonly definition: UnitDefinition;
-  readonly strategy: ServantStrategy | undefined;
 }
 
 interface TacticalAreaRuntimeSnapshot {
@@ -146,7 +144,6 @@ export class CampaignSession {
       this.campaignPartyMemberIds.add(member.id);
       this.partyMembersById.set(member.id, {
         definition: cloneUnitDefinition(member),
-        strategy: undefined,
       });
     }
   }
@@ -217,11 +214,6 @@ export class CampaignSession {
       localUnits,
     );
     const { session, player } = createGameSession(level);
-    session.restorePersistentPlayerServantStrategies(
-      partyMembers.flatMap((member) => member.strategy
-        ? [{ servantId: member.definition.id, strategy: member.strategy }]
-        : []),
-    );
     if (runtimeSnapshot) {
       session.restoreMageDiscoverySnapshot(runtimeSnapshot.mageDiscovery);
     }
@@ -245,12 +237,6 @@ export class CampaignSession {
         })),
       mageDiscovery: area.session.getMageDiscoverySnapshot(),
     });
-    const strategyByServantId = new Map<string, ServantStrategy>(
-      area.session.getPersistentPlayerServantStrategies().map((state) => [
-        state.servantId,
-        state.strategy,
-      ]),
-    );
 
     for (const [memberId, member] of this.partyMembersById) {
       const currentUnit = area.session.getUnit(memberId);
@@ -264,7 +250,6 @@ export class CampaignSession {
           position: currentUnit.position,
           currentHp: currentUnit.currentHp,
         },
-        strategy: strategyByServantId.get(memberId),
       });
     }
 
@@ -332,7 +317,6 @@ function createCampaignTacticalLevel(
 function clonePartyMember(member: PersistentPartyMember): PersistentPartyMember {
   return {
     definition: cloneUnitDefinition(member.definition),
-    strategy: member.strategy,
   };
 }
 

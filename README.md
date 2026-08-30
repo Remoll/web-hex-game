@@ -23,14 +23,23 @@ selection, movement, and attack feedback, and its **Return** control remains
 disabled until the Mage reaches it. Transitions briefly lock input and respect
 `prefers-reduced-motion`.
 
-The campaign owns the Mage and living Player-servant state, including HP and
-servant orders. Leaving and re-entering the existing tactical area also restores
-that area's local unit positions, HP, defeated-unit remains, and discovered fog;
-only its selection, activation AP, timeline, and presentation queue restart.
+The campaign owns the Mage and living Player-servant state, including HP.
+Leaving and re-entering the existing tactical area also restores that area's
+local unit positions, HP, defeated-unit remains, and discovered fog. Servant
+orders are map-local and clear whenever the party leaves a tactical area, so
+servants use their default autonomous behaviour after arriving elsewhere. Only
+selection, activation AP, timeline, and presentation queue restart.
 The tactical destination always begins with the Mage ready at 4 AP. Strategic
 areas intentionally have no fog, combat, AI, AP, or timeline simulation yet.
 The route's explicit tactical entry direction places the Mage on the endpoint,
 then places servants in a stable direction-relative neighbouring sequence.
+
+The opposite highlighted Strategic entrance leads to the safe, enemy-free
+**Cobblestone Tower Ground Floor**. Its compact passable Cobblestone room uses
+the same party persistence and fresh 4-AP Mage entry as the existing encounter;
+the highlighted return exit leads back to the tower entrance. The authored
+floor layout is stored separately in `public/levels/tower-ground.json`. Upper
+tower floors and tower-specific gameplay are not part of this prototype yet.
 
 ## Tactical prototype controls
 

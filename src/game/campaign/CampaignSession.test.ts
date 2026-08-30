@@ -10,6 +10,7 @@ import { CampaignSession } from "@/game/campaign/CampaignSession";
 import {
   createExampleCampaign,
   existingTacticalAreaId,
+  strategicTowerEntranceCoordinate,
   strategicMapRadius,
 } from "@/game/campaign/createExampleCampaign";
 import { actionPointsPerActivation } from "@/game/eventTimeline/EventTimeline";
@@ -20,6 +21,9 @@ import { MovementType, TerrainType, type MapArray } from "@/game/types";
 
 const exampleLevelPath = fileURLToPath(
   new URL("../../../public/levels/example.json", import.meta.url),
+);
+const towerGroundLevelPath = fileURLToPath(
+  new URL("../../../public/levels/tower-ground.json", import.meta.url),
 );
 const partyDamage = 20;
 const localEnemyDamage = 20;
@@ -33,14 +37,19 @@ const sourceBlockedRouteCoordinate = { q: 1, r: 0 };
 const blockedEntryCoordinate = { q: 0, r: 0 };
 
 async function createCampaignSession(): Promise<CampaignSession> {
-  const tacticalLevel = JSON.parse(
-    await readFile(exampleLevelPath, "utf8"),
-  ) as LevelDefinition;
-  return new CampaignSession(createExampleCampaign(tacticalLevel));
+  const [tacticalLevel, towerGroundLevel] = await Promise.all([
+    loadLevelFixture(exampleLevelPath),
+    loadLevelFixture(towerGroundLevelPath),
+  ]);
+  return new CampaignSession(createExampleCampaign(tacticalLevel, towerGroundLevel));
+}
+
+async function loadLevelFixture(levelPath: string): Promise<LevelDefinition> {
+  return JSON.parse(await readFile(levelPath, "utf8")) as LevelDefinition;
 }
 
 describe("CampaignSession", () => {
-  it("round-trips a living party and restores local tactical state into a fresh Mage activation", async () => {
+  it("round-trips a living party and restores local tactical state without map-local orders", async () => {
     const campaign = await createCampaignSession();
     const strategicArea = campaign.activeArea;
     if (strategicArea.kind !== CampaignAreaKind.Strategic) {
@@ -49,6 +58,7 @@ describe("CampaignSession", () => {
     expect(strategicArea.session.gameMap.radiusInHex).toBe(strategicMapRadius);
     expect(campaign.getOutboundRoutes().map((route) => route.from.coordinate)).toEqual([
       { q: strategicMapRadius, r: 0 },
+      strategicTowerEntranceCoordinate,
     ]);
 
     for (let step = 0; step < strategicStepsToExistingTacticalMap; step += 1) {
@@ -116,9 +126,7 @@ describe("CampaignSession", () => {
       survivingServant.maxHp - partyDamage,
     );
     expect(restoredTacticalArea.session.getUnit("friendly-2")).toBeUndefined();
-    expect(restoredTacticalArea.session.getServantStrategyType("friendly-1")).toBe(
-      ServantStrategyType.Hold,
-    );
+    expect(restoredTacticalArea.session.getServantStrategyType("friendly-1")).toBeUndefined();
     expect(restoredTacticalArea.session.getUnit("enemy-1")?.currentHp).toBe(
       localEnemy.maxHp - localEnemyDamage,
     );

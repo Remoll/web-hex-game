@@ -8,6 +8,8 @@ All notable changes to this project are documented in this file.
   the existing tactical encounter, with explicit accessible entry, reduced-
   motion-safe transition locking, deterministic party entry formation, and
   per-area tactical/fog persistence.
+- Added a reciprocal Cobblestone Tower Ground Floor route with a safe passable
+  tactical entry and persistent party return.
 
 ## 2026-08-29
 
