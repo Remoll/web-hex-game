@@ -196,6 +196,21 @@ export function createTacticalHexStructurePlacementProjection(
   });
 }
 
+/** WallBlocks and Trees are the current full-hex solid cover types. */
+export function isGroundMovementBlockingTacticalHexStructure(
+  structure: TacticalHexStructureProjection | undefined,
+): boolean {
+  return structure?.type === TacticalHexStructureType.WallBlock
+    || structure?.type === TacticalHexStructureType.Tree;
+}
+
+/** Door and Window behavior is intentionally deferred and therefore transparent. */
+export function isSightBlockingTacticalHexStructure(
+  structure: TacticalHexStructureProjection | undefined,
+): boolean {
+  return isGroundMovementBlockingTacticalHexStructure(structure);
+}
+
 function requireRecord(value: unknown, context: string): Readonly<Record<string, unknown>> {
   if (!isRecord(value)) {
     throw new Error(`${context} must be an object`);

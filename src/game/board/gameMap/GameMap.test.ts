@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
+import { getHexCoordKey } from "@/game/board/hexCoord/HexCoord";
 import {
   DoorBlockInitialState,
   TacticalHexAxis,
@@ -29,6 +30,16 @@ const missingFieldStructureId = "missing-field";
 const unknownStructureId = "unknown-structure";
 const duplicateStructureCoordinate = { q: 0, r: 0 };
 const missingStructureCoordinate = { q: 9, r: 9 };
+const movementOrigin = { q: 0, r: 0 };
+const wallBlockerCoordinate = { q: 1, r: 0 };
+const treeBlockerCoordinate = { q: 0, r: 1 };
+const windowCoordinate = { q: -1, r: 0 };
+const doorCoordinate = { q: 0, r: -1 };
+const fieldBeyondWall = { q: 2, r: 0 };
+const movementWallStructureId = "movement-wall";
+const movementTreeStructureId = "movement-tree";
+const movementWindowStructureId = "movement-window";
+const movementDoorStructureId = "movement-door";
 
 const mapData: MapArray = [
   {
@@ -165,6 +176,94 @@ describe("GameMap", () => {
       ...missingStructureCoordinate,
       structure: { type: TacticalHexStructureType.Tree },
     }])).toThrow("Tactical structure at 9,9 must reference an existing map field");
+  });
+
+  it("blocks Ground entry and pathfinding through WallBlocks and Trees only", () => {
+    const structureMap = new GameMap([
+      mapItem(movementOrigin.q, movementOrigin.r, 0),
+      mapItem(wallBlockerCoordinate.q, wallBlockerCoordinate.r, 1),
+      mapItem(fieldBeyondWall.q, fieldBeyondWall.r, 1),
+      mapItem(treeBlockerCoordinate.q, treeBlockerCoordinate.r, 1),
+      mapItem(windowCoordinate.q, windowCoordinate.r, 0),
+      mapItem(doorCoordinate.q, doorCoordinate.r, 0),
+    ], [
+      {
+        id: movementWallStructureId,
+        ...wallBlockerCoordinate,
+        structure: {
+          type: TacticalHexStructureType.WallBlock,
+          sideMaterial: WallBlockSideMaterial.Stone,
+        },
+      },
+      {
+        id: movementTreeStructureId,
+        ...treeBlockerCoordinate,
+        structure: { type: TacticalHexStructureType.Tree },
+      },
+      {
+        id: movementWindowStructureId,
+        ...windowCoordinate,
+        structure: {
+          type: TacticalHexStructureType.WindowBlock,
+          axis: TacticalHexAxis.Q,
+        },
+      },
+      {
+        id: movementDoorStructureId,
+        ...doorCoordinate,
+        structure: {
+          type: TacticalHexStructureType.DoorBlock,
+          axis: TacticalHexAxis.S,
+          initialState: DoorBlockInitialState.Closed,
+        },
+      },
+    ]);
+
+    expect(structureMap.isGroundEntryBlockedByStructure(wallBlockerCoordinate)).toBe(true);
+    expect(structureMap.isGroundEntryBlockedByStructure(treeBlockerCoordinate)).toBe(true);
+    expect(structureMap.isGroundEntryBlockedByStructure(windowCoordinate)).toBe(false);
+    expect(structureMap.isGroundEntryBlockedByStructure(doorCoordinate)).toBe(false);
+    expect(structureMap.getTraversalCost(
+      movementOrigin,
+      wallBlockerCoordinate,
+      MovementType.Ground,
+    )).toBeUndefined();
+    expect(structureMap.getTraversalCost(
+      movementOrigin,
+      treeBlockerCoordinate,
+      MovementType.Ground,
+    )).toBeUndefined();
+    expect(structureMap.getTraversalCost(
+      movementOrigin,
+      wallBlockerCoordinate,
+      MovementType.Flying,
+    )).toBe(baseMovementActionPointCost);
+    expect(structureMap.getTraversalCost(
+      movementOrigin,
+      windowCoordinate,
+      MovementType.Ground,
+    )).toBe(baseMovementActionPointCost);
+    expect(structureMap.getTraversalCost(
+      movementOrigin,
+      doorCoordinate,
+      MovementType.Ground,
+    )).toBe(baseMovementActionPointCost);
+    expect(structureMap.findShortestPath(
+      movementOrigin,
+      fieldBeyondWall,
+      MovementType.Ground,
+      groundUphillMovementActionPointCost,
+    )).toBeUndefined();
+
+    const reachablePaths = structureMap.getReachablePaths(
+      movementOrigin,
+      MovementType.Ground,
+      groundUphillMovementActionPointCost,
+    );
+    expect(reachablePaths.has(getHexCoordKey(wallBlockerCoordinate))).toBe(false);
+    expect(reachablePaths.has(getHexCoordKey(treeBlockerCoordinate))).toBe(false);
+    expect(reachablePaths.has(getHexCoordKey(windowCoordinate))).toBe(true);
+    expect(reachablePaths.has(getHexCoordKey(doorCoordinate))).toBe(true);
   });
 
   it("finds passable shortest paths and excludes occupied or impassable hexes", () => {

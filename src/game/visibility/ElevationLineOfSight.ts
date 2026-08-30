@@ -11,12 +11,12 @@ export const steepElevationVisionBlockerDifference = 2;
 const sightLineDistanceDecrement = 1;
 
 /**
- * Evaluates height-aware tactical sight without consulting presentation state.
- * A target is visible when at least one shortest hex line is unblocked. This
- * prevents a blocker on one of two equally direct neighbouring lines from
- * extending its shadow across the other line. The target field is deliberately
- * excluded from blocker checks: it is visible itself, while an elevated
- * intervening field hides cells beyond it.
+ * Evaluates elevation- and structure-aware tactical sight without consulting
+ * presentation state. A target is visible when at least one shortest hex line
+ * is unblocked. This prevents a blocker on one of two equally direct
+ * neighbouring lines from extending its shadow across the other line. The
+ * target field is deliberately excluded from blocker checks: it is visible
+ * itself, while an elevated or solid intervening field hides cells beyond it.
  */
 export function hasElevationLineOfSight(
   gameMap: GameMap,
@@ -74,7 +74,9 @@ function hasUnblockedShortestSightLine(
     }
 
     const nextField = gameMap.getField(next.q, next.r);
-    if (!nextField || isSteepVisionBlocker(nextField.getGroundLevel(), observerGroundLevel)) {
+    if (!nextField
+      || gameMap.isSightBlockedByStructure(next)
+      || isSteepVisionBlocker(nextField.getGroundLevel(), observerGroundLevel)) {
       continue;
     }
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
+import {
+  TacticalHexStructureType,
+  WallBlockSideMaterial,
+} from "@/game/board/structure/TacticalHexStructure";
 import { Faction } from "@/game/faction/Faction";
 import {
   GameActionPreviewType,
@@ -36,6 +40,11 @@ const standardLeavingCostMultiplier = 1;
 const shallowWaterUphillActionPointCost = TacticalActionPointCost.Move
   * shallowWaterLeavingCostMultiplier
   + groundUphillAdditionalActionPointCost;
+const structureBlockingMageStart = { q: 0, r: 0 };
+const structureBlockingField = { q: 1, r: 0 };
+const structureBlockedEnemyField = { q: 2, r: 0 };
+const structureBlockingWallId = "session-blocking-wall";
+const structureBlockedEnemyId = "structure-blocked-enemy";
 
 const mapData: MapArray = [
   { q: 0, r: 0, fieldAttrs: field(TerrainType.Grass) },
@@ -110,6 +119,65 @@ function createSession(): {
 }
 
 describe("GameSession", () => {
+  it("keeps Ground previews and fog-safe unit projections behind a WallBlock unavailable", () => {
+    const mage = new Player(
+      "mage",
+      structureBlockingMageStart,
+      UnitTexture.PlayerIdle,
+      { viewRange: 3 },
+    );
+    const hiddenEnemy = new Unit(
+      structureBlockedEnemyId,
+      structureBlockedEnemyField,
+      UnitTexture.EnemyIdle,
+      { faction: Faction.Enemy },
+    );
+    const session = new GameSession(new GameMap(
+      createGrassMap([
+        structureBlockingMageStart,
+        structureBlockingField,
+        structureBlockedEnemyField,
+      ]),
+      [{
+        id: structureBlockingWallId,
+        ...structureBlockingField,
+        structure: {
+          type: TacticalHexStructureType.WallBlock,
+          sideMaterial: WallBlockSideMaterial.Stone,
+        },
+      }],
+    ), [mage, hiddenEnemy]);
+
+    expect(session.clickHex(structureBlockingMageStart)).toEqual({
+      type: GameActionType.Selected,
+      unitId: mage.id,
+    });
+    expect(session.getReachableHexes()).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ coord: structureBlockingField }),
+      expect.objectContaining({ coord: structureBlockedEnemyField }),
+    ]));
+    expect(session.previewHex(structureBlockingField)).toEqual({
+      type: GameActionPreviewType.OutOfRange,
+      reason: GameActionRejectionReason.OutOfRange,
+    });
+    expect(session.clickHex(structureBlockingField)).toEqual({
+      type: GameActionType.Ignored,
+      reason: GameActionRejectionReason.OutOfRange,
+    });
+    expect(mage.position).toEqual(structureBlockingMageStart);
+    expect(session.getFieldVisibility(structureBlockedEnemyField)).toBe(
+      FieldVisibility.Undiscovered,
+    );
+    expect(session.isUnitVisible(hiddenEnemy)).toBe(false);
+    expect(session.initiativeQueuePresentation.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        state: InitiativeQueueCardState.Unknown,
+        unitId: undefined,
+        canHighlight: false,
+      }),
+    ]));
+  });
+
   it("derives Mage Shallow Water highlights including a legal uphill exit", () => {
     const mageStart = { q: 0, r: 0 };
     const shallowWaterHex = { q: 1, r: 0 };

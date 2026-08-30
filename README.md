@@ -51,8 +51,13 @@ exist in that level's `map`.
 
 The loader validates these explicit values before a tactical session begins.
 The GameMap exposes immutable, deterministic lookups by coordinate and stable
-placement id. Structures currently define data only: they do not yet alter
-movement, line of sight, rendering, UI, or door state.
+placement id. `wall-block` and `tree` prevent Ground entry and block sight
+beyond their own field; the solid field itself remains visible. The same rule
+therefore applies to Mage movement previews, pathfinding, autonomous Ground
+movement, and fog of war. Flying remains unaffected. `door-block` and
+`window-block` retain no collision or sight effect until their dedicated
+interaction and axis-sight stories. No structure renderer or door UI exists
+yet.
 
 The opposite highlighted Strategic entrance leads to the safe, enemy-free
 **Cobblestone Tower Ground Floor**. Its compact passable Cobblestone room uses

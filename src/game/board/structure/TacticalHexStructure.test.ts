@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   createTacticalHexStructureProjection,
   DoorBlockInitialState,
+  isGroundMovementBlockingTacticalHexStructure,
+  isSightBlockingTacticalHexStructure,
   parseTacticalHexStructureDefinition,
   TacticalHexAxis,
   TacticalHexStructureType,
@@ -57,6 +59,12 @@ describe("TacticalHexStructure", () => {
     expect(Object.isFrozen(door)).toBe(true);
     expect(Object.isFrozen(window)).toBe(true);
     expect(Object.isFrozen(tree)).toBe(true);
+    expect(isGroundMovementBlockingTacticalHexStructure(wall)).toBe(true);
+    expect(isGroundMovementBlockingTacticalHexStructure(tree)).toBe(true);
+    expect(isSightBlockingTacticalHexStructure(wall)).toBe(true);
+    expect(isSightBlockingTacticalHexStructure(tree)).toBe(true);
+    expect(isGroundMovementBlockingTacticalHexStructure(door)).toBe(false);
+    expect(isSightBlockingTacticalHexStructure(window)).toBe(false);
   });
 
   it("rejects missing, unsupported, and incompatible type-specific data", () => {

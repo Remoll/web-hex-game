@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "@/game/board/gameMap/GameMap";
+import {
+  DoorBlockInitialState,
+  TacticalHexAxis,
+  TacticalHexStructureType,
+  WallBlockSideMaterial,
+} from "@/game/board/structure/TacticalHexStructure";
 import { MovementType, TerrainType, type MapArray } from "@/game/types";
 import {
   hasElevationLineOfSight,
   steepElevationVisionBlockerDifference,
 } from "@/game/visibility/ElevationLineOfSight";
+
+const observerCoordinate = { q: 0, r: 0 };
+const solidStructureCoordinate = { q: 1, r: 0 };
+const targetBeyondSolidStructureCoordinate = { q: 2, r: 0 };
+const wallStructureId = "sight-wall";
+const treeStructureId = "sight-tree";
+const doorStructureId = "sight-door";
+const windowStructureId = "sight-window";
 
 describe("hasElevationLineOfSight", () => {
   it("keeps an elevated intervening field visible but blocks fields beyond it", () => {
@@ -89,6 +103,103 @@ describe("hasElevationLineOfSight", () => {
       map,
       { q: 0, r: 0 },
       { q: 2, r: 0 },
+    )).toBe(false);
+  });
+
+  it("keeps a solid structure field visible but blocks sight beyond WallBlocks and Trees", () => {
+    const wallMap = new GameMap(createElevationMap([0, 0, 0]), [{
+      id: wallStructureId,
+      ...solidStructureCoordinate,
+      structure: {
+        type: TacticalHexStructureType.WallBlock,
+        sideMaterial: WallBlockSideMaterial.Timber,
+      },
+    }]);
+    const treeMap = new GameMap(createElevationMap([0, 1, 0]), [{
+      id: treeStructureId,
+      ...solidStructureCoordinate,
+      structure: { type: TacticalHexStructureType.Tree },
+    }]);
+
+    expect(wallMap.isSightBlockedByStructure(solidStructureCoordinate)).toBe(true);
+    expect(hasElevationLineOfSight(
+      wallMap,
+      observerCoordinate,
+      solidStructureCoordinate,
+    )).toBe(true);
+    expect(hasElevationLineOfSight(
+      wallMap,
+      observerCoordinate,
+      targetBeyondSolidStructureCoordinate,
+    )).toBe(false);
+    expect(hasElevationLineOfSight(
+      treeMap,
+      observerCoordinate,
+      targetBeyondSolidStructureCoordinate,
+    )).toBe(false);
+  });
+
+  it("keeps sight through DoorBlocks and WindowBlocks until their later rules exist", () => {
+    const doorMap = new GameMap(createElevationMap([0, 0, 0]), [{
+      id: doorStructureId,
+      ...solidStructureCoordinate,
+      structure: {
+        type: TacticalHexStructureType.DoorBlock,
+        axis: TacticalHexAxis.R,
+        initialState: DoorBlockInitialState.Closed,
+      },
+    }]);
+    const windowMap = new GameMap(createElevationMap([0, 0, 0]), [{
+      id: windowStructureId,
+      ...solidStructureCoordinate,
+      structure: {
+        type: TacticalHexStructureType.WindowBlock,
+        axis: TacticalHexAxis.S,
+      },
+    }]);
+
+    expect(doorMap.isSightBlockedByStructure(solidStructureCoordinate)).toBe(false);
+    expect(windowMap.isSightBlockedByStructure(solidStructureCoordinate)).toBe(false);
+    expect(hasElevationLineOfSight(
+      doorMap,
+      observerCoordinate,
+      targetBeyondSolidStructureCoordinate,
+    )).toBe(true);
+    expect(hasElevationLineOfSight(
+      windowMap,
+      observerCoordinate,
+      targetBeyondSolidStructureCoordinate,
+    )).toBe(true);
+  });
+
+  it("blocks a target only when every equally direct sight line crosses a solid structure", () => {
+    const map = new GameMap([
+      mapItem(0, 0, 0),
+      mapItem(1, 0, 0),
+      mapItem(0, 1, 0),
+      mapItem(1, 1, 0),
+    ], [
+      {
+        id: wallStructureId,
+        q: 1,
+        r: 0,
+        structure: {
+          type: TacticalHexStructureType.WallBlock,
+          sideMaterial: WallBlockSideMaterial.Stone,
+        },
+      },
+      {
+        id: treeStructureId,
+        q: 0,
+        r: 1,
+        structure: { type: TacticalHexStructureType.Tree },
+      },
+    ]);
+
+    expect(hasElevationLineOfSight(
+      map,
+      observerCoordinate,
+      { q: 1, r: 1 },
     )).toBe(false);
   });
 });

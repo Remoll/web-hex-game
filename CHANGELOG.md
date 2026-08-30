@@ -14,6 +14,8 @@ All notable changes to this project are documented in this file.
   route with persistent party transfer.
 - Added strict data-driven full-hex structure definitions with validated stable
   placement ids for future tactical maps.
+- Added WallBlock and Tree Ground-movement and line-of-sight blocking, while
+  preserving the deferred DoorBlock and WindowBlock behaviour.
 
 ## 2026-08-29
 

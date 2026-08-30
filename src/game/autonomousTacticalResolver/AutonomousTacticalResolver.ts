@@ -19,7 +19,7 @@ import {
   type ServantStrategy,
 } from "@/game/unit/servantStrategy/ServantStrategy";
 import { UnitTacticalRole } from "@/game/unit/Unit";
-import type { HexCoord, MovementType } from "@/game/types";
+import { MovementType, type HexCoord } from "@/game/types";
 import { hasElevationLineOfSight } from "@/game/visibility/ElevationLineOfSight";
 
 const adjacentHexDistance = 1;
@@ -539,6 +539,8 @@ function canUnitOccupy(
   const field = input.gameMap.getField(coord.q, coord.r);
   return field !== undefined
     && field.getAllowedMovements()[unit.movementType]
+    && (unit.movementType !== MovementType.Ground
+      || !input.gameMap.isGroundEntryBlockedByStructure(coord))
     && getLivingUnitAt(input, coord) === undefined;
 }
 

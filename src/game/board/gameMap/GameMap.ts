@@ -1,6 +1,8 @@
 import { Field } from "@/game/board/field/Field";
 import {
   createTacticalHexStructurePlacementProjection,
+  isGroundMovementBlockingTacticalHexStructure,
+  isSightBlockingTacticalHexStructure,
   type TacticalHexStructurePlacementDefinition,
   type TacticalHexStructurePlacementProjection,
   type TacticalHexStructureProjection,
@@ -124,6 +126,20 @@ export class GameMap {
     return this.structurePlacementsByCoordKey.get(getHexCoordKey({ q, r }));
   }
 
+  /** True when an authored full-hex structure prevents Ground entry. */
+  isGroundEntryBlockedByStructure(coord: HexCoord): boolean {
+    return isGroundMovementBlockingTacticalHexStructure(
+      this.getStructure(coord.q, coord.r),
+    );
+  }
+
+  /** True when an intervening full-hex structure blocks tactical sight. */
+  isSightBlockedByStructure(coord: HexCoord): boolean {
+    return isSightBlockingTacticalHexStructure(
+      this.getStructure(coord.q, coord.r),
+    );
+  }
+
   /** Iterates authored structures in their stable level-data registration order. */
   forEachStructure(callback: ForEachTacticalHexStructure): void {
     for (const placement of this.structurePlacementsByCoordKey.values()) {
@@ -159,7 +175,9 @@ export class GameMap {
     if (!originField
       || !destinationField
       || this.getHexDistance(origin, destination) !== adjacentHexDistance
-      || !destinationField.getAllowedMovements()[movementType]) {
+      || !destinationField.getAllowedMovements()[movementType]
+      || (movementType === MovementType.Ground
+        && this.isGroundEntryBlockedByStructure(destination))) {
       return undefined;
     }
 
