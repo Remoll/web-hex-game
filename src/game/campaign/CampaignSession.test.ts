@@ -10,6 +10,7 @@ import { CampaignSession } from "@/game/campaign/CampaignSession";
 import {
   createExampleCampaign,
   existingTacticalAreaId,
+  strategicStructureShowcaseEntranceCoordinate,
   strategicTowerEntranceCoordinate,
   strategicMapRadius,
 } from "@/game/campaign/createExampleCampaign";
@@ -28,6 +29,9 @@ const towerGroundLevelPath = fileURLToPath(
 const towerUpperLevelPath = fileURLToPath(
   new URL("../../../public/levels/tower-upper.json", import.meta.url),
 );
+const structureShowcaseLevelPath = fileURLToPath(
+  new URL("../../../public/levels/structure-showcase.json", import.meta.url),
+);
 const partyDamage = 20;
 const localEnemyDamage = 20;
 const strategicStepsToExistingTacticalMap = strategicMapRadius;
@@ -40,13 +44,19 @@ const sourceBlockedRouteCoordinate = { q: 1, r: 0 };
 const blockedEntryCoordinate = { q: 0, r: 0 };
 
 async function createCampaignSession(): Promise<CampaignSession> {
-  const [tacticalLevel, towerGroundLevel, towerUpperLevel] = await Promise.all([
+  const [tacticalLevel, towerGroundLevel, towerUpperLevel, structureShowcaseLevel] = await Promise.all([
     loadLevelFixture(exampleLevelPath),
     loadLevelFixture(towerGroundLevelPath),
     loadLevelFixture(towerUpperLevelPath),
+    loadLevelFixture(structureShowcaseLevelPath),
   ]);
   return new CampaignSession(
-    createExampleCampaign(tacticalLevel, towerGroundLevel, towerUpperLevel),
+    createExampleCampaign(
+      tacticalLevel,
+      towerGroundLevel,
+      towerUpperLevel,
+      structureShowcaseLevel,
+    ),
   );
 }
 
@@ -65,6 +75,7 @@ describe("CampaignSession", () => {
     expect(campaign.getOutboundRoutes().map((route) => route.from.coordinate)).toEqual([
       { q: strategicMapRadius, r: 0 },
       strategicTowerEntranceCoordinate,
+      strategicStructureShowcaseEntranceCoordinate,
     ]);
 
     for (let step = 0; step < strategicStepsToExistingTacticalMap; step += 1) {

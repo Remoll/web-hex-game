@@ -97,7 +97,7 @@ export class TacticalPresentationQueue {
         return;
       }
 
-      if (event.kind === TacticalPresentationEventKind.Attack) {
+      if (event.kind !== TacticalPresentationEventKind.Move) {
         this.options.onEventCompleted(event);
         continue;
       }

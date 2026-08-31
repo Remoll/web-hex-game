@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  DoorBlockInitialState,
+} from "@/game/board/structure/TacticalHexStructure";
+import {
   TacticalPresentationEventKind,
   type TacticalPresentationEvent,
   type TacticalUnitPresentation,
@@ -49,7 +52,38 @@ function attackEvent(
   };
 }
 
+function doorStateChangedEvent(): TacticalPresentationEvent {
+  return {
+    kind: TacticalPresentationEventKind.DoorStateChanged,
+    doorBlockId: "test-door",
+    currentState: DoorBlockInitialState.Open,
+  };
+}
+
 describe("TacticalPresentationQueue", () => {
+  it("completes a DoorBlock state change before a following movement animation", () => {
+    const completed: TacticalPresentationEvent[] = [];
+    const queue = createQueue(true, completed);
+    const enemy = presentationUnit("enemy", { q: 1, r: 0 });
+
+    queue.enqueue([
+      doorStateChangedEvent(),
+      moveEvent(enemy, { q: 2, r: 0 }),
+    ]);
+
+    expect(completed.map((event) => event.kind)).toEqual([
+      TacticalPresentationEventKind.DoorStateChanged,
+    ]);
+    expect(queue.isAnimating).toBe(true);
+
+    queue.update(0);
+    queue.update(movementStepDurationMs);
+    expect(completed.map((event) => event.kind)).toEqual([
+      TacticalPresentationEventKind.DoorStateChanged,
+      TacticalPresentationEventKind.Move,
+    ]);
+  });
+
   it("completes an Attack only after the preceding Move animation", () => {
     const completed: TacticalPresentationEvent[] = [];
     const queue = createQueue(true, completed);

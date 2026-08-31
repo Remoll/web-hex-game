@@ -17,11 +17,10 @@ The development server starts at the address printed by Vite. Press `C` to toggl
 
 The demo now starts on a navigation-only radius-4 Strategic Map. A persistent
 gold route glow marks every public entrance or exit: move the single Mage party
-marker to the highlighted entrance, then use the accessible **Enter Existing
-Tactical Map** control. The tactical return exit stays highlighted alongside
-selection, movement, and attack feedback, and its **Return** control remains
-disabled until the Mage reaches it. Transitions briefly lock input and respect
-`prefers-reduced-motion`.
+marker to a highlighted entrance, then use its accessible **Enter** control.
+The tactical return exit stays highlighted alongside selection, movement, and
+attack feedback, and its **Return** control remains disabled until the Mage
+reaches it. Transitions briefly lock input and respect `prefers-reduced-motion`.
 
 The campaign owns the Mage and living Player-servant state, including HP.
 Leaving and re-entering the existing tactical area also restores that area's
@@ -55,13 +54,31 @@ placement id. `wall-block` and `tree` prevent Ground entry and block sight
 beyond their own field; the solid field itself remains visible. The same rule
 therefore applies to Mage movement previews, pathfinding, autonomous Ground
 movement, and fog of war. Flying remains unaffected. `door-block` and
-`window-block` prevents Ground entry. It permits sight only through its two
-opposite faces along its declared `q`, `r`, or `s` axis; a cross-axis sight line
-is blocked. A selected ready Mage may click an adjacent visible `door-block` to
-toggle it for 1 AP: closed doors block Ground entry and sight, while open doors
+`window-block` prevent Ground entry. Windows do not block sight in any
+direction; their authored `q`, `r`, or `s` axis is currently visual orientation
+data for future mechanics. Clicking an adjacent visible
+`door-block` opens a contextual menu. A closed door can be opened for 1 AP. An
+open door can be closed for 1 AP or entered for the currently legal
+movement-path cost from any reachable Mage hex; entering uses the normal movement action and never
+teleports the Mage. Closed doors block Ground entry and sight, while open doors
 allow both. The initial door state remains authored in JSON; each tactical
-session owns its current state. Future ritual line-of-effect rules can reuse
-the same window-axis rule. No structure renderer or door UI exists yet.
+session owns its current state.
+
+The third highlighted Strategic entrance, at `q: 0, r: -4`, enters the
+**Tactical Structure Showcase**. This reproducible radius-5 Cobblestone map
+centres a hexagonal room: alternating Stone and Timber WallBlocks form its six
+corners, and every side has an initially closed DoorBlock pair around one
+WindowBlock. An outer ring gives the Mage and servants space to
+approach and enter the room; Trees remain in three-hex grass clearings inside
+it. Walls render as tall textured full-hex blocks with cropped wall-art UVs
+and black top caps; doors, windows, and Trees render as camera-facing
+isometric cards. Door art updates after the Mage opens or closes it.
+Structures on Undiscovered fields are hidden with the rest of the black fog;
+discovered structures remain visible beneath translucent fog. The showcase is
+authored in
+`public/levels/structure-showcase.json`, uses
+`edge-structures-atlas.png` for walls, doors, and windows, and uses
+`props-atlas.png` for Trees.
 
 The opposite highlighted Strategic entrance leads to the safe, enemy-free
 **Cobblestone Tower Ground Floor**. Its compact passable Cobblestone room uses
@@ -108,6 +125,8 @@ facing, and stealth remain deferred.
 - **Discovered** hexes retain terrain caps and vertical sides under translucent
   fog, but units and remains are hidden.
 - **Visible** hexes show terrain, living units, and remains normally.
+- Structures follow the same privacy boundary: they are absent under
+  **Undiscovered** fog and visible on **Discovered** and **Visible** fields.
 
 The Mage can be selected only while currently Visible. Hovering or clicking a
 hidden unit remains unavailable and reveals no unit information.

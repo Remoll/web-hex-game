@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { AreaTravelHud } from "@/app/areaTravelHud/AreaTravelHud";
 import { CampaignRouteFeedbackPresenter } from "@/app/campaignRouteFeedback/CampaignRouteFeedbackPresenter";
+import { DoorInteractionHud } from "@/app/doorInteractionHud/DoorInteractionHud";
 import {
   GameController,
   type TacticalPresentationPresenter,
@@ -40,6 +41,7 @@ import {
   type RenderConfig,
 } from "@/rendering/RenderConfig";
 import { TacticalPresentationQueue } from "@/rendering/tacticalPresentation/TacticalPresentationQueue";
+import { TacticalStructureView } from "@/rendering/tacticalStructureView/TacticalStructureView";
 import { buildVisibleUnitMovementAnimation } from "@/rendering/unitMotion/UnitMovementAnimationModel";
 import { UnitMovementAnimationQueue } from "@/rendering/unitMotion/UnitMovementAnimationQueue";
 import { UnitHealthView } from "@/rendering/unitHealthView/UnitHealthView";
@@ -74,6 +76,7 @@ export class GameApp {
   private readonly timelineHud: TimelineHud;
   private readonly initiativeQueueHud: InitiativeQueueHud;
   private readonly servantCommandHud: ServantCommandHud;
+  private readonly doorInteractionHud: DoorInteractionHud;
   private readonly areaTravelHud: AreaTravelHud;
   private readonly mapTransitionOverlay: MapTransitionOverlay;
 
@@ -81,6 +84,7 @@ export class GameApp {
   private mapView: MapView | undefined;
   private mapHighlightView: MapHighlightView | undefined;
   private campaignRouteFeedbackPresenter: CampaignRouteFeedbackPresenter | undefined;
+  private tacticalStructureView: TacticalStructureView | undefined;
   private unitView: UnitView | undefined;
   private unitHealthView: UnitHealthView | undefined;
   private remainsView: RemainsView | undefined;
@@ -140,6 +144,21 @@ export class GameApp {
         controller.clearServantStrategy();
       }),
     });
+    this.doorInteractionHud = new DoorInteractionHud({
+      container,
+      onOpen: () => this.runTacticalInteraction((controller) => {
+        controller.openDoorBlock();
+      }),
+      onClose: () => this.runTacticalInteraction((controller) => {
+        controller.closeDoorBlock();
+      }),
+      onEnter: () => this.runTacticalInteraction((controller) => {
+        controller.enterDoorBlock();
+      }),
+      onDismiss: () => this.runTacticalInteraction((controller) => {
+        controller.dismissDoorInteraction();
+      }),
+    });
     this.areaTravelHud = new AreaTravelHud({
       container,
       onTravel: () => void this.travelAvailableRoute(),
@@ -161,6 +180,7 @@ export class GameApp {
     this.timelineHud.dispose();
     this.initiativeQueueHud.dispose();
     this.servantCommandHud.dispose();
+    this.doorInteractionHud.dispose();
     this.areaTravelHud.dispose();
     this.mapTransitionOverlay.dispose();
     this.renderer.dispose();
@@ -235,6 +255,7 @@ export class GameApp {
     this.timelineHud.setVisible(false);
     this.initiativeQueueHud.setVisible(false);
     this.servantCommandHud.setVisible(false);
+    this.doorInteractionHud.setVisible(false);
   }
 
   private activateTacticalArea(activeArea: TacticalCampaignArea): void {
@@ -243,6 +264,11 @@ export class GameApp {
     const mapView = this.requireMapView();
     const campaignRouteFeedbackPresenter = this.requireCampaignRouteFeedbackPresenter();
     this.activeTacticalSession = activeArea.session;
+    this.tacticalStructureView = new TacticalStructureView(
+      this.scene,
+      gameMap,
+      this.renderConfig,
+    );
     this.unitHealthView = new UnitHealthView(this.scene, gameMap, this.renderConfig);
     this.remainsView = new RemainsView(this.scene, gameMap, this.renderConfig);
     this.unitMovementAnimationQueue = new UnitMovementAnimationQueue(
@@ -285,6 +311,7 @@ export class GameApp {
     this.timelineHud.setVisible(true);
     this.initiativeQueueHud.setVisible(true);
     this.servantCommandHud.setVisible(true);
+    this.doorInteractionHud.setVisible(true);
     this.gameController = new GameController(
       tacticalSession,
       tacticalPresentationPresenter,
@@ -292,6 +319,7 @@ export class GameApp {
       this.timelineHud,
       this.servantCommandHud,
       this.initiativeQueueHud,
+      this.doorInteractionHud,
     );
     this.syncTacticalPresentation(tacticalSession);
     this.input = new InputController(
@@ -312,6 +340,8 @@ export class GameApp {
     this.mapHighlightView?.dispose();
     this.mapHighlightView = undefined;
     this.campaignRouteFeedbackPresenter = undefined;
+    this.tacticalStructureView?.dispose();
+    this.tacticalStructureView = undefined;
     this.tacticalPresentationQueue?.clear();
     this.tacticalPresentationQueue = undefined;
     this.unitMovementAnimationQueue = undefined;
@@ -396,10 +426,16 @@ export class GameApp {
     if (this.activeTacticalSession !== session) {
       return;
     }
-    this.requireMapView().syncVisibility(session.visibility);
+    this.syncTacticalEnvironment(session);
     for (const unit of session.units) {
       this.syncTacticalUnitPresentation(session, unit);
     }
+  }
+
+  /** Refreshes board-only state without snapping queued unit animations. */
+  private syncTacticalEnvironment(session: GameSession): void {
+    this.requireMapView().syncVisibility(session.visibility);
+    this.tacticalStructureView?.sync(session.visibility, session);
   }
 
   private syncTacticalUnitPresentation(
@@ -439,6 +475,9 @@ export class GameApp {
       case TacticalPresentationEventKind.Attack:
         this.syncTacticalSnapshot(session, event.attacker);
         this.syncTacticalSnapshot(session, event.target);
+        return;
+      case TacticalPresentationEventKind.DoorStateChanged:
+        this.syncTacticalEnvironment(session);
         return;
     }
   }

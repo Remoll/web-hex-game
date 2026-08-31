@@ -4,7 +4,6 @@ import {
   DoorBlockInitialState,
   isGroundMovementBlockingTacticalHexStructure,
   isSightBlockingTacticalHexStructure,
-  isTacticalHexAxisTraversal,
   parseTacticalHexStructureDefinition,
   TacticalHexAxis,
   TacticalHexStructureType,
@@ -16,13 +15,6 @@ const structureContext = "Test structure";
 const unsupportedStructureType = "arch-block";
 const unsupportedWallBlockSideMaterial = "brick";
 const unsupportedDoorBlockInitialState = "ajar";
-const windowCoordinate = { q: 0, r: 0 };
-const qAxisEntry = { q: -1, r: 0 };
-const qAxisExit = { q: 1, r: 0 };
-const rAxisEntry = { q: 0, r: -1 };
-const rAxisExit = { q: 0, r: 1 };
-const sAxisEntry = { q: -1, r: 1 };
-const sAxisExit = { q: 1, r: -1 };
 
 describe("TacticalHexStructure", () => {
   it("uses stable serialized values and creates immutable type-specific projections", () => {
@@ -124,30 +116,4 @@ describe("TacticalHexStructure", () => {
     }, structureContext)).toThrow("Test structure does not support property initialState");
   });
 
-  it("accepts only opposite-face crossings on the authored WindowBlock axis", () => {
-    expect(isTacticalHexAxisTraversal(
-      TacticalHexAxis.Q,
-      qAxisEntry,
-      windowCoordinate,
-      qAxisExit,
-    )).toBe(true);
-    expect(isTacticalHexAxisTraversal(
-      TacticalHexAxis.R,
-      rAxisEntry,
-      windowCoordinate,
-      rAxisExit,
-    )).toBe(true);
-    expect(isTacticalHexAxisTraversal(
-      TacticalHexAxis.S,
-      sAxisEntry,
-      windowCoordinate,
-      sAxisExit,
-    )).toBe(true);
-    expect(isTacticalHexAxisTraversal(
-      TacticalHexAxis.Q,
-      rAxisEntry,
-      windowCoordinate,
-      rAxisExit,
-    )).toBe(false);
-  });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  type DoorInteractionPresenter,
   GameController,
   type InitiativeQueuePresenter,
   type ServantCommandPresenter,
@@ -79,7 +80,7 @@ function createTacticalPresentationPresenter(): TacticalPresentationPresenter {
 }
 
 describe("GameController", () => {
-  it("synchronizes a DoorBlock visibility update without tactical motion events", () => {
+  it("opens a DoorBlock only after the contextual action and synchronizes visibility", () => {
     const player = new Player(
       "player",
       { q: 0, r: 0 },
@@ -96,18 +97,48 @@ describe("GameController", () => {
       },
     }]), [player]);
     const presenter = createTacticalPresentationPresenter();
-    const controller = new GameController(session, presenter);
+    const doorInteractionPresenter: DoorInteractionPresenter = { sync: vi.fn() };
+    const controller = new GameController(
+      session,
+      presenter,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      doorInteractionPresenter,
+    );
 
     controller.clickHex(player.position);
 
     expect(controller.clickHex({ q: 1, r: 0 })).toEqual({
+      type: GameActionType.DoorInteractionRequested,
+      mageId: player.id,
+      doorBlockId: controllerDoorBlockId,
+      currentState: DoorBlockInitialState.Closed,
+    });
+    expect(presenter.sync).not.toHaveBeenCalled();
+    expect(doorInteractionPresenter.sync).toHaveBeenLastCalledWith({
+      mageId: player.id,
+      doorBlockId: controllerDoorBlockId,
+      currentState: DoorBlockInitialState.Closed,
+      canOpen: true,
+      canClose: false,
+      enterActionPointCost: undefined,
+    });
+
+    expect(controller.openDoorBlock()).toEqual({
       type: GameActionType.DoorToggled,
       mageId: player.id,
       doorBlockId: controllerDoorBlockId,
       previousState: DoorBlockInitialState.Closed,
       nextState: DoorBlockInitialState.Open,
     });
-    expect(presenter.sync).toHaveBeenCalledWith([], true);
+    expect(presenter.sync).toHaveBeenCalledWith([{
+      kind: TacticalPresentationEventKind.DoorStateChanged,
+      doorBlockId: controllerDoorBlockId,
+      currentState: DoorBlockInitialState.Open,
+    }], true);
+    expect(doorInteractionPresenter.sync).toHaveBeenLastCalledWith(undefined);
   });
 
   it("syncs and safely clears an initiative-queue map highlight", () => {

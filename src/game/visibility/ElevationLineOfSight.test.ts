@@ -137,7 +137,7 @@ describe("hasElevationLineOfSight", () => {
     )).toBe(false);
   });
 
-  it("permits aligned WindowBlock sight while blocking a cross-axis sight line", () => {
+  it("does not restrict sight through WindowBlocks regardless of their axis", () => {
     const alignedWindowMap = new GameMap(createElevationMap([0, 0, 0]), [{
       id: windowStructureId,
       ...solidStructureCoordinate,
@@ -165,7 +165,27 @@ describe("hasElevationLineOfSight", () => {
       crossAxisWindowMap,
       observerCoordinate,
       targetBeyondSolidStructureCoordinate,
-    )).toBe(false);
+    )).toBe(true);
+
+    const turningWindowMap = new GameMap([
+      mapItem(0, 0, 0),
+      mapItem(1, 0, 0),
+      mapItem(2, 0, 0),
+      mapItem(3, -1, 0),
+    ], [{
+      id: windowStructureId,
+      ...solidStructureCoordinate,
+      structure: {
+        type: TacticalHexStructureType.WindowBlock,
+        axis: TacticalHexAxis.Q,
+      },
+    }]);
+
+    expect(hasElevationLineOfSight(
+      turningWindowMap,
+      observerCoordinate,
+      { q: 3, r: -1 },
+    )).toBe(true);
   });
 
   it("blocks a target only when every equally direct sight line crosses a solid structure", () => {

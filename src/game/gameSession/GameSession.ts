@@ -1,6 +1,9 @@
 import { GameMap, type MovementPath } from "@/game/board/gameMap/GameMap";
 import { TacticalDoorState } from "@/game/board/structure/TacticalDoorState";
-import { DoorBlockInitialState } from "@/game/board/structure/TacticalHexStructure";
+import {
+  DoorBlockInitialState,
+  TacticalHexStructureType,
+} from "@/game/board/structure/TacticalHexStructure";
 import {
   getHexCoordKey,
   isSameHexCoord,
@@ -44,6 +47,8 @@ import {
   type FieldVisibilityReader,
 } from "@/game/visibility/MageVisibility";
 
+const adjacentHexDistance = 1;
+
 export enum GameActionType {
   Selected = "selected",
   Deselected = "deselected",
@@ -54,12 +59,20 @@ export enum GameActionType {
   SecureTargetSelectionCancelled = "secure-target-selection-cancelled",
   Moved = "moved",
   Attacked = "attacked",
+  DoorInteractionRequested = "door-interaction-requested",
   DoorToggled = "door-toggled",
   StrategyAssigned = "strategy-assigned",
   StrategyCleared = "strategy-cleared",
   Waited = "waited",
   TurnEnded = "turn-ended",
   Ignored = "ignored",
+}
+
+/** Explicit Mage choices for one authored DoorBlock. */
+export enum DoorBlockInteractionAction {
+  Open = "open",
+  Close = "close",
+  Enter = "enter",
 }
 
 export enum GameActionPreviewType {
@@ -111,6 +124,12 @@ export type GameAction =
     damage: number;
     targetCurrentHp: number;
     targetDefeated: boolean;
+  }
+  | {
+    type: GameActionType.DoorInteractionRequested;
+    mageId: string;
+    doorBlockId: string;
+    currentState: DoorBlockInitialState;
   }
   | {
     type: GameActionType.DoorToggled;
@@ -189,10 +208,22 @@ export interface ReachableHex {
   readonly cost: number;
 }
 
+/** Read-only, UI-safe action availability for one selected Mage and DoorBlock. */
+export interface DoorBlockInteractionPresentation {
+  readonly mageId: string;
+  readonly doorBlockId: string;
+  readonly currentState: DoorBlockInitialState;
+  readonly canOpen: boolean;
+  readonly canClose: boolean;
+  /** The legal movement cost to enter an open door, if affordable. */
+  readonly enterActionPointCost: number | undefined;
+}
+
 /** Stable visual event kinds emitted by resolved tactical actions. */
 export enum TacticalPresentationEventKind {
   Move = "move",
   Attack = "attack",
+  DoorStateChanged = "door-state-changed",
 }
 
 /**
@@ -226,8 +257,18 @@ export interface UnitAttackEvent {
   readonly target: TacticalUnitPresentation;
 }
 
+/** Signals a visible DoorBlock state change before later queued unit actions. */
+export interface DoorBlockStateChangedEvent {
+  readonly kind: TacticalPresentationEventKind.DoorStateChanged;
+  readonly doorBlockId: string;
+  readonly currentState: DoorBlockInitialState;
+}
+
 /** Ordered renderer-facing playback stream; it never grants mutation authority. */
-export type TacticalPresentationEvent = UnitMovementEvent | UnitAttackEvent;
+export type TacticalPresentationEvent =
+  | UnitMovementEvent
+  | UnitAttackEvent
+  | DoorBlockStateChangedEvent;
 
 /** Information-safe visual states for initiative cards. */
 export enum InitiativeQueueCardState {
@@ -323,11 +364,6 @@ export class GameSession {
     this.mageVisibility = new MageVisibility(
       this.gameMap,
       (coord) => this.tacticalDoorState.isSightBlocked(coord),
-      (entry, through, exit) => this.tacticalDoorState.isSightTraversalBlocked(
-        entry,
-        through,
-        exit,
-      ),
     );
     this.timeline = new EventTimeline(this.unitsById.values());
     this.resolveAutonomousActivations();
@@ -386,6 +422,11 @@ export class GameSession {
 
   getUnit(id: string): Unit | undefined {
     return this.unitsById.get(id);
+  }
+
+  /** Safe read-only projection for presentation of one authored DoorBlock. */
+  getDoorBlockState(doorBlockId: string): DoorBlockInitialState | undefined {
+    return this.tacticalDoorState.getState(doorBlockId);
   }
 
   /** Exposes only a servant's active strategy kind, never private target data. */
@@ -753,7 +794,12 @@ export class GameSession {
       case GameActionPreviewType.ValidAttack:
         return this.attack(preview);
       case GameActionPreviewType.ValidDoorInteraction:
-        return this.toggleDoorBlock(preview);
+        return {
+          type: GameActionType.DoorInteractionRequested,
+          mageId: preview.mageId,
+          doorBlockId: preview.doorBlockId,
+          currentState: preview.currentState,
+        };
       case GameActionPreviewType.OutOfRange:
         if (!selectedUnit && !this.getUnitAt(coord)) {
           return {
@@ -764,6 +810,100 @@ export class GameSession {
 
         return { type: GameActionType.Ignored, reason: preview.reason };
     }
+  }
+
+  /** Executes one explicit, currently valid choice from the DoorBlock context UI. */
+  performDoorBlockInteraction(
+    doorBlockId: string,
+    action: DoorBlockInteractionAction,
+  ): GameAction {
+    const presentation = this.getDoorBlockInteractionPresentation(doorBlockId);
+    const mage = presentation
+      ? this.unitsById.get(presentation.mageId)
+      : undefined;
+    if (!presentation || !mage || !mage.isAlive || !this.isMageReady()) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.NotReady,
+      };
+    }
+
+    switch (action) {
+      case DoorBlockInteractionAction.Open:
+        if (presentation.currentState !== DoorBlockInitialState.Closed
+          || !presentation.canOpen) {
+          return this.getUnavailableDoorInteractionAction(mage);
+        }
+        return this.toggleDoorBlock(mage, doorBlockId);
+      case DoorBlockInteractionAction.Close:
+        if (presentation.currentState !== DoorBlockInitialState.Open
+          || !presentation.canClose) {
+          return this.getUnavailableDoorInteractionAction(mage);
+        }
+        return this.toggleDoorBlock(mage, doorBlockId);
+      case DoorBlockInteractionAction.Enter: {
+        if (presentation.currentState !== DoorBlockInitialState.Open
+          || presentation.enterActionPointCost === undefined) {
+          return this.getUnavailableDoorInteractionAction(mage);
+        }
+        const placement = this.gameMap.getStructurePlacementById(doorBlockId);
+        const path = placement
+          ? this.getReachablePaths(mage).get(getHexCoordKey(placement.coordinate))
+          : undefined;
+        if (!placement || !path) {
+          return this.getUnavailableDoorInteractionAction(mage);
+        }
+        return this.moveSelectedUnit({
+          type: GameActionPreviewType.ValidMove,
+          unitId: mage.id,
+          destination: { ...placement.coordinate },
+          path,
+        });
+      }
+    }
+  }
+
+  /** Builds a presentation-only action menu for the currently selected Mage. */
+  getDoorBlockInteractionPresentation(
+    doorBlockId: string,
+  ): DoorBlockInteractionPresentation | undefined {
+    const mage = this.getSelectedControllableUnit();
+    const placement = this.gameMap.getStructurePlacementById(doorBlockId);
+    if (!mage
+      || placement?.structure.type !== TacticalHexStructureType.DoorBlock
+      || this.getFieldVisibility(placement.coordinate) !== FieldVisibility.Visible) {
+      return undefined;
+    }
+
+    const currentState = this.tacticalDoorState.getState(doorBlockId);
+    if (currentState === undefined) {
+      return undefined;
+    }
+
+    const isAdjacent = this.gameMap.getHexDistance(
+      mage.position,
+      placement.coordinate,
+    ) === adjacentHexDistance;
+    const enterPath = currentState === DoorBlockInitialState.Open
+      ? this.getReachablePaths(mage).get(getHexCoordKey(placement.coordinate))
+      : undefined;
+    if (!isAdjacent && !enterPath) {
+      return undefined;
+    }
+
+    const canToggle = this.hasActionPointAvailability(
+      mage,
+      TacticalActionPointCost.DoorInteraction,
+    );
+
+    return {
+      mageId: mage.id,
+      doorBlockId,
+      currentState,
+      canOpen: currentState === DoorBlockInitialState.Closed && isAdjacent && canToggle,
+      canClose: currentState === DoorBlockInitialState.Open && isAdjacent && canToggle,
+      enterActionPointCost: enterPath?.cost,
+    };
   }
 
   /** Assigns the currently selected visible servant the safe default strategy. */
@@ -1219,23 +1359,15 @@ export class GameSession {
       };
     }
 
-    if (this.gameMap.getHexDistance(mage.position, coord) !== 1) {
+    const isAdjacent = this.gameMap.getHexDistance(mage.position, coord)
+      === adjacentHexDistance;
+    const enterPath = currentState === DoorBlockInitialState.Open
+      ? this.getReachablePaths(mage).get(getHexCoordKey(coord))
+      : undefined;
+    if (!isAdjacent && !enterPath) {
       return {
         type: GameActionPreviewType.OutOfRange,
         reason: GameActionRejectionReason.OutOfRange,
-      };
-    }
-
-    if (!this.hasActionPointAvailability(
-      mage,
-      TacticalActionPointCost.DoorInteraction,
-    )) {
-      return {
-        type: GameActionPreviewType.OutOfRange,
-        reason: this.getAvailabilityRejectionReason(
-          mage,
-          TacticalActionPointCost.DoorInteraction,
-        ),
       };
     }
 
@@ -1248,13 +1380,10 @@ export class GameSession {
   }
 
   private toggleDoorBlock(
-    preview: Extract<
-      GameActionPreview,
-      { type: GameActionPreviewType.ValidDoorInteraction }
-    >,
+    mage: Unit,
+    doorBlockId: string,
   ): GameAction {
-    const mage = this.unitsById.get(preview.mageId);
-    if (!mage || !mage.isAlive || !this.isMage(mage) || !this.isMageReady()) {
+    if (!mage.isAlive || !this.isMage(mage) || !this.isMageReady()) {
       return {
         type: GameActionType.Ignored,
         reason: GameActionRejectionReason.NotReady,
@@ -1268,8 +1397,8 @@ export class GameSession {
       };
     }
 
-    const previousState = this.tacticalDoorState.getState(preview.doorBlockId);
-    const nextState = this.tacticalDoorState.toggle(preview.doorBlockId);
+    const previousState = this.tacticalDoorState.getState(doorBlockId);
+    const nextState = this.tacticalDoorState.toggle(doorBlockId);
     if (previousState === undefined || nextState === undefined) {
       return {
         type: GameActionType.Ignored,
@@ -1283,6 +1412,7 @@ export class GameSession {
     );
     this.recalculateMageVisibility();
     this.requiresTacticalVisibilitySync = true;
+    this.publishDoorBlockStateChangedEvent(doorBlockId, nextState);
     this.clearServantCommandTarget();
     this.resolveAutonomousActivationsIfActivationEnded(
       mage.id,
@@ -1292,9 +1422,18 @@ export class GameSession {
     return {
       type: GameActionType.DoorToggled,
       mageId: mage.id,
-      doorBlockId: preview.doorBlockId,
+      doorBlockId,
       previousState,
       nextState,
+    };
+  }
+
+  private getUnavailableDoorInteractionAction(mage: Unit): GameAction {
+    return {
+      type: GameActionType.Ignored,
+      reason: this.hasActionPointAvailability(mage, TacticalActionPointCost.Move)
+        ? GameActionRejectionReason.OutOfRange
+        : this.getAvailabilityRejectionReason(mage, TacticalActionPointCost.Move),
     };
   }
 
@@ -1564,8 +1703,6 @@ export class GameSession {
       isGroundEntryBlocked: (coord) =>
         this.tacticalDoorState.isGroundEntryBlocked(coord),
       isSightLineBlocked: (coord) => this.tacticalDoorState.isSightBlocked(coord),
-      isSightTraversalBlocked: (entry, through, exit) =>
-        this.tacticalDoorState.isSightTraversalBlocked(entry, through, exit),
       actorId: unit.id,
       mageId: this.mageId,
       remainingActionPoints,
@@ -1782,6 +1919,17 @@ export class GameSession {
     }));
   }
 
+  private publishDoorBlockStateChangedEvent(
+    doorBlockId: string,
+    currentState: DoorBlockInitialState,
+  ): void {
+    this.tacticalPresentationEvents.push(Object.freeze({
+      kind: TacticalPresentationEventKind.DoorStateChanged,
+      doorBlockId,
+      currentState,
+    }));
+  }
+
   private createTacticalUnitPresentation(unit: Unit): TacticalUnitPresentation {
     return Object.freeze({
       id: unit.id,
@@ -1802,6 +1950,9 @@ export class GameSession {
       case TacticalPresentationEventKind.Attack:
         return this.isTacticalUnitPresentationSafe(event.attacker)
           && this.isTacticalUnitPresentationSafe(event.target);
+      case TacticalPresentationEventKind.DoorStateChanged:
+        return this.tacticalDoorState.getState(event.doorBlockId)
+          === event.currentState;
     }
   }
 

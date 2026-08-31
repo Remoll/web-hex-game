@@ -16,17 +16,21 @@ export const strategicAreaId = "strategic-overworld";
 export const existingTacticalAreaId = "existing-tactical-map";
 export const towerGroundAreaId = "cobblestone-tower-ground";
 export const towerUpperAreaId = "cobblestone-tower-upper";
+export const structureShowcaseAreaId = "tactical-structure-showcase";
 export const strategicTacticalRouteId = "strategic-to-existing-tactical";
 export const tacticalStrategicRouteId = "existing-tactical-to-strategic";
 export const strategicTowerGroundRouteId = "strategic-to-cobblestone-tower-ground";
 export const towerGroundStrategicRouteId = "cobblestone-tower-ground-to-strategic";
 export const towerGroundUpperRouteId = "cobblestone-tower-ground-to-upper";
 export const towerUpperGroundRouteId = "cobblestone-tower-upper-to-ground";
+export const strategicStructureShowcaseRouteId = "strategic-to-tactical-structure-showcase";
+export const structureShowcaseStrategicRouteId = "tactical-structure-showcase-to-strategic";
 export const strategicMapRadius = 4;
 
 const strategicInitialPartyPosition = { q: 0, r: 0 };
 const strategicTacticalRouteCoordinate = { q: strategicMapRadius, r: 0 };
 export const strategicTowerEntranceCoordinate = { q: -strategicMapRadius, r: 0 };
+export const strategicStructureShowcaseEntranceCoordinate = { q: 0, r: -strategicMapRadius };
 const tacticalRouteCoordinate = { q: -6, r: 0 };
 const tacticalEntryDirection = TacticalEntryDirection.East;
 const towerGroundEntryDirection = TacticalEntryDirection.East;
@@ -34,14 +38,17 @@ const towerGroundUpperStairCoordinate = { q: 1, r: -1 };
 const towerUpperGroundStairCoordinate = { q: -1, r: 0 };
 const towerGroundUpperStairDirection = TacticalEntryDirection.West;
 const towerUpperGroundStairDirection = TacticalEntryDirection.East;
+const structureShowcaseRouteCoordinate = { q: -5, r: 0 };
+const structureShowcaseEntryDirection = TacticalEntryDirection.SouthEast;
 const groundLevel = 0;
 const standardLeavingCostMultiplier = 1;
 
-/** Builds the initial strategic, encounter, and linked tower-floor campaign graph. */
+/** Builds the initial strategic, encounter, tower-floor, and structure-showcase graph. */
 export function createExampleCampaign(
   tacticalLevel: LevelDefinition,
   towerGroundLevel: LevelDefinition,
   towerUpperLevel: LevelDefinition,
+  structureShowcaseLevel: LevelDefinition,
 ): CampaignDefinition {
   const towerGroundEntryCoordinate: HexCoord = {
     ...towerGroundLevel.player.position,
@@ -78,6 +85,12 @@ export function createExampleCampaign(
         displayName: "Cobblestone Tower Upper Floor",
         kind: CampaignAreaKind.Tactical,
         level: towerUpperLevel,
+      },
+      {
+        id: structureShowcaseAreaId,
+        displayName: "Tactical Structure Showcase",
+        kind: CampaignAreaKind.Tactical,
+        level: structureShowcaseLevel,
       },
     ],
     routes: [
@@ -159,6 +172,32 @@ export function createExampleCampaign(
           areaId: towerGroundAreaId,
           coordinate: towerGroundUpperStairCoordinate,
           tacticalEntryDirection: towerGroundUpperStairDirection,
+        },
+      },
+      {
+        id: strategicStructureShowcaseRouteId,
+        reciprocalRouteId: structureShowcaseStrategicRouteId,
+        from: {
+          areaId: strategicAreaId,
+          coordinate: strategicStructureShowcaseEntranceCoordinate,
+        },
+        to: {
+          areaId: structureShowcaseAreaId,
+          coordinate: structureShowcaseRouteCoordinate,
+          tacticalEntryDirection: structureShowcaseEntryDirection,
+        },
+      },
+      {
+        id: structureShowcaseStrategicRouteId,
+        reciprocalRouteId: strategicStructureShowcaseRouteId,
+        from: {
+          areaId: structureShowcaseAreaId,
+          coordinate: structureShowcaseRouteCoordinate,
+          tacticalEntryDirection: structureShowcaseEntryDirection,
+        },
+        to: {
+          areaId: strategicAreaId,
+          coordinate: strategicStructureShowcaseEntranceCoordinate,
         },
       },
     ],

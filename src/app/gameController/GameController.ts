@@ -3,8 +3,10 @@ import {
   GameActionRejectionReason,
   GameActionPreviewType,
   GameActionType,
+  DoorBlockInteractionAction,
   type GameAction,
   type GameActionPreview,
+  type DoorBlockInteractionPresentation,
   type InitiativeQueuePresentation,
   type ServantCommandPresentation,
   type TacticalPresentationEvent,
@@ -30,6 +32,10 @@ export interface ServantCommandPresenter {
 
 export interface InitiativeQueuePresenter {
   sync(presentation: InitiativeQueuePresentation): void;
+}
+
+export interface DoorInteractionPresenter {
+  sync(presentation: DoorBlockInteractionPresentation | undefined): void;
 }
 
 /** Synchronizes one resolved state without allowing presentation to change rules. */
@@ -59,9 +65,14 @@ const noopInitiativeQueuePresenter: InitiativeQueuePresenter = {
   sync: () => undefined,
 };
 
+const noopDoorInteractionPresenter: DoorInteractionPresenter = {
+  sync: () => undefined,
+};
+
 /** Connects domain actions to the presentation layer without exposing Three.js to the game. */
 export class GameController {
   private initiativeQueueHighlightedUnitId: string | undefined;
+  private activeDoorBlockId: string | undefined;
 
   constructor(
     private readonly session: GameSession,
@@ -70,6 +81,7 @@ export class GameController {
     private readonly timelinePresenter: TimelinePresenter = noopTimelinePresenter,
     private readonly servantCommandPresenter: ServantCommandPresenter = noopServantCommandPresenter,
     private readonly initiativeQueuePresenter: InitiativeQueuePresenter = noopInitiativeQueuePresenter,
+    private readonly doorInteractionPresenter: DoorInteractionPresenter = noopDoorInteractionPresenter,
   ) {
     this.syncTacticalInterface();
   }
@@ -80,6 +92,13 @@ export class GameController {
     }
 
     const action = this.session.clickHex(coord);
+
+    if (action.type === GameActionType.DoorInteractionRequested) {
+      this.activeDoorBlockId = action.doorBlockId;
+      this.syncDoorInteractionPresentation();
+    } else {
+      this.clearDoorInteractionPresentation();
+    }
 
     if (action.type === GameActionType.StrategyAssigned
       || action.type === GameActionType.StrategyCleared) {
@@ -92,12 +111,29 @@ export class GameController {
     return action;
   }
 
+  openDoorBlock(): GameAction {
+    return this.performDoorBlockInteraction(DoorBlockInteractionAction.Open);
+  }
+
+  closeDoorBlock(): GameAction {
+    return this.performDoorBlockInteraction(DoorBlockInteractionAction.Close);
+  }
+
+  enterDoorBlock(): GameAction {
+    return this.performDoorBlockInteraction(DoorBlockInteractionAction.Enter);
+  }
+
+  dismissDoorInteraction(): void {
+    this.clearDoorInteractionPresentation();
+  }
+
   waitForMage(): GameAction {
     if (this.tacticalPresentationPresenter.isAnimating) {
       return this.presentationBusyAction();
     }
 
     const action = this.session.waitForMage();
+    this.clearDoorInteractionPresentation();
     this.syncResolvedTacticalPresentation();
     this.syncTacticalInterface();
     return action;
@@ -109,6 +145,7 @@ export class GameController {
     }
 
     const action = this.session.endMageTurn();
+    this.clearDoorInteractionPresentation();
     this.syncResolvedTacticalPresentation();
     this.syncTacticalInterface();
     return action;
@@ -359,5 +396,46 @@ export class GameController {
 
     this.syncResolvedTacticalPresentation();
     this.syncTacticalInterface();
+  }
+
+  private performDoorBlockInteraction(
+    action: DoorBlockInteractionAction,
+  ): GameAction {
+    if (this.tacticalPresentationPresenter.isAnimating) {
+      return this.presentationBusyAction();
+    }
+
+    const doorBlockId = this.activeDoorBlockId;
+    if (!doorBlockId) {
+      return {
+        type: GameActionType.Ignored,
+        reason: GameActionRejectionReason.OutOfRange,
+      };
+    }
+
+    const resolvedAction = this.session.performDoorBlockInteraction(
+      doorBlockId,
+      action,
+    );
+    this.syncResolvedTacticalPresentation();
+    this.syncTacticalInterface();
+    this.clearDoorInteractionPresentation();
+    return resolvedAction;
+  }
+
+  private syncDoorInteractionPresentation(): void {
+    const doorBlockId = this.activeDoorBlockId;
+    const presentation = doorBlockId
+      ? this.session.getDoorBlockInteractionPresentation(doorBlockId)
+      : undefined;
+    if (!presentation) {
+      this.activeDoorBlockId = undefined;
+    }
+    this.doorInteractionPresenter.sync(presentation);
+  }
+
+  private clearDoorInteractionPresentation(): void {
+    this.activeDoorBlockId = undefined;
+    this.doorInteractionPresenter.sync(undefined);
   }
 }

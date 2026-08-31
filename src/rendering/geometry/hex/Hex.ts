@@ -113,6 +113,39 @@ export class Hex {
     return geometry;
   }
 
+  /**
+   * Side-wall geometry with one complete UV tile per hex face. It is used by
+   * tall structure blocks whose six faces share an instanced atlas material.
+   */
+  static createTexturedHexSidesGeometry(size: number): THREE.BufferGeometry {
+    const geometry = new THREE.BufferGeometry();
+    const outerRadius = size;
+    const outerPoints: PlaneCoord[] = [];
+    const positions: number[] = [];
+    const uvs: number[] = [];
+
+    for (let index = 0; index < 6; index += 1) {
+      outerPoints.push(HexLayout.hexVertex(index, outerRadius));
+    }
+
+    for (let index = 0; index < 6; index += 1) {
+      const nextIndex = (index + 1) % 6;
+      const start = outerPoints[index];
+      const end = outerPoints[nextIndex];
+
+      positions.push(start.x, start.y, 1, end.x, end.y, 0, end.x, end.y, 1);
+      uvs.push(0, 1, 1, 0, 1, 1);
+      positions.push(start.x, start.y, 1, start.x, start.y, 0, end.x, end.y, 0);
+      uvs.push(0, 1, 0, 0, 1, 0);
+    }
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.computeVertexNormals();
+
+    return geometry;
+  }
+
   /** A unit-height hex prism that overlays both a terrain cap and its walls. */
   static createHexFogPrismGeometry(size: number): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();

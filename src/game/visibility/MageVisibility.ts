@@ -8,7 +8,6 @@ import type { HexCoord } from "@/game/types";
 import {
   hasElevationLineOfSight,
   type IsSightLineBlocked,
-  type IsSightTraversalBlocked,
 } from "@/game/visibility/ElevationLineOfSight";
 
 /** Serializable tactical fog states, ordered from no knowledge to full sight. */
@@ -39,11 +38,6 @@ export class MageVisibility implements FieldVisibilityReader {
     private readonly gameMap: GameMap,
     private readonly isSightLineBlocked: IsSightLineBlocked = (coord) =>
       gameMap.isSightBlockedByStructure(coord),
-    private readonly isSightTraversalBlocked: IsSightTraversalBlocked = (
-      entry,
-      through,
-      exit,
-    ) => gameMap.isSightTraversalBlockedByStructure(entry, through, exit),
   ) {
     this.gameMap.forEachField((q, r) => {
       this.visibilityByHex.set(
@@ -99,7 +93,6 @@ export class MageVisibility implements FieldVisibilityReader {
           magePosition,
           coord,
           this.isSightLineBlocked,
-          this.isSightTraversalBlocked,
         );
 
       this.visibilityByHex.set(

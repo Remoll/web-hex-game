@@ -8,6 +8,7 @@ import {
 } from "@/game/board/structure/TacticalHexStructure";
 import { Faction } from "@/game/faction/Faction";
 import {
+  DoorBlockInteractionAction,
   GameActionPreviewType,
   GameActionRejectionReason,
   GameActionType,
@@ -53,6 +54,7 @@ const doorBlockedEnemyField = { q: 2, r: 0 };
 const doorBlockId = "session-door";
 const doorBlockedEnemyId = "door-blocked-enemy";
 const distantDoorField = { q: 2, r: 0 };
+const distantDoorPathStepCount = 2;
 const windowBlockId = "session-window";
 const windowBlockedEnemyId = "window-blocked-enemy";
 
@@ -188,7 +190,7 @@ describe("GameSession", () => {
     ]));
   });
 
-  it("toggles an adjacent DoorBlock for one Mage AP and updates movement and fog", () => {
+  it("offers explicit DoorBlock actions, then updates movement and fog", () => {
     const mage = new Player(
       "mage",
       doorMageStart,
@@ -230,8 +232,30 @@ describe("GameSession", () => {
       doorBlockId,
       currentState: DoorBlockInitialState.Closed,
     });
+    expect(session.getDoorBlockState(doorBlockId)).toBe(DoorBlockInitialState.Closed);
 
     expect(session.clickHex(doorField)).toEqual({
+      type: GameActionType.DoorInteractionRequested,
+      mageId: mage.id,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Closed,
+    });
+    expect(session.getDoorBlockInteractionPresentation(doorBlockId)).toEqual({
+      mageId: mage.id,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Closed,
+      canOpen: true,
+      canClose: false,
+      enterActionPointCost: undefined,
+    });
+    expect(session.eventTimeline.getRemainingActionPoints(mage.id)).toBe(
+      actionPointsPerActivation,
+    );
+
+    expect(session.performDoorBlockInteraction(
+      doorBlockId,
+      DoorBlockInteractionAction.Open,
+    )).toEqual({
       type: GameActionType.DoorToggled,
       mageId: mage.id,
       doorBlockId,
@@ -241,6 +265,12 @@ describe("GameSession", () => {
     expect(session.eventTimeline.getRemainingActionPoints(mage.id)).toBe(
       actionPointsPerActivation - TacticalActionPointCost.DoorInteraction,
     );
+    expect(session.getDoorBlockState(doorBlockId)).toBe(DoorBlockInitialState.Open);
+    expect(session.consumeTacticalPresentationEvents()).toEqual([{
+      kind: TacticalPresentationEventKind.DoorStateChanged,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Open,
+    }]);
     expect(session.getReachableHexes()).toEqual(expect.arrayContaining([
       expect.objectContaining({ coord: doorField }),
     ]));
@@ -248,17 +278,48 @@ describe("GameSession", () => {
       FieldVisibility.Visible,
     );
     expect(session.isUnitVisible(hiddenEnemy)).toBe(true);
+    expect(session.getDoorBlockInteractionPresentation(doorBlockId)).toEqual({
+      mageId: mage.id,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Open,
+      canOpen: false,
+      canClose: true,
+      enterActionPointCost: TacticalActionPointCost.Move,
+    });
 
+    expect(session.performDoorBlockInteraction(
+      doorBlockId,
+      DoorBlockInteractionAction.Enter,
+    )).toMatchObject({
+      type: GameActionType.Moved,
+      unitId: mage.id,
+      to: doorField,
+    });
+    expect(mage.position).toEqual(doorField);
+    expect(session.getDoorBlockInteractionPresentation(doorBlockId)).toBeUndefined();
+
+    expect(session.clickHex(doorMageStart)).toMatchObject({
+      type: GameActionType.Moved,
+      unitId: mage.id,
+      to: doorMageStart,
+    });
     expect(session.clickHex(doorField)).toEqual({
+      type: GameActionType.DoorInteractionRequested,
+      mageId: mage.id,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Open,
+    });
+
+    expect(session.performDoorBlockInteraction(
+      doorBlockId,
+      DoorBlockInteractionAction.Close,
+    )).toEqual({
       type: GameActionType.DoorToggled,
       mageId: mage.id,
       doorBlockId,
       previousState: DoorBlockInitialState.Open,
       nextState: DoorBlockInitialState.Closed,
     });
-    expect(session.eventTimeline.getRemainingActionPoints(mage.id)).toBe(
-      actionPointsPerActivation - (TacticalActionPointCost.DoorInteraction * 2),
-    );
     expect(session.getReachableHexes()).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ coord: doorField }),
     ]));
@@ -268,7 +329,7 @@ describe("GameSession", () => {
     expect(session.isUnitVisible(hiddenEnemy)).toBe(false);
   });
 
-  it("rejects a non-adjacent DoorBlock interaction without spending Mage AP", () => {
+  it("rejects a non-adjacent closed DoorBlock interaction without spending Mage AP", () => {
     const mage = new Player("mage", doorMageStart, UnitTexture.PlayerIdle, {
       viewRange: 3,
     });
@@ -304,6 +365,66 @@ describe("GameSession", () => {
     );
   });
 
+  it("offers Enter for an open DoorBlock from any reachable Mage hex", () => {
+    const mage = new Player("mage", doorMageStart, UnitTexture.PlayerIdle, {
+      viewRange: 3,
+    });
+    const session = new GameSession(new GameMap(
+      createGrassMap([
+        doorMageStart,
+        doorField,
+        distantDoorField,
+      ]),
+      [{
+        id: doorBlockId,
+        ...distantDoorField,
+        structure: {
+          type: TacticalHexStructureType.DoorBlock,
+          axis: TacticalHexAxis.R,
+          initialState: DoorBlockInitialState.Open,
+        },
+      }],
+    ), [mage]);
+
+    session.clickHex(doorMageStart);
+
+    expect(session.previewHex(distantDoorField)).toEqual({
+      type: GameActionPreviewType.ValidDoorInteraction,
+      mageId: mage.id,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Open,
+    });
+    expect(session.clickHex(distantDoorField)).toEqual({
+      type: GameActionType.DoorInteractionRequested,
+      mageId: mage.id,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Open,
+    });
+    expect(session.getDoorBlockInteractionPresentation(doorBlockId)).toEqual({
+      mageId: mage.id,
+      doorBlockId,
+      currentState: DoorBlockInitialState.Open,
+      canOpen: false,
+      canClose: false,
+      enterActionPointCost: TacticalActionPointCost.Move * distantDoorPathStepCount,
+    });
+
+    expect(session.performDoorBlockInteraction(
+      doorBlockId,
+      DoorBlockInteractionAction.Enter,
+    )).toMatchObject({
+      type: GameActionType.Moved,
+      unitId: mage.id,
+      to: distantDoorField,
+    });
+    expect(mage.position).toEqual(distantDoorField);
+    expect(session.eventTimeline.getRemainingActionPoints(mage.id)).toBe(
+      actionPointsPerActivation - (
+        TacticalActionPointCost.Move * distantDoorPathStepCount
+      ),
+    );
+  });
+
   it("lets autonomous Ground units perceive and cross a DoorBlock only after the Mage opens it", () => {
     const mage = new Player(
       "mage",
@@ -333,12 +454,16 @@ describe("GameSession", () => {
     expect(enemy.position).toEqual(doorBlockedEnemyField);
     session.clickHex(doorMageStart);
     session.clickHex(doorField);
+    session.performDoorBlockInteraction(
+      doorBlockId,
+      DoorBlockInteractionAction.Open,
+    );
     session.endMageTurn();
 
     expect(enemy.position).toEqual(doorField);
   });
 
-  it("blocks Ground movement at a WindowBlock while applying its sight axis", () => {
+  it("blocks Ground movement at a WindowBlock without restricting sight", () => {
     const alignedMage = new Player(
       "aligned-mage",
       doorMageStart,
@@ -400,14 +525,14 @@ describe("GameSession", () => {
     ), [crossAxisMage, crossAxisEnemy]);
 
     expect(crossAxisSession.getFieldVisibility(doorBlockedEnemyField)).toBe(
-      FieldVisibility.Undiscovered,
+      FieldVisibility.Visible,
     );
     expect(crossAxisSession.initiativeQueuePresentation.entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          state: InitiativeQueueCardState.Unknown,
-          unitId: undefined,
-          canHighlight: false,
+          state: InitiativeQueueCardState.Identified,
+          unitId: windowBlockedEnemyId,
+          canHighlight: true,
         }),
       ]),
     );

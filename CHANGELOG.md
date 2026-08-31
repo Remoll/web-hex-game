@@ -19,6 +19,9 @@ All notable changes to this project are documented in this file.
 - Added Mage-controlled adjacent DoorBlock toggling for 1 AP, with runtime
   closed-door movement and sight blocking.
 - Added WindowBlock Ground-movement blocking and axis-aligned tactical sight.
+- Added the reachable Tactical Structure Showcase map, supplied structure
+  atlases, and fog-aware rendering for tall WallBlocks, DoorBlocks,
+  WindowBlocks, and Trees.
 
 ## 2026-08-29
 

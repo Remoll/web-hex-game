@@ -175,6 +175,56 @@ canvas {
   cursor: not-allowed;
 }
 
+.door-interaction-hud {
+  --door-interaction-control-minimum-size: 44px;
+  --door-interaction-control-gap: 8px;
+
+  position: fixed;
+  top: 108px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--door-interaction-control-gap);
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  color: #f2eee3;
+  font: 600 14px/1.2 system-ui, sans-serif;
+  background: rgb(18 18 18 / 92%);
+  border: 1px solid #b99769;
+  border-radius: 4px;
+  transform: translateX(-50%);
+}
+
+.door-interaction-hud[hidden] {
+  display: none;
+}
+
+.door-interaction-hud__status {
+  color: #e4bd49;
+}
+
+.door-interaction-hud__button {
+  min-width: var(--door-interaction-control-minimum-size);
+  min-height: var(--door-interaction-control-minimum-size);
+  padding: 4px 8px;
+  color: inherit;
+  font: inherit;
+  background: #4f3b2d;
+  border: 1px solid #b99769;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.door-interaction-hud__button:disabled {
+  color: #90897d;
+  background: #2c2925;
+  border-color: #514b43;
+  cursor: not-allowed;
+}
+
 .initiative-queue-hud {
   position: fixed;
   right: 0;

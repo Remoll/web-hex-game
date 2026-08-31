@@ -13,6 +13,8 @@ import {
   existingTacticalAreaId,
   strategicAreaId,
   strategicMapRadius,
+  strategicStructureShowcaseEntranceCoordinate,
+  strategicStructureShowcaseRouteId,
   strategicTowerEntranceCoordinate,
   strategicTowerGroundRouteId,
   towerGroundAreaId,
@@ -20,6 +22,8 @@ import {
   towerGroundUpperRouteId,
   towerUpperAreaId,
   towerUpperGroundRouteId,
+  structureShowcaseAreaId,
+  structureShowcaseStrategicRouteId,
 } from "@/game/campaign/createExampleCampaign";
 import { actionPointsPerActivation } from "@/game/eventTimeline/EventTimeline";
 import type { LevelDefinition } from "@/game/levels/LevelDefinition";
@@ -33,6 +37,9 @@ const towerGroundLevelPath = fileURLToPath(
 );
 const towerUpperLevelPath = fileURLToPath(
   new URL("../../../public/levels/tower-upper.json", import.meta.url),
+);
+const structureShowcaseLevelPath = fileURLToPath(
+  new URL("../../../public/levels/structure-showcase.json", import.meta.url),
 );
 const strategicTowerTravelStepCount = strategicMapRadius;
 const playerMageId = "player";
@@ -54,20 +61,27 @@ interface ExampleCampaignLevels {
   readonly tactical: LevelDefinition;
   readonly towerGround: LevelDefinition;
   readonly towerUpper: LevelDefinition;
+  readonly structureShowcase: LevelDefinition;
 }
 
 async function loadExampleCampaign(): Promise<CampaignDefinition> {
   const levels = await loadExampleCampaignLevels();
-  return createExampleCampaign(levels.tactical, levels.towerGround, levels.towerUpper);
+  return createExampleCampaign(
+    levels.tactical,
+    levels.towerGround,
+    levels.towerUpper,
+    levels.structureShowcase,
+  );
 }
 
 async function loadExampleCampaignLevels(): Promise<ExampleCampaignLevels> {
-  const [tactical, towerGround, towerUpper] = await Promise.all([
+  const [tactical, towerGround, towerUpper, structureShowcase] = await Promise.all([
     loadLevelFixture(exampleLevelPath),
     loadLevelFixture(towerGroundLevelPath),
     loadLevelFixture(towerUpperLevelPath),
+    loadLevelFixture(structureShowcaseLevelPath),
   ]);
-  return { tactical, towerGround, towerUpper };
+  return { tactical, towerGround, towerUpper, structureShowcase };
 }
 
 async function loadLevelFixture(levelPath: string): Promise<LevelDefinition> {
@@ -273,6 +287,33 @@ describe("createExampleCampaign tower routes", () => {
     }
     expect(existingTacticalArea.definition.id).toBe(existingTacticalAreaId);
     expect(existingTacticalArea.session.getServantStrategyType(firstServantId)).toBeUndefined();
+  });
+
+  it("enters the authored structure showcase from its third strategic entrance", async () => {
+    const campaign = new CampaignSession(await loadExampleCampaign());
+    const strategicArea = campaign.activeArea;
+    if (strategicArea.kind !== CampaignAreaKind.Strategic) {
+      throw new Error("The example campaign must start on the strategic map");
+    }
+
+    for (let coordinateR = -1; coordinateR >= -strategicMapRadius; coordinateR -= 1) {
+      expect(strategicArea.session.moveTo({ q: 0, r: coordinateR })).toBe(true);
+    }
+
+    expect(strategicArea.session.partyPosition).toEqual(
+      strategicStructureShowcaseEntranceCoordinate,
+    );
+    expect(campaign.getAvailableRoute()?.id).toBe(strategicStructureShowcaseRouteId);
+
+    const showcaseArea = campaign.travelAvailableRoute().activeArea;
+    if (showcaseArea.kind !== CampaignAreaKind.Tactical) {
+      throw new Error("The structure showcase route must enter a tactical area");
+    }
+    expect(showcaseArea.definition.id).toBe(structureShowcaseAreaId);
+    expect(showcaseArea.session.getUnit(playerMageId)?.position).toEqual({ q: -5, r: 0 });
+    expect(showcaseArea.session.getUnit(firstServantId)?.position).toEqual({ q: -5, r: 1 });
+    expect(showcaseArea.session.getUnit(secondServantId)?.position).toEqual({ q: -4, r: -1 });
+    expect(campaign.getAvailableRoute()?.id).toBe(structureShowcaseStrategicRouteId);
   });
 
   it("rejects a tower entrance configured outside the strategic map", async () => {
